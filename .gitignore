@@ -1,0 +1,6 @@
+build/
+.noe-cache/
+*.noeir
+*.o
+*.obj
+*.exe

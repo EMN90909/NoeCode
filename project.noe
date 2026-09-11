@@ -1,0 +1,5 @@
+project {
+    name: "noe"
+    version: "0.0.3"
+    entry: "bootstrap/main.cpp"
+}

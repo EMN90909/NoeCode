@@ -43,9 +43,10 @@ Token Lexer::identifier(){
         {"let",TokenKind::Let},{"const",TokenKind::Const},{"function",TokenKind::Function},
         {"if",TokenKind::If},{"else",TokenKind::Else},{"while",TokenKind::While},
         {"return",TokenKind::Return},{"true",TokenKind::True},{"false",TokenKind::False},
-        {"null",TokenKind::Null},{"import",TokenKind::Import},{"record",TokenKind::Record},
-        {"class",TokenKind::Class},{"extern",TokenKind::Extern},{"export",TokenKind::Export},
-        {"volatile",TokenKind::Volatile},{"as",TokenKind::As}
+        {"null",TokenKind::Null},{"import",TokenKind::Import},{"module",TokenKind::Module},
+        {"record",TokenKind::Record},{"class",TokenKind::Class},{"extern",TokenKind::Extern},
+        {"export",TokenKind::Export},{"volatile",TokenKind::Volatile},{"as",TokenKind::As},
+        {"throw",TokenKind::Throw},{"try",TokenKind::Try}
     };
     auto it=keywords.find(text);
     return Token{it==keywords.end()?TokenKind::Identifier:it->second,text,Span{start,current_,line,col}};

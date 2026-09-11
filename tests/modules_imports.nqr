@@ -1,0 +1,4 @@
+module tests.imports
+import "module_math.nqr"
+
+print(twice(4))

@@ -228,17 +228,22 @@ public:
 };
 class LinkerDriver {
 public:
-    bool link(const std::filesystem::path& objectOrAssembly, const std::filesystem::path& output, Diagnostics& diagnostics) const;
+    bool link(const std::filesystem::path& assembly, const std::filesystem::path& output, Diagnostics& diagnostics) const;
 };
 
 struct ProjectManifest {
     std::string name = "app";
     std::string version = "0.0.0";
     std::string entry = "src/main.noe";
+    std::string profile = "app";
+    std::string target = "native";
+    std::unordered_map<std::string, std::string> dependencies;
 };
 class PackageManager {
 public:
     std::optional<ProjectManifest> loadManifest(const std::filesystem::path& path, Diagnostics& diagnostics) const;
+    bool writeLock(const ProjectManifest& manifest, const std::filesystem::path& path, Diagnostics& diagnostics) const;
+    bool createProject(const std::filesystem::path& directory, const std::string& name, Diagnostics& diagnostics) const;
 };
 class Formatter {
 public:

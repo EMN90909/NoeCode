@@ -1,74 +1,127 @@
 # NoeCode
 
-Noe is a standalone, statically typed, native-oriented general-purpose programming language. This repository contains the custom Noe compiler/toolchain bootstrap.
+Noe is a standalone, statically typed, native-oriented general-purpose programming language. This repository contains the custom Noe bootstrap compiler and toolchain.
 
-No Rust is used. Noe projects do not use TOML: source files are `.noe`, project metadata is `project.noe`, and future dependency locks use `noe.lock`.
+**Bootstrap status: phase 8/8 (`0.0.8-bootstrap`).** The bootstrap pipeline is executable end to end: source can be lexed, parsed, type-checked, lowered to NIR, optimized, interpreted, or compiled into a Linux x86-64 ELF executable.
 
-## Current milestone: phase 3/8
-
-This milestone turns the repository into an executable compiler foundation rather than documentation only. The lexer, parser, type checker, NIR lowering, basic optimizer and reference interpreter are implemented and wired together. The package-manifest reader, formatter foundation, test runner and language-server boundary are also present.
-
-The native backend and linker driver are intentionally explicit boundaries at this phase; they return structured diagnostics instead of pretending native code generation is complete. Custom machine-code emission is the next major milestone.
+No Rust, Cargo, TOML, or LLVM is used. Noe projects use `.noe`, `project.noe`, and `noe.lock`. The one-time bootstrap compiler is C++17. The current native backend emits Noe-owned x86-64 assembly and the linker driver invokes GNU `as`/`ld`; generated programs use Linux syscalls and do not require a Noe server or runtime installation.
 
 ## Build the bootstrap compiler
 
-Linux/macOS:
-
 ```sh
 sh scripts/build.sh
+./build/noe --version
 ```
 
-Windows PowerShell with MSVC or g++:
+Requirements for the bootstrap on Linux: a C++17 compiler. Native `noe build` additionally needs GNU binutils (`as` and `ld`).
 
-```powershell
-./scripts/build.ps1
-```
-
-The one-time bootstrap requires a C++17 compiler. That is only for bootstrapping Noe itself; Noe programs are not Rust projects and do not use Cargo or TOML. The long-term compiler will be progressively rewritten in `.noe` until it can compile itself.
-
-## Try Noe
+## Run Noe
 
 ```sh
-./build/noe check examples/hello.noe
-./build/noe nir examples/hello.noe
-./build/noe run examples/hello.noe
-./build/noe test tests
+./build/noe check examples/native_hello.noe
+./build/noe nir examples/native_hello.noe
+./build/noe run examples/native_hello.noe
+./build/noe build examples/native_hello.noe build/native_hello
+./build/native_hello
 ```
 
-Expected output from the example:
+Expected native output:
 
 ```text
-Hello Noe
+Hello from native Noe
 30
+0
+1
+2
+```
+
+## Create a Noe project
+
+```sh
+./build/noe new hello
+cd hello
+../build/noe check src/main.noe
+```
+
+A generated project contains only Noe-owned project files:
+
+```text
+hello/
+├── project.noe
+├── noe.lock
+├── src/
+│   └── main.noe
+└── tests/
+```
+
+`project.noe` is the human-written manifest. `noe.lock` is deterministic generated metadata. No TOML is required.
+
+## Commands
+
+```text
+noe new <name> [dir]
+noe lex <file>
+noe check [file]
+noe nir [file]
+noe run [file]
+noe build [file] [output]
+noe format <file>
+noe manifest [project.noe]
+noe lock [project.noe]
+noe test [dir]
+noe lsp
 ```
 
 ## Compiler pipeline
 
 ```text
 .noe source
-  -> lexer
-  -> parser / AST
-  -> type checker
-  -> NIR
-  -> optimizer
-  -> interpreter        (working now)
-  -> native backend     (next milestone)
-  -> linker driver      (next milestone)
+   ↓
+lexer
+   ↓
+parser / AST
+   ↓
+type checker
+   ↓
+NIR
+   ↓
+optimizer
+   ├──────────────→ NIR interpreter
+   ↓
+custom x86-64 backend
+   ↓
+GNU assembler/linker driver
+   ↓
+Linux ELF executable
 ```
 
-## Toolchain modules
+## Bootstrap components
 
-- Lexer: source text to tokens with spans and structured lexical diagnostics.
-- Parser: recursive-descent parser with precedence handling and AST construction.
-- Type checker: primitive inference, lexical scopes, typed functions and assignment/call checking.
-- NIR: register-based Noe Intermediate Representation with control flow and calls.
-- Optimizer: constant-folding foundation over NIR.
-- Interpreter: executes NIR, including functions, variables, loops, branches and `print`.
-- Native backend: isolated interface ready for custom target code generation.
-- Linker driver: isolated link stage ready for target object formats.
-- Package manager: reads custom `project.noe` manifests; remote resolution comes later.
-- Formatter: token-based canonical formatting foundation.
-- Test runner: discovers and executes `.noe` test programs.
-- Language server: compiler-service boundary ready for later JSON-RPC/LSP transport.
+- **Lexer** — tokens, comments, literals, keywords, operators, source spans and lexical diagnostics.
+- **Parser** — recursive-descent AST parser with precedence, variables, functions, calls, blocks, `if`, `while` and `return`.
+- **Type checker** — primitive inference, scopes, signatures, assignments, calls and structured `NOE-T...` diagnostics.
+- **NIR** — register-based Noe Intermediate Representation with explicit control flow and calls.
+- **Optimizer** — constant folding over NIR.
+- **Interpreter** — reference execution path used by `noe run` and tests.
+- **Native backend** — custom Linux x86-64 code generation for the current core subset.
+- **Linker driver** — assembles and links freestanding ELF executables with GNU binutils.
+- **Package/project manager** — custom `project.noe`, project creation and deterministic `noe.lock` generation.
+- **Formatter** — canonical token-aware formatting.
+- **Test runner** — discovers and executes `.noe` test programs.
+- **Language server** — Content-Length framed JSON-RPC/LSP initialize flow and live compiler diagnostics for opened/changed documents.
 
-See `docs/BOOTSTRAP.md` for the exact phase boundary.
+## Native subset in 0.0.8
+
+The native backend currently supports Linux x86-64 integer and boolean arithmetic, comparisons, variables, functions with up to six parameters, branches, loops, string constants, `print(string)`, `print(int)` and `print(bool)`. Float machine-code generation and runtime string concatenation deliberately report structured native-backend diagnostics instead of silently miscompiling.
+
+The NIR boundary is target-independent, so Windows, ARM64, WebAssembly and future direct object/ELF writers can be added without replacing the frontend.
+
+## Verify everything
+
+```sh
+sh scripts/test.sh
+```
+
+The end-to-end suite builds the compiler, validates a type error, exercises NIR and the interpreter, tests formatting and the test runner, builds/runs a real native executable, creates/locks a Noe project, and smoke-tests LSP initialization plus diagnostics.
+
+Phase 8/8 means the **bootstrap toolchain milestone** is complete; it does not mean the entire long-term language specification is already Noe 1.0. Generics, records/classes, async/concurrency, full modules/registry resolution, additional native targets, systems features, visual programming and self-hosting remain later language milestones.

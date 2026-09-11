@@ -1,0 +1,17 @@
+name: Noe compiler CI
+
+on:
+  push:
+    branches: [main, noe-phase-8]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run end-to-end Noe tests
+        run: sh scripts/test.sh

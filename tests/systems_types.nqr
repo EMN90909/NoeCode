@@ -1,0 +1,20 @@
+record Framebuffer {
+    address: *volatile u32
+    width: u32
+    height: u32
+    pitch: u32
+}
+
+extern function external_write(data: *u8, count: usize): isize
+
+export function kernel_main(fb: *Framebuffer): void {
+    fb.address[0] = 0x00FF0000
+}
+
+function systems_smoke(): usize {
+    let value: u32 = 7
+    let ptr: *u32 = &value
+    ptr[0] = 9
+    let raw: usize = ptr as usize
+    return raw
+}

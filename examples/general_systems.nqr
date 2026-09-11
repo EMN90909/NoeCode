@@ -1,0 +1,18 @@
+module examples.general
+
+function identity<T>(value: T): T {
+    return value
+}
+
+export function exercise(): isize {
+    let values: [u32; 4] = [1, 2, 3, 4]
+    let view: []u32 = slice(values)
+    let first: u32 = view[0]
+    let counter: u64 = 1
+    let ptr: *u64 = &counter
+    atomic.store(ptr, 2)
+    let observed: u64 = atomic.load(ptr)
+    intrinsic("x86.pause")
+    asm("nop")
+    return identity((first as isize) + (observed as isize) + (len(view) as isize))
+}

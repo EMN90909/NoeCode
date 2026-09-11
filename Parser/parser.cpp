@@ -23,22 +23,52 @@ StmtPtr Parser::declaration(){
     if(isExtern && match({TokenKind::Export})) isExport=true;
     if(match({TokenKind::Function})) return functionDeclaration(isExtern,isExport);
     if(isExport||isExtern){diagnostics_.error("NOE-P2010",previous().span,"export/extern currently apply to function declarations");throw ParseError("parse");}
+    if(match({TokenKind::Module}))return moduleDeclaration();
+    if(match({TokenKind::Import}))return importDeclaration();
     if(match({TokenKind::Record}))return recordDeclaration();
     if(match({TokenKind::Let}))return letDeclaration(false);
     if(match({TokenKind::Const}))return letDeclaration(true);
     return statement();
 }
 
+std::vector<std::string> Parser::parseGenericParams(){
+    std::vector<std::string> out;
+    if(!match({TokenKind::Less}))return out;
+    do{out.push_back(consume(TokenKind::Identifier,"expected generic type parameter").lexeme);}while(match({TokenKind::Comma}));
+    consume(TokenKind::Greater,"expected '>' after generic parameters");
+    return out;
+}
+
 std::string Parser::parseTypeName(){
-    bool pointer=false,vol=false;
     if(match({TokenKind::Star})){
-        pointer=true;
-        if(match({TokenKind::Volatile}))vol=true;
+        bool vol=match({TokenKind::Volatile});
+        return std::string("*")+(vol?"volatile ":"")+parseTypeName();
+    }
+    if(match({TokenKind::LBracket})){
+        if(match({TokenKind::RBracket}))return "[]"+parseTypeName();
+        std::string element=parseTypeName();
+        consume(TokenKind::Semicolon,"expected ';' between array element type and length");
+        const Token& count=consume(TokenKind::Integer,"expected fixed array length");
+        consume(TokenKind::RBracket,"expected ']' after fixed array type");
+        return "["+element+";"+count.lexeme+"]";
     }
     const Token& base=consume(TokenKind::Identifier,"expected type name");
-    std::string result=base.lexeme;
-    if(pointer)result=std::string("*")+(vol?"volatile ":"")+result;
-    return result;
+    return base.lexeme;
+}
+
+StmtPtr Parser::moduleDeclaration(){
+    const Token& first=consume(TokenKind::Identifier,"expected module name");
+    std::string name=first.lexeme;
+    while(match({TokenKind::Dot}))name+="."+consume(TokenKind::Identifier,"expected module name segment").lexeme;
+    match({TokenKind::Semicolon});
+    auto m=std::make_shared<ModuleStmt>();m->span=first.span;m->name=std::move(name);return m;
+}
+
+StmtPtr Parser::importDeclaration(){
+    const Token& path=consume(TokenKind::String,"expected quoted import path, for example import \"math.nqr\"");
+    auto s=path.lexeme;
+    auto i=std::make_shared<ImportStmt>();i->span=path.span;i->path=s.size()>=2?s.substr(1,s.size()-2):std::string{};
+    match({TokenKind::Semicolon});return i;
 }
 
 StmtPtr Parser::recordDeclaration(){
@@ -58,6 +88,7 @@ StmtPtr Parser::recordDeclaration(){
 
 StmtPtr Parser::functionDeclaration(bool isExtern,bool isExport){
     const Token& name=consume(TokenKind::Identifier,"expected function name");
+    auto genericParams=parseGenericParams();
     consume(TokenKind::LParen,"expected '(' after function name");
     std::vector<Parameter> params;
     if(!check(TokenKind::RParen)){
@@ -72,7 +103,7 @@ StmtPtr Parser::functionDeclaration(bool isExtern,bool isExport){
     std::optional<std::string> ret;
     if(match({TokenKind::Colon}))ret=parseTypeName();
     auto fn=std::make_shared<FunctionStmt>();
-    fn->span=name.span;fn->name=name.lexeme;fn->params=std::move(params);fn->returnType=ret;fn->isExtern=isExtern;fn->isExport=isExport;
+    fn->span=name.span;fn->name=name.lexeme;fn->genericParams=std::move(genericParams);fn->params=std::move(params);fn->returnType=ret;fn->isExtern=isExtern;fn->isExport=isExport;
     if(isExtern){match({TokenKind::Semicolon});fn->body=std::make_shared<BlockStmt>();return fn;}
     consume(TokenKind::LBrace,"expected '{' before function body");
     fn->body=block();
@@ -88,10 +119,18 @@ StmtPtr Parser::letDeclaration(bool isConst){
     match({TokenKind::Semicolon});return s;
 }
 
-StmtPtr Parser::statement(){if(match({TokenKind::If}))return ifStatement();if(match({TokenKind::While}))return whileStatement();if(match({TokenKind::Return}))return returnStatement();if(match({TokenKind::LBrace}))return block();return expressionStatement();}
+StmtPtr Parser::statement(){
+    if(match({TokenKind::If}))return ifStatement();
+    if(match({TokenKind::While}))return whileStatement();
+    if(match({TokenKind::Return}))return returnStatement();
+    if(match({TokenKind::Throw}))return throwStatement();
+    if(match({TokenKind::LBrace}))return block();
+    return expressionStatement();
+}
 StmtPtr Parser::ifStatement(){Token start=previous();ExprPtr cond;if(match({TokenKind::LParen})){cond=expression();consume(TokenKind::RParen,"expected ')' after if condition");}else cond=expression();auto s=std::make_shared<IfStmt>();s->span=start.span;s->condition=cond;s->thenBranch=statement();if(match({TokenKind::Else}))s->elseBranch=statement();return s;}
 StmtPtr Parser::whileStatement(){Token start=previous();ExprPtr cond;if(match({TokenKind::LParen})){cond=expression();consume(TokenKind::RParen,"expected ')' after while condition");}else cond=expression();auto s=std::make_shared<WhileStmt>();s->span=start.span;s->condition=cond;s->body=statement();return s;}
 StmtPtr Parser::returnStatement(){Token start=previous();auto s=std::make_shared<ReturnStmt>();s->span=start.span;if(!check(TokenKind::Semicolon)&&!check(TokenKind::RBrace)&&!check(TokenKind::Eof))s->value=expression();match({TokenKind::Semicolon});return s;}
+StmtPtr Parser::throwStatement(){Token start=previous();auto s=std::make_shared<ThrowStmt>();s->span=start.span;s->value=expression();match({TokenKind::Semicolon});return s;}
 std::shared_ptr<BlockStmt> Parser::block(){auto b=std::make_shared<BlockStmt>();b->span=previous().span;while(!check(TokenKind::RBrace)&&!check(TokenKind::Eof)){try{b->statements.push_back(declaration());}catch(const ParseError&){synchronize();}}consume(TokenKind::RBrace,"expected '}' after block");return b;}
 StmtPtr Parser::expressionStatement(){auto s=std::make_shared<ExprStmt>();s->expr=expression();s->span=s->expr->span;match({TokenKind::Semicolon});return s;}
 
@@ -114,7 +153,7 @@ ExprPtr Parser::equality(){auto e=comparison();while(match({TokenKind::EqualEqua
 ExprPtr Parser::comparison(){auto e=term();while(match({TokenKind::Less,TokenKind::LessEqual,TokenKind::Greater,TokenKind::GreaterEqual})){auto o=previous();e=makeBinary(e,o.kind,term(),o.span);}return e;}
 ExprPtr Parser::term(){auto e=factor();while(match({TokenKind::Plus,TokenKind::Minus})){auto o=previous();e=makeBinary(e,o.kind,factor(),o.span);}return e;}
 ExprPtr Parser::factor(){auto e=unary();while(match({TokenKind::Star,TokenKind::Slash,TokenKind::Percent})){auto o=previous();e=makeBinary(e,o.kind,unary(),o.span);}return e;}
-ExprPtr Parser::unary(){if(match({TokenKind::Bang,TokenKind::Minus,TokenKind::Plus,TokenKind::Star,TokenKind::Ampersand})){auto op=previous();auto u=std::make_shared<UnaryExpr>();u->op=op.kind;u->operand=unary();u->span=op.span;return u;}return cast();}
+ExprPtr Parser::unary(){if(match({TokenKind::Bang,TokenKind::Minus,TokenKind::Plus,TokenKind::Star,TokenKind::Ampersand,TokenKind::Try})){auto op=previous();auto u=std::make_shared<UnaryExpr>();u->op=op.kind;u->operand=unary();u->span=op.span;return u;}return cast();}
 ExprPtr Parser::cast(){auto e=call();while(match({TokenKind::As})){auto c=std::make_shared<CastExpr>();c->span=previous().span;c->value=e;c->typeName=parseTypeName();e=c;}return e;}
 ExprPtr Parser::call(){
     auto e=primary();
@@ -133,6 +172,11 @@ ExprPtr Parser::primary(){
     if(match({TokenKind::Null})){auto x=std::make_shared<LiteralExpr>();x->span=previous().span;x->value=std::monostate{};return x;}
     if(match({TokenKind::String})){auto x=std::make_shared<LiteralExpr>();x->span=previous().span;auto s=previous().lexeme;x->value=s.size()>=2?s.substr(1,s.size()-2):std::string{};return x;}
     if(match({TokenKind::Identifier})){auto x=std::make_shared<NameExpr>();x->span=previous().span;x->name=previous().lexeme;return x;}
+    if(match({TokenKind::LBracket})){
+        auto a=std::make_shared<ArrayExpr>();a->span=previous().span;
+        if(!check(TokenKind::RBracket))do{a->elements.push_back(expression());}while(match({TokenKind::Comma}));
+        consume(TokenKind::RBracket,"expected ']' after array literal");return a;
+    }
     if(match({TokenKind::LParen})){auto e=expression();consume(TokenKind::RParen,"expected ')' after expression");return e;}
     diagnostics_.error("NOE-P2001",peek().span,"expected expression");throw ParseError("parse");
 }
@@ -143,5 +187,5 @@ const Token& Parser::advance(){if(!check(TokenKind::Eof))++current_;return previ
 const Token& Parser::previous()const{return tokens_[current_-1];}
 const Token& Parser::peek()const{return tokens_[current_];}
 const Token& Parser::consume(TokenKind kind,const std::string& message){if(check(kind))return advance();diagnostics_.error("NOE-P2000",peek().span,message);throw ParseError("parse");}
-void Parser::synchronize(){if(!check(TokenKind::Eof))advance();while(!check(TokenKind::Eof)){if(previous().kind==TokenKind::Semicolon)return;switch(peek().kind){case TokenKind::Function:case TokenKind::Record:case TokenKind::Extern:case TokenKind::Export:case TokenKind::Let:case TokenKind::Const:case TokenKind::If:case TokenKind::While:case TokenKind::Return:return;default:break;}advance();}}
+void Parser::synchronize(){if(!check(TokenKind::Eof))advance();while(!check(TokenKind::Eof)){if(previous().kind==TokenKind::Semicolon)return;switch(peek().kind){case TokenKind::Function:case TokenKind::Record:case TokenKind::Module:case TokenKind::Import:case TokenKind::Extern:case TokenKind::Export:case TokenKind::Let:case TokenKind::Const:case TokenKind::If:case TokenKind::While:case TokenKind::Return:case TokenKind::Throw:return;default:break;}advance();}}
 } // namespace noe

@@ -1,5 +1,7 @@
 project {
     name: "noe"
-    version: "0.1.0-bootstrap"
+    version: "1.0.0-production-track"
     entry: "bootstrap/main.cpp"
+    profile: "compiler"
+    target: "linux-x86_64-bootstrap"
 }

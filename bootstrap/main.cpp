@@ -7,7 +7,7 @@
 using namespace noe;
 
 static void usage() {
-    std::cout << "Noe bootstrap compiler 0.0.8\n"
+    std::cout << "Noe compiler " << NOE_COMPILER_VERSION << "\n"
               << "usage: noe <command> [path]\n\n"
               << "  new <name> [dir]       create a Noe project (project.noe, no TOML)\n"
               << "  lex <file>             print lexer tokens\n"
@@ -19,6 +19,8 @@ static void usage() {
               << "  manifest [file]        read project.noe\n"
               << "  lock [file]            generate deterministic noe.lock\n"
               << "  test [dir]             compile and run .noe tests\n"
+              << "  doctor [dir]           verify production-track repository health\n"
+              << "  release-check [dir]    alias for doctor after running tests externally\n"
               << "  lsp                    run JSON-RPC language server\n";
 }
 
@@ -33,8 +35,14 @@ static std::optional<SourceSelection> selectSource(int argc, char** argv, Diagno
 int main(int argc, char** argv) {
     if (argc < 2) { usage(); return 0; }
     std::string cmd = argv[1];
-    if (cmd == "--version" || cmd == "version") { std::cout << "Noe 0.0.8-bootstrap\n"; return 0; }
+    if (cmd == "--version" || cmd == "version") {
+        std::cout << "Noe " << NOE_COMPILER_VERSION << "\n"
+                  << "language=" << NOE_LANGUAGE_VERSION << "\n"
+                  << "target=" << NOE_SUPPORTED_TARGET << "\n";
+        return 0;
+    }
     if (cmd == "lsp") return LanguageServer{}.run();
+    if (cmd == "doctor" || cmd == "release-check") return runProductionDoctor(argc >= 3 ? argv[2] : ".");
     try {
         if (cmd == "new") {
             if (argc < 3) { std::cerr << "NOE-C0002: new requires a project name\n"; return 1; }

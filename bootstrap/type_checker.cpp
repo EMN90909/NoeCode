@@ -4,16 +4,21 @@
 namespace noe {
 
 TypeChecker::TypeChecker(Diagnostics& diagnostics) : diagnostics_(diagnostics) { pushScope(); }
-void TypeChecker::pushScope(){ scopes_.push_back({}); }
-void TypeChecker::popScope(){ scopes_.pop_back(); }
-void TypeChecker::define(const std::string& name, Type type, Span span){
+void TypeChecker::pushScope(){ scopes_.push_back({}); constScopes_.push_back({}); }
+void TypeChecker::popScope(){ scopes_.pop_back(); constScopes_.pop_back(); }
+void TypeChecker::define(const std::string& name, Type type, bool isConst, Span span){
     auto& scope=scopes_.back();
+    auto& constScope=constScopes_.back();
     if(scope.count(name)) diagnostics_.error("NOE-T3003",span,"symbol '"+name+"' is already defined in this scope");
-    else scope[name]=type;
+    else { scope[name]=type; constScope[name]=isConst; }
 }
 std::optional<Type> TypeChecker::resolve(const std::string& name) const {
     for(auto it=scopes_.rbegin();it!=scopes_.rend();++it){ auto f=it->find(name); if(f!=it->end()) return f->second; }
     return std::nullopt;
+}
+bool TypeChecker::isConstSymbol(const std::string& name) const {
+    for(auto it=constScopes_.rbegin();it!=constScopes_.rend();++it){ auto f=it->find(name); if(f!=it->end()) return f->second; }
+    return false;
 }
 
 bool TypeChecker::check(const Program& program){
@@ -41,7 +46,7 @@ void TypeChecker::checkStmt(const StmtPtr& stmt){
         Type declared=s->annotation?typeFromName(*s->annotation):init;
         if(s->annotation && declared.kind==TypeKind::Unknown) diagnostics_.error("NOE-T3000",s->span,"unknown type '"+*s->annotation+"'");
         if(!canAssign(declared,init)) diagnostics_.error("NOE-T3001",s->span,"cannot assign "+init.name()+" to "+declared.name(),"change the value or the declared type");
-        define(s->name,declared,s->span); return;
+        define(s->name,declared,s->isConst,s->span); return;
     }
     if(auto s=std::dynamic_pointer_cast<ExprStmt>(stmt)){ checkExpr(s->expr); return; }
     if(auto s=std::dynamic_pointer_cast<BlockStmt>(stmt)){ pushScope(); for(const auto& x:s->statements) checkStmt(x); popScope(); return; }
@@ -60,7 +65,7 @@ void TypeChecker::checkStmt(const StmtPtr& stmt){
     }
     if(auto s=std::dynamic_pointer_cast<FunctionStmt>(stmt)){
         auto sig=functions_[s->name]; Type saved=currentReturn_; currentReturn_=sig.result;
-        pushScope(); for(std::size_t i=0;i<s->params.size();++i) define(s->params[i].name,sig.params[i],s->params[i].span);
+        pushScope(); for(std::size_t i=0;i<s->params.size();++i) define(s->params[i].name,sig.params[i],false,s->params[i].span);
         for(const auto& x:s->body->statements) checkStmt(x);
         popScope(); currentReturn_=saved; return;
     }
@@ -89,6 +94,7 @@ Type TypeChecker::checkExpr(const ExprPtr& expr){
         if(e->op==TokenKind::Equal){
             auto n=std::dynamic_pointer_cast<NameExpr>(e->left); Type rhs=checkExpr(e->right); if(!n) return {TypeKind::Unknown};
             auto lhs=resolve(n->name); if(!lhs){ diagnostics_.error("NOE-T3002",n->span,"unknown symbol '"+n->name+"'"); return {TypeKind::Unknown}; }
+            if(isConstSymbol(n->name)) diagnostics_.error("NOE-T3014",e->span,"cannot assign to const '"+n->name+"'","declare it with let when mutation is intended");
             if(!canAssign(*lhs,rhs)) diagnostics_.error("NOE-T3001",e->span,"cannot assign "+rhs.name()+" to "+lhs->name());
             return *lhs;
         }

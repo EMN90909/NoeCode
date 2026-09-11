@@ -2,7 +2,7 @@
 
 ![Noe compiler CI](https://github.com/EMN90909/NoeCode/actions/workflows/ci.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
-![Status](https://img.shields.io/badge/status-bootstrap%200.1-orange)
+![Status](https://img.shields.io/badge/status-1.0.0--production--track-orange)
 
 **NoeCode** is the bootstrap implementation of **Noe**, a standalone, statically typed, native-oriented general-purpose programming language.
 
@@ -19,23 +19,25 @@ print(add(10, 20))
 
 ## What works now
 
-The current bootstrap is ready to clone, build, test, and use for the supported Noe subset.
+The current bootstrap is on a **1.0.0 production-track** baseline for the supported Noe subset. It is ready to clone, build, test, and use for Linux x86-64 experiments and native smoke programs.
 
 - Lexer, parser, AST, type checker, NIR and optimizer
 - Reference interpreter: `noe run`
 - Custom Linux x86-64 native backend: `noe build`
 - Assembler/linker driver for generated executables
 - `project.noe` manifests and deterministic `noe.lock`
+- `const` reassignment safety diagnostics
 - Formatter foundation and `.noe` test runner
 - JSON-RPC language-server bootstrap diagnostics
+- Production doctor/release-check scripts
 - GitHub Actions CI validation
 - Public docs, MIT license, legal notice, security policy and contribution guide
 
 ## Current status
 
-NoeCode is **usable as a bootstrap compiler and language experiment**. It is not yet a complete Noe 1.0 production language. The native backend currently supports the core Linux x86-64 subset: integers, booleans, functions, local variables, arithmetic, comparisons, branches, while loops, returns, and printing integers/bools/constant strings.
+NoeCode is **usable as a production-track bootstrap compiler and language experiment**. It is not yet a complete Noe 1.0 ecosystem with every long-term feature. The native backend currently supports the core Linux x86-64 subset: integers, booleans, functions, local variables, arithmetic, comparisons, branches, while loops, returns, const assignment checks, and printing integers/bools/constant strings.
 
-See [`docs/STATUS.md`](docs/STATUS.md) for the exact implemented feature set and limitations.
+See [`docs/STATUS.md`](docs/STATUS.md) and [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md) for the exact implemented feature set and limitations.
 
 ## Quick start
 
@@ -74,6 +76,12 @@ Run the complete verification suite:
 sh scripts/test.sh
 ```
 
+Run the production-track release check:
+
+```sh
+sh scripts/release_check.sh
+```
+
 ## Project layout
 
 ```text
@@ -82,7 +90,7 @@ NoeCode/
 ├── docs/                   # user and implementer documentation
 ├── examples/               # runnable .noe examples
 ├── tests/                  # .noe compiler/runtime tests
-├── scripts/                # build/test scripts
+├── scripts/                # build/test/release scripts
 ├── project.noe             # Noe-native project manifest
 ├── LICENSE
 └── LEGAL.md
@@ -112,6 +120,8 @@ noe format <file>
 noe manifest [project.noe]
 noe lock [project.noe]
 noe test [directory]
+noe doctor [directory]
+noe release-check [directory]
 noe lsp
 ```
 
@@ -127,6 +137,7 @@ Important pages:
 - [`docs/NATIVE_BACKEND.md`](docs/NATIVE_BACKEND.md)
 - [`docs/PROJECTS.md`](docs/PROJECTS.md)
 - [`docs/STATUS.md`](docs/STATUS.md)
+- [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md)
 - [`docs/ROADMAP.md`](docs/ROADMAP.md)
 
 ## Design direction

@@ -2,6 +2,7 @@
 set -eu
 sh scripts/build.sh
 ./build/noe --version
+./build/noe doctor .
 
 # Frontend + type checker + NIR + optimizer + interpreter.
 ./build/noe check examples/native_hello.noe
@@ -16,6 +17,14 @@ if ./build/noe check build/type_error.noe > build/type_error.out 2>&1; then
     exit 1
 fi
 grep -q 'NOE-T3001' build/type_error.out
+
+# Const safety diagnostic.
+printf 'const answer = 42\nanswer = 1\n' > build/const_error.noe
+if ./build/noe check build/const_error.noe > build/const_error.out 2>&1; then
+    echo 'expected type checker to reject const reassignment' >&2
+    exit 1
+fi
+grep -q 'NOE-T3014' build/const_error.out
 
 # Test runner.
 ./build/noe test tests

@@ -1,57 +1,22 @@
-# Noe Documentation
+# Noe documentation
 
-Welcome to the Noe documentation.
+Welcome to the NoeCode documentation hub.
 
-Noe is a standalone, statically typed, native-oriented general-purpose programming language. This repository contains the current bootstrap compiler and toolchain.
+Noe is a standalone, statically typed, native-oriented general-purpose language. This repository contains the bootstrap compiler and the current supported 1.0 production-track subset.
 
-## Start here
+## Read first
 
-1. [Getting started](GETTING_STARTED.md)
-2. [Language reference](LANGUAGE_REFERENCE.md)
-3. [Toolchain reference](TOOLCHAIN.md)
-4. [Projects and packages](PROJECTS.md)
-5. [Native backend](NATIVE_BACKEND.md)
-6. [Implementation status](STATUS.md)
-7. [Roadmap](ROADMAP.md)
+- [`GETTING_STARTED.md`](GETTING_STARTED.md) — clone, build, run, and compile a `.noe` program.
+- [`STATUS.md`](STATUS.md) — exact feature status and limitations.
+- [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md) — what the 1.0 production-track baseline means.
+- [`LANGUAGE_REFERENCE.md`](LANGUAGE_REFERENCE.md) — current syntax and semantics.
+- [`TOOLCHAIN.md`](TOOLCHAIN.md) — compiler pipeline, CLI, diagnostics, formatter, tests, and LSP.
+- [`NATIVE_BACKEND.md`](NATIVE_BACKEND.md) — custom Linux x86-64 backend details.
+- [`PROJECTS.md`](PROJECTS.md) — `project.noe` and `noe.lock`.
+- [`ROADMAP.md`](ROADMAP.md) — path from bootstrap to full Noe ecosystem.
 
-## What Noe can do today
+## Important honesty rule
 
-The current bootstrap can lex, parse, type-check, lower to NIR, optimize, interpret, and natively build a supported `.noe` subset into a Linux x86-64 executable.
+The repository is production-track for the currently implemented bootstrap subset. It is not yet the final complete Noe language specification or complete Noe standard library.
 
-## Important status note
-
-NoeCode is usable as a bootstrap compiler and language experiment. It is not yet the full future Noe language described by the long-term specification. See [STATUS.md](STATUS.md) for the exact supported feature set.
-
-## Noe project layout
-
-```text
-myapp/
-├── project.noe
-├── src/
-│   └── main.noe
-└── noe.lock
-```
-
-## Example
-
-```noe
-function add(a: int, b: int): int {
-    return a + b
-}
-
-print("Hello from Noe")
-print(add(10, 20))
-```
-
-Run it:
-
-```sh
-./build/noe run src/main.noe
-```
-
-Build it natively on Linux x86-64:
-
-```sh
-./build/noe build src/main.noe build/myapp
-./build/myapp
-```
+Unsupported features are documented as future work instead of being hidden or implied.

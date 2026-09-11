@@ -11,6 +11,10 @@
 
 namespace noe {
 
+inline constexpr const char* NOE_LANGUAGE_VERSION = "1.0";
+inline constexpr const char* NOE_COMPILER_VERSION = "1.0.0-production-track";
+inline constexpr const char* NOE_SUPPORTED_TARGET = "linux-x86_64-bootstrap";
+
 struct Span {
     std::size_t start = 0;
     std::size_t end = 0;
@@ -190,10 +194,12 @@ private:
     Type checkExpr(const ExprPtr& expr);
     void pushScope();
     void popScope();
-    void define(const std::string& name, Type type, Span span);
+    void define(const std::string& name, Type type, bool isConst, Span span);
     std::optional<Type> resolve(const std::string& name) const;
+    bool isConstSymbol(const std::string& name) const;
     Diagnostics& diagnostics_;
     std::vector<std::unordered_map<std::string, Type>> scopes_;
+    std::vector<std::unordered_map<std::string, bool>> constScopes_;
     std::unordered_map<std::string, FunctionType> functions_;
     Type currentReturn_{TypeKind::Void};
 };
@@ -265,5 +271,6 @@ struct CompileResult {
 };
 CompileResult compileSource(const std::string& source);
 std::string readTextFile(const std::filesystem::path& path);
+int runProductionDoctor(const std::filesystem::path& root);
 
 } // namespace noe

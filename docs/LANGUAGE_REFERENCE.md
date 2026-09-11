@@ -4,19 +4,12 @@ This page documents the implemented bootstrap Noe syntax. Roadmap-only features 
 
 ## Files
 
-Noe source files use the `.noe` extension.
-
-```text
-src/main.noe
-```
-
-Project metadata uses `project.noe`. Noe projects do not use TOML.
+Noe source files use `.noe`. Project metadata uses `project.noe`.
 
 ## Comments
 
 ```noe
 // line comment
-
 /* block comment */
 ```
 
@@ -27,8 +20,6 @@ let name = "Noe"
 let count: int = 10
 const enabled = true
 ```
-
-`let` declares a local variable. `const` is parsed and tracked as a declaration form; stronger mutation enforcement is a future refinement.
 
 ## Primitive types
 
@@ -43,15 +34,6 @@ void
 null
 ```
 
-The type checker infers obvious primitive values:
-
-```noe
-let a = 10       // int
-let b = 1.5      // float
-let ok = true    // bool
-let msg = "hi"   // string
-```
-
 ## Functions
 
 ```noe
@@ -59,8 +41,6 @@ function add(a: int, b: int): int {
     return a + b
 }
 ```
-
-Function parameters should be typed. Return types are checked when provided.
 
 ## Calls
 
@@ -73,23 +53,11 @@ print(add(10, 20))
 
 ## Operators
 
-Arithmetic:
+Arithmetic: `+ - * / %`
 
-```text
-+  -  *  /  %
-```
+Comparison: `== != < <= > >=`
 
-Comparison:
-
-```text
-==  !=  <  <=  >  >=
-```
-
-Logic:
-
-```text
-!  &&  ||
-```
+Logic: `! && ||`
 
 Assignment:
 
@@ -108,13 +76,10 @@ if (score > 10) {
 }
 ```
 
-Parentheses around conditions are accepted. Brace blocks are canonical.
-
 ## While loops
 
 ```noe
 let i = 0
-
 while (i < 3) {
     print(i)
     i = i + 1

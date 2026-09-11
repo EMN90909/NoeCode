@@ -1,7 +1,5 @@
 project {
     name: "noe"
-    version: "0.0.8"
+    version: "0.1.0-bootstrap"
     entry: "bootstrap/main.cpp"
-    profile: "bootstrap"
-    target: "native"
 }

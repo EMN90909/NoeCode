@@ -52,16 +52,6 @@ cd hello-noe
 ../build/noe run src/main.noe
 ```
 
-A Noe project uses:
-
-```text
-project.noe
-src/main.noe
-noe.lock
-```
-
-No TOML manifest is required.
-
 ## 5. Run all checks
 
 From the repository root:
@@ -69,5 +59,3 @@ From the repository root:
 ```sh
 sh scripts/test.sh
 ```
-
-This command builds the compiler, checks sample programs, runs interpreter tests, builds and executes a native binary, verifies `project.noe`, validates deterministic locks, and exercises the language-server diagnostic path.

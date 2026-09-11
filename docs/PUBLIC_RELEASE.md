@@ -15,13 +15,10 @@ Use this checklist before tagging a Noe release.
 - Example program builds as a native Linux x86-64 executable.
 - CI passes on `main`.
 
-## Nice to have
-
-- GitHub repository description is set.
-- Topics are set: `noe`, `compiler`, `programming-language`, `native`, `x86-64`, `interpreter`, `language-server`.
-- First GitHub Release is created from a tested commit.
-- Known limitations are listed in `docs/STATUS.md`.
-
-## Current recommended description
+## Recommended GitHub description
 
 Noe is an experimental statically typed general-purpose programming language and custom compiler bootstrap: `.noe` source, `project.noe` manifests, NIR, interpreter, native Linux x86-64 build, formatter, tests, and LSP diagnostics — no Rust, TOML, Cargo, or LLVM.
+
+## Suggested topics
+
+`noe`, `compiler`, `programming-language`, `native`, `x86-64`, `interpreter`, `language-server`, `systems-programming`

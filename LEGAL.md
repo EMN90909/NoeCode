@@ -2,7 +2,7 @@
 
 NoeCode is provided under the MIT License. See `LICENSE` for the full license text.
 
-This project is experimental compiler infrastructure for the Noe language. It is provided as-is, without warranties or guarantees of fitness for production, safety-critical, security-critical, financial, medical, aviation, or legal use.
+This project is experimental compiler infrastructure for the Noe language. It is provided as-is, without warranties or guarantees of fitness for production, safety-critical, security-critical, financial, medical, aviation, industrial, or legal use.
 
 Noe, `.noe`, `project.noe`, NIR, and related names are project identifiers used by this repository. Third-party names, trademarks, platforms, operating systems, and tools belong to their respective owners.
 

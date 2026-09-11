@@ -25,43 +25,14 @@ noe test [directory]
 noe lsp
 ```
 
-## `noe new`
+## Command summary
 
-Creates a project using Noe-native metadata:
-
-```text
-project.noe
-src/main.noe
-```
-
-## `noe check`
-
-Runs the frontend and type checker without executing code.
-
-## `noe nir`
-
-Prints optimized NIR for inspection and debugging.
-
-## `noe run`
-
-Compiles to NIR and executes through the reference interpreter.
-
-## `noe build`
-
-Compiles the supported subset to a Linux x86-64 native executable.
-
-## `noe lock`
-
-Generates deterministic lock metadata for the current project. Remote package resolution is future work.
-
-## `noe format`
-
-Applies the canonical formatter foundation to a `.noe` source file.
-
-## `noe test`
-
-Finds `.noe` files in a test directory, compiles them, and runs them.
-
-## `noe lsp`
-
-Starts the language-server bootstrap. It supports JSON-RPC initialization and compiler diagnostics for editor/agent integration foundations.
+- `noe new` creates a project using `project.noe`.
+- `noe check` runs parsing and type checking.
+- `noe nir` prints optimized NIR.
+- `noe run` executes through the reference interpreter.
+- `noe build` produces a Linux x86-64 native executable for the supported subset.
+- `noe lock` generates deterministic lock metadata.
+- `noe format` applies canonical formatting foundations.
+- `noe test` compiles and runs `.noe` tests.
+- `noe lsp` starts the language-server bootstrap.

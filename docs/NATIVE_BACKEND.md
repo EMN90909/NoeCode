@@ -45,28 +45,8 @@ Hello from native Noe
 
 ## Supported native operations
 
-- integer constants
-- boolean constants
-- local variables
-- integer arithmetic
-- comparisons
-- branches
-- while loops
-- function calls
-- returns
-- `print` for integers, booleans, and constant strings
+Integer constants, boolean constants, local variables, integer arithmetic, comparisons, branches, while loops, function calls, returns, and `print` for integers, booleans, and constant strings.
 
-## Explicit non-goals for this backend stage
+## Explicit limitations
 
-The backend intentionally reports diagnostics instead of silently miscompiling unsupported features. Native support for floats, heap strings, arrays, records, classes, ABI-level libraries and cross-platform targets is future work.
-
-## Next backend milestones
-
-1. Object-file writer instead of shelling to system tools.
-2. Linux ARM64 target.
-3. Windows PE/COFF target.
-4. macOS Mach-O target.
-5. Debug information.
-6. Runtime/stdlib linking.
-7. FFI and calling-convention support.
-8. Freestanding/system-profile output.
+Native support for floats, heap strings, arrays, records, classes, ABI-level libraries and cross-platform targets is future work.

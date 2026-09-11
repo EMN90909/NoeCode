@@ -12,12 +12,4 @@ Only the current `main` branch is maintained during bootstrap development. There
 
 ## Scope
 
-Security reports may include:
-
-- incorrect code generation;
-- crashes on malformed `.noe` input;
-- unsafe file writes from CLI commands;
-- path traversal in project/package tooling;
-- generated binary behavior that differs from checked Noe semantics.
-
-The project will add a fuller security process when Noe reaches stable release status.
+Security reports may include incorrect code generation, crashes on malformed `.noe` input, unsafe file writes from CLI commands, path traversal in project/package tooling, or generated binary behavior that differs from checked Noe semantics.

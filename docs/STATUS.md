@@ -32,24 +32,8 @@ The custom native backend currently supports integer and boolean control-flow pr
 
 ## Not complete yet
 
-These are roadmap features, not finished features:
-
-- records/classes/interfaces/traits as full semantic systems
-- generics
-- modules/import resolver across many files
-- package registry downloads
-- advanced standard library
-- async/await
-- threads/channels/tasks
-- C/C++/C# FFI
-- realtime profile analysis
-- unsafe memory/pointers/allocators
-- SIMD/atomics
-- WebAssembly backend
-- freestanding kernel/driver SDK
-- visual programming frontend
-- self-hosted Noe compiler
+Roadmap features not finished yet include full records/classes/interfaces/traits, generics, multi-file modules, package registry downloads, advanced standard library, async/await, threads/channels/tasks, FFI, realtime analysis, unsafe memory/pointers/allocators, SIMD/atomics, WebAssembly, freestanding kernel/driver SDK, visual programming, and self-hosting.
 
 ## Readiness rule
 
-Use NoeCode today for experimenting, learning the compiler architecture, writing small supported `.noe` programs, and extending the language. Do not present it as a production-ready replacement for C#, C++, Rust, Go, JavaScript, or Python yet.
+Use NoeCode today for experimenting, learning the compiler architecture, writing small supported `.noe` programs, and extending the language. Do not present it as a production-ready replacement for major established languages yet.

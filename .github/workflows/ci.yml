@@ -12,6 +12,7 @@ jobs:
   cross-platform-core:
     name: core-${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -36,6 +37,7 @@ jobs:
   linux-native-release:
     name: linux-native-release
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Run full native release check

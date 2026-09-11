@@ -1,0 +1,32 @@
+module tests.general
+
+function identity<T>(value: T): T {
+    return value
+}
+
+function fail(): isize {
+    throw 3
+}
+
+function propagate(): isize {
+    let value: isize = try fail()
+    return value
+}
+
+let values: [int; 4] = [1, 2, 3, 4]
+let view: []int = slice(values)
+print(len(view))
+print(view[2])
+
+let counter: int = 41
+let counterPtr: *int = &counter
+atomic.store(counterPtr, 42)
+print(atomic.load(counterPtr))
+print(atomic.exchange(counterPtr, 43))
+print(atomic.compareExchange(counterPtr, 43, 44))
+atomic.fence()
+
+print(identity(9))
+print(propagate())
+intrinsic("x86.pause")
+asm("nop")

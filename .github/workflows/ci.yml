@@ -43,7 +43,8 @@ jobs:
           $nq = if (Test-Path 'build/Release/noqeri.exe') { 'build/Release/noqeri.exe' } else { 'build/noqeri.exe' }
           & $nq doctor .
 
-  linux-native:
+  freestanding-native:
+    name: freestanding-native
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

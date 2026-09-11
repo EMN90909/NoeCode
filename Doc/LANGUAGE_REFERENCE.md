@@ -1,61 +1,105 @@
-# noqeri 1.0 core language reference
+# noqeri 1.3 language reference
 
-noqeri is statically checked before NIR execution or native code generation. The stable grammar stays intentionally small: capability grows through ordinary calls and the host ABI rather than low-level syntax.
+noqeri remains a compact statically checked language, but 1.3 adds a small set of explicit systems primitives. They are general-purpose features for libraries, embedded programs, runtimes, FFI, high-performance code, and kernels; there is no special OS dialect or kernel mode.
 
-## Lexical form
+## Scalar types
 
-Identifiers use ASCII letters/underscore followed by letters, digits or underscore. Line comments use `//`. Strings use double quotes. Integer, floating-point, boolean (`true`, `false`) and `null` literals are recognized.
+The portable-width integer types are:
 
-## Declarations
+- unsigned: `u8`, `u16`, `u32`, `u64`, `usize`
+- signed: `i8`, `i16`, `i32`, `i64`, `isize`
+
+`usize` and `isize` are pointer-sized. On the current x86-64 native target they are 64-bit.
+
+The existing convenient types `int`, `float`, `bool`, `string`, `null`, and `void` remain available. `int` is the ordinary general-purpose signed integer type.
+
+## Pointers
 
 ```nqr
-let count: int = 0
-const name: string = "noqeri"
+let value: u32 = 42
+let p: *u32 = &value
+let copy: u32 = *p
+p[0] = 7
+```
 
-function add(a: int, b: int): int {
-    return a + b
+`*T` is a pointer to `T`. `&value` produces an address. Unary `*` dereferences. Indexing performs scaled pointer arithmetic using the size of `T`.
+
+Explicit pointer/integer conversion uses `as`:
+
+```nqr
+let address: usize = 0x1000
+let mmio: *u32 = address as *u32
+let raw: usize = mmio as usize
+```
+
+Implicit integer-to-pointer conversion is intentionally not performed.
+
+## Volatile memory
+
+Volatile is attached to the pointer:
+
+```nqr
+let status: *volatile u32 = 0xF0000000 as *volatile u32
+let current: u32 = status[0]
+status[1] = current
+```
+
+Loads and stores through a `*volatile T` lower to volatile NIR memory operations. `volatile` is a memory-access promise; it is not a general variable modifier.
+
+## Records
+
+```nqr
+record PixelBuffer {
+    address: *volatile u32
+    width: u32
+    height: u32
+    pitch: u32
 }
 ```
 
-`const` bindings cannot be reassigned. Core type names are `void`, `null`, `bool`, `int`, `float` and `string`.
+Records use declaration-order layout with natural alignment. Field offsets are resolved during type checking, so native code sees explicit address calculations rather than dynamic property lookup.
 
-## Control flow
+A pointer to a record may use ordinary field syntax:
 
 ```nqr
-if count < 10 {
-    print(count)
-} else {
-    print("done")
-}
-
-while count < 10 {
-    count = count + 1
+function clear(buffer: *PixelBuffer): void {
+    buffer.address[0] = 0
 }
 ```
 
-## Expressions
+The `.` operator automatically treats a pointer-to-record as the base address for field access. This keeps common systems code simple without adding `->`.
 
-The stable core supports calls, unary `!`/`-`, arithmetic `+ - * / %`, comparisons, equality and logical `&&` / `||`, with conventional precedence.
+## Casts
 
-## Services without syntax growth
+`value as Type` is the one explicit cast form. Numeric casts, pointer-to-pointer casts, `usize`/`isize` to pointer, pointer to `usize`/`isize`, and `null` to pointer are supported.
 
-Built-in runtime services remain ordinary named calls:
-
-```nqr
-print(platform())
-let started: int = clockMillis()
-print(textLength("simple"))
-```
-
-Embedders may register additional services through ABI v1 and call them with the ordinary function-call form:
+## Linkage
 
 ```nqr
-let response = host("app.lookup", "item-42")
-print(response)
+extern function device_write(data: *u8, count: usize): isize
+
+export function library_entry(data: *u8, count: usize): isize {
+    return device_write(data, count)
+}
 ```
 
-`host` does not add pointer, address, memory, record, array or intrinsic expressions to the language. It is lowered through the existing NIR `Call` operation. See `Doc/ABI.md` for the versioned C boundary.
+`extern` declares a function whose symbol is provided by the surrounding link. `export` makes the Noqeri function available under its declared name. Neither keyword implies an operating system.
 
-## Deliberately outside the stable grammar
+## NIR memory model
 
-The lexer reserves `import`, `record` and `class`, but they are not documented as stable implemented grammar until parser, type, NIR and runtime support exists. Pointer operators, address-of/dereference expressions, raw-memory access, architecture intrinsics and volatile operations are likewise not part of the 1.0 language.
+The NIR now has explicit operations for:
+
+- `address_of`
+- `load_memory`
+- `store_memory`
+- volatile memory loads/stores
+- `ptr_offset`
+- `cast`
+
+Memory operations carry an access width. Volatile operations remain visible to the optimizer.
+
+## ABI services
+
+The Noqeri ABI remains separate from raw language memory. Friendly services such as `print`, `clockMillis`, and `platform` can still be supplied through the Noqeri ABI. Low-level code does not need those services to use pointers, records, exports, or extern declarations.
+
+See `Doc/ABI.md` and `Doc/FREESTANDING.md` for embedding and target details.

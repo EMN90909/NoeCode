@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(noqeri VERSION 1.1.0 LANGUAGES CXX)
+project(noqeri VERSION 1.2.0 LANGUAGES CXX)
 include(GNUInstallDirs)
 
 option(NOQERI_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
@@ -68,6 +68,7 @@ if(BUILD_TESTING)
   add_test(NAME noqeri-version COMMAND noqeri --version)
   add_test(NAME noqeri-check-hello COMMAND noqeri check ${CMAKE_SOURCE_DIR}/examples/hello.nqr)
   add_test(NAME noqeri-tests COMMAND noqeri test ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME noqeri-freestanding-build COMMAND noqeri build ${CMAKE_SOURCE_DIR}/examples/native_hello.nqr ${CMAKE_BINARY_DIR}/native_hello.s)
   add_test(NAME noqeri-doctor COMMAND noqeri doctor ${CMAKE_SOURCE_DIR})
 endif()
 

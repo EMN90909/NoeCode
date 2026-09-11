@@ -1,0 +1,6 @@
+*.noe linguist-detectable=true
+*.noe text eol=lf
+*.md text eol=lf
+*.cpp text eol=lf
+*.hpp text eol=lf
+*.sh text eol=lf

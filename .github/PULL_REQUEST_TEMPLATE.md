@@ -1,14 +1,16 @@
 ## Summary
 
-Describe the Noe compiler, docs, tests, or tooling change.
+Describe the Ric compiler, docs, tests, runtime, editor, site, or tooling change.
 
 ## Checks
 
-- [ ] `sh scripts/test_core.sh` passes on Linux/macOS or `.\scripts	est_core.ps1` passes on Windows.
-- [ ] `sh scripts/release_check.sh` passes for Linux native backend changes.
-- [ ] New language behavior is documented in `docs/` or `grammar/`.
-- [ ] No TOML, Cargo, Rust, Python, or LLVM dependency was introduced.
+- [ ] `./scripts/test_core.sh` passes on Linux/macOS or `.\scripts\test_core.ps1` passes on Windows.
+- [ ] `./scripts/release_check.sh` passes for Linux native-backend changes.
+- [ ] New language behavior is documented in `Doc/` and/or `Grammar/`.
+- [ ] New or changed language behavior has `.ric` tests.
+- [ ] Public naming remains `Ric`, `.ric`, `project.ric`, `ric.lock`, and `ric`.
+- [ ] Unsupported platform behavior is documented accurately.
 
 ## Notes
 
-Mention unsupported platform behavior honestly when a change touches native code generation.
+Call out compatibility changes, backend limitations, and release-impacting changes explicitly.

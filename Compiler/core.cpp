@@ -1,6 +1,7 @@
 #include "noe.hpp"
 #include <algorithm>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <regex>
 #include <set>

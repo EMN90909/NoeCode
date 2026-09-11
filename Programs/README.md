@@ -1,5 +1,11 @@
 # Programs
 
-The current executable entry point is `Compiler/bootstrap/main.cpp` and builds as `noqeri`.
+`Programs/` owns user-facing noqeri tools built into the compiler executable.
 
-This directory owns CLI contracts, future auxiliary executables and install layout. User-facing command names must stay consistent with `README.md` and `Doc/TOOLCHAIN.md`.
+- `noqeri.cpp` — CLI entry point.
+- `formatter.cpp` — source formatter.
+- `package.cpp` — project/lock tooling.
+- `lsp.cpp` — JSON-RPC language-server foundation.
+- `test_runner.cpp` — `.nqr` test runner.
+
+Keeping these tools separate from parser/compiler/runtime code makes command behavior easier to evolve without collapsing the repository into one source directory.

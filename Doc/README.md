@@ -1,6 +1,6 @@
 # noqeri documentation
 
-<p align="center"><img src="_static/noqeri-logo.svg" alt="noqeri logo" width="360"></p>
+<p align="center"><img src="_static/noqeri-logo.webp" alt="noqeri logo" width="420"></p>
 
 The public documentation is separated from implementation notes so users can learn the language without reading bootstrap internals.
 

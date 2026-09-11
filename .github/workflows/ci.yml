@@ -20,6 +20,13 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
+      - name: Verify repository (Unix)
+        if: runner.os != 'Windows'
+        run: ./scripts/verify_repository.sh
+      - name: Verify repository (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/verify_repository.ps1
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - name: Build
@@ -42,3 +49,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ./scripts/release_check.sh
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure ASan/UBSan
+        run: cmake -S . -B build-sanitize -DCMAKE_BUILD_TYPE=Debug -DNOQERI_ENABLE_SANITIZERS=ON
+      - name: Build
+        run: cmake --build build-sanitize --parallel
+      - name: Test
+        run: ctest --test-dir build-sanitize --output-on-failure

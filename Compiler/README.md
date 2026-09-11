@@ -1,5 +1,13 @@
-# noqeri compiler
+# Compiler
 
-`bootstrap/` contains the buildable C++17 compiler used to establish noqeri. It owns lexical analysis, parsing, type checking, NIR lowering/optimization, interpreted execution, native Linux x86-64 emission, project tooling, formatter, tests and LSP bootstrap behavior.
+`Compiler/` owns noqeri semantic analysis and code generation. The compiled bootstrap implementation now lives here rather than in one catch-all bootstrap directory.
 
-The long-term goal is a reproducible staged bootstrap with the compiler written in `.nqr`; until then this directory is the canonical implementation rather than a set of placeholders.
+- `core.cpp` — diagnostics, type utilities and compile pipeline coordination.
+- `type_checker.cpp` — static checking.
+- `nir.cpp` — noqeri IR lowering/printing.
+- `optimizer.cpp` — NIR optimization.
+- `native_backend.cpp` — native assembly emission.
+- `linker.cpp` — platform linker driver.
+- `bootstrap/noe.hpp` — temporary compatibility include used by the C++ bootstrap sources; the public header is `Include/noqeri/noqeri.hpp`.
+
+New compiler implementation should be placed by responsibility, with tests and documentation updated in the same change.

@@ -1,5 +1,7 @@
 # Runtime
 
-noqeri's bootstrap runtime is the NIR interpreter plus the platform native backend/linker path. Runtime responsibilities include built-ins such as `print`, call frames, value representation, process exit status and future allocation/GC behavior.
+`Runtime/` owns noqeri execution semantics and the future native runtime/ABI boundary.
 
-Interpreted and native execution should share semantics; backend-specific differences are bugs unless explicitly documented.
+`interpreter.cpp` is the current reference NIR interpreter. It is used for `noqeri run`, tests and cross-platform semantic validation while native backends mature.
+
+Native runtime work must document allocation, strings, calls, errors/panics, platform ABI behavior and compatibility guarantees before those interfaces are treated as stable.

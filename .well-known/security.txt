@@ -1,0 +1,4 @@
+Contact: https://github.com/EMN90909/NoeCode/security/advisories/new
+Preferred-Languages: en
+Canonical: https://github.com/EMN90909/NoeCode/blob/main/.well-known/security.txt
+Expires: 2027-09-11T00:00:00Z

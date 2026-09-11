@@ -1,5 +1,8 @@
 # noqeri brand assets
 
-`noqeri-logo.svg` is the canonical repository logo, vectorized from the uploaded wolf/code mark. The same mark is used by the README, public site and editor integrations so the language has one recognizable identity from repository page to `.nqr` file icon.
+The canonical noqeri identity is the wolf/code artwork supplied for the project.
 
-When adapting the mark for small UI surfaces, preserve the dark navy oval, blue code brackets, white angular wolf/monogram and blue inner-ear/eye accents. Do not replace it with an unrelated glyph for official noqeri tooling.
+- `noqeri-logo.webp` — optimized full logo used by the repository README, public site and documentation.
+- `noqeri-mark.png` — compact square derivative of the same artwork for `.nqr` file icons, extension icons and favicons.
+
+Keep the wolf, central N silhouette and code-bracket framing recognizable. The uploaded artwork is the source identity; do not substitute the previous generated SVG as the primary mark.

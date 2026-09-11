@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+set -eu
+required='README.md LICENSE LEGAL.md SECURITY.md CONTRIBUTING.md CMakeLists.txt project.nqr noqeri.lock Brand/noqeri-logo.webp Brand/noqeri-mark.png Grammar/noqeri.grammar.md Include/noqeri/noqeri.hpp Parser/lexer.cpp Parser/parser.cpp Compiler/core.cpp Runtime/interpreter.cpp Programs/noqeri.cpp Tools/build/production.cpp editors/vscode/package.json site/index.html'
+for path in $required; do
+  if [ ! -e "$path" ]; then echo "missing required repository path: $path" >&2; exit 1; fi
+done
+legacy=$(find . -path './.git' -prune -o -type f \( -name '*.noe' -o -name '*.ric' \) -print)
+if [ -n "$legacy" ]; then
+  echo "legacy source extensions found:" >&2
+  echo "$legacy" >&2
+  exit 1
+fi
+printf '%s\n' 'repository structure verified: noqeri / .nqr'

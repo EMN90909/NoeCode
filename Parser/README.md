@@ -1,5 +1,9 @@
-# Parser subsystem
+# Parser
 
-The buildable recursive-descent parser currently lives at `Compiler/bootstrap/parser.cpp`. This directory owns grammar-to-parser policy, parser error-recovery design and future generated/self-hosted parser work.
+`Parser/` owns the executable front-end implementation for noqeri syntax.
 
-Grammar changes require parser, formatter, editor grammar and `.nqr` test changes in the same commit.
+- `lexer.cpp` tokenizes `.nqr` source.
+- `parser.cpp` builds the bootstrap AST defined by `Include/noqeri/noqeri.hpp`.
+- `Grammar/noqeri.grammar.md` is the user-visible syntax contract.
+
+Grammar changes must update the grammar contract, lexer/parser behavior, language reference and conformance tests together.

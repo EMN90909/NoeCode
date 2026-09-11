@@ -1,77 +1,55 @@
-# Noqeri host ABI v1
+# Noqeri ABI v2
 
-Noqeri keeps the stable source language deliberately small. Native capability is provided through a versioned host boundary instead of pointer syntax, raw-memory instructions, architecture intrinsics or layout-dependent records.
+Noqeri owns its ABI. It is not the Linux ABI, Windows ABI, macOS ABI, libc ABI, or a kernel-specific ABI.
 
-## Language-side model
+The stable source language remains deliberately small. Platform capability is supplied below the language and NIR layers through `Include/noqeri/abi.h`, so Noqeri code does not need pointer operators, raw-memory instructions, architecture intrinsics, or layout-dependent records.
 
-Ordinary services look like ordinary calls:
+## Native entry
 
-```nqr
-print(platform())
-print(clockMillis())
-print(textLength("noqeri"))
-```
-
-Embedders can expose additional capabilities without extending the grammar:
-
-```nqr
-let result = host("app.lookup", "customer-42")
-print(result)
-```
-
-`host` is not a new expression form. It lowers to the existing NIR `Call` instruction. The first argument is a string service name; remaining arguments cross the ABI as primitive tagged values.
-
-## ABI contract
-
-The public C header is `Include/noqeri/abi.h`. ABI v1 contains only:
-
-- an explicit `NOQERI_ABI_VERSION`;
-- tagged `null`, `bool`, `int`, `float` and `string` values;
-- length-delimited strings;
-- a function entry `{ name, invoke, user_data }`;
-- a host table with an ABI version and entry count;
-- `noqeri_abi_version()` and `noqeri_run_source()` entry points.
-
-No AST, C++ object, STL type, NIR structure, pointer arithmetic contract or compiler-internal layout is part of the public ABI.
-
-## Minimal host
+Freestanding x86-64 output exports:
 
 ```c
-#include <noqeri/abi.h>
-
-static int32_t answer(void* user_data,
-                      const noqeri_abi_value* args,
-                      size_t argc,
-                      noqeri_abi_value* result,
-                      noqeri_abi_error* error) {
-    (void)user_data; (void)args; (void)argc; (void)error;
-    result->tag = NOQERI_ABI_INT;
-    result->as.integer = 42;
-    return 0;
-}
-
-int main(void) {
-    const noqeri_abi_function_entry functions[] = {
-        {"app.answer", answer, NULL},
-    };
-    const noqeri_host_api host = {
-        NOQERI_ABI_VERSION,
-        1,
-        functions,
-    };
-    noqeri_abi_error error = {0};
-    return noqeri_run_source("print(host(\"app.answer\"))", &host, &error);
-}
+int64_t noqeri_entry(const noqeri_abi* abi);
 ```
 
-## Built-in services
+There is no `_start`, process exit syscall, libc requirement, Linux loader assumption, or built-in OS startup sequence. The caller owns startup, stack setup, memory policy, interrupts, processes, and shutdown.
 
-The reference runtime currently exposes `print`, `platform`, `clockMillis` and `textLength` through the same host-call mechanism. This removes the previous interpreter-only special case for `print` and gives future standard services one extension point.
+## ABI table
 
-## Native backend
+ABI v2 contains a Noqeri-defined table with:
 
-The bootstrap Linux x86-64 backend remains freestanding. Programs that use runtime host services should use `noqeri run` or embed the shared `noqeri-abi` library. The CLI rejects host-dependent programs before native emission instead of silently producing unresolved external symbols.
+- `write(context, data, size)` for byte output used by `print`;
+- `clock_millis(context)` as an optional time source;
+- `platform_name(context)` as an optional platform identity;
+- named Noqeri service entries for higher-level integrations;
+- tagged primitive values for the interpreter/embedding boundary;
+- explicit `abi_version` and `struct_size` fields for compatibility.
 
-## Compatibility rule
+The interpreter's desktop implementation is only one adapter. A kernel can supply a different `noqeri_abi` table without changing Noqeri source, NIR, or generated code.
 
-ABI additions must be backward compatible within ABI v1. Any breaking change to value representation, calling convention, ownership rules or table layout requires a new ABI version. The source-language grammar can therefore remain stable while host capability evolves independently.
+## Native calling convention
+
+Generated x86-64 Noqeri functions use a Noqeri-defined internal convention: the first six scalar arguments use `rdi`, `rsi`, `rdx`, `rcx`, `r8`, and `r9`; scalar results use `rax`.
+
+That is part of the Noqeri native target contract, not a promise that the surrounding operating system uses the same convention. A Windows, macOS, firmware, bootloader, or kernel adapter may provide a shim at `noqeri_entry` when required.
+
+## Freestanding build flow
+
+`noqeri build source.nqr build/program.s` emits freestanding assembly only. It deliberately does not run `as`, `ld`, or an OS linker automatically.
+
+To assemble for a chosen object format, configure an adapter command:
+
+```sh
+export NOQERI_NATIVE_ASSEMBLER='clang -c {input} -o {output}'
+noqeri assemble build/program.s build/program.o
+```
+
+A kernel may instead assemble and link the emitted file inside its own build using its own linker script and image format.
+
+## Service model
+
+The reference interpreter still supports ordinary service calls such as `print`, `clockMillis`, `platform`, and `textLength`, plus named services registered in `noqeri_abi.services`. The native backend directly supports the fixed ABI callbacks needed for freestanding execution; generic named-service marshalling remains an interpreter/embedding feature until its native lowering is implemented.
+
+## Compatibility
+
+Breaking changes to the ABI table, native entry contract, primitive representation, or calling convention require a new `NOQERI_ABI_VERSION`. New fields must be appended and guarded by `struct_size`.

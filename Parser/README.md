@@ -1,5 +1,5 @@
 # Parser subsystem
 
-The buildable parser currently lives at `compiler/bootstrap/parser.cpp`; this directory owns parser architecture, generated-parser policy and future self-hosted parser sources.
+The buildable recursive-descent parser currently lives at `Compiler/bootstrap/parser.cpp`. This directory owns grammar-to-parser policy, parser error-recovery design and future generated/self-hosted parser work.
 
-The parser consumes tokens from `Lexer`, builds the AST types declared in `Include/ric/ric.hpp`, reports structured diagnostics and follows `Grammar/ric.grammar.md`. Grammar changes require parser and test changes in the same commit.
+Grammar changes require parser, formatter, editor grammar and `.nqr` test changes in the same commit.

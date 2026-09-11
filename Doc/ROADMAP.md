@@ -2,7 +2,7 @@
 
 ## 1.0 hardening
 
-Increase parser/type-system conformance tests, complete formatter coverage, expand LSP capabilities, add fuzz targets and lock down diagnostic stability.
+Increase parser/type-system conformance tests, complete formatter coverage, expand LSP capabilities, add fuzz targets and stabilize diagnostics.
 
 ## Native backends
 
@@ -10,12 +10,12 @@ Keep Linux x86-64 stable, then implement PE/COFF on Windows and Mach-O on macOS 
 
 ## Modules and standard library
 
-Connect import semantics, module discovery, package resolution and the standard-library surface to the compiler rather than adding unimplemented library files.
+Implement import semantics, module discovery, package resolution and a tested standard-library surface rather than adding fake APIs.
 
 ## Self-hosting
 
-Grow Ric until the compiler can be implemented in `.ric`, then maintain a reproducible staged bootstrap so users do not need another language after the bootstrap boundary.
+Grow noqeri until the compiler can be implemented in `.nqr`, then maintain a reproducible staged bootstrap.
 
 ## Tooling
 
-Turn `editors/vscode/` into a publishable extension package, expand `ric lsp`, add debugger protocol support and generate API docs from compiler metadata.
+Publish the editor package once LSP behavior is stable, add debugger protocol support and automate release artifacts/checksums.

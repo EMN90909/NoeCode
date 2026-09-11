@@ -1,5 +1,5 @@
 {
-  "name": "Ric compiler development",
+  "name": "noqeri compiler development",
   "image": "mcr.microsoft.com/devcontainers/cpp:1-debian-12",
   "postCreateCommand": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build --parallel",
   "customizations": {"vscode": {"extensions": ["ms-vscode.cpptools", "ms-vscode.cmake-tools"]}}

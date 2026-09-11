@@ -1,5 +1,5 @@
 {
-  "iconDefinitions": {"_ric": {"iconPath": "./ric.svg"}},
-  "fileExtensions": {"ric": "_ric"},
-  "fileNames": {"project.ric": "_ric", "ric.lock": "_ric"}
+  "iconDefinitions": {"_noqeri": {"iconPath": "../assets/noqeri-logo.svg"}},
+  "fileExtensions": {"nqr": "_noqeri"},
+  "fileNames": {"project.nqr": "_noqeri", "noqeri.lock": "_noqeri"}
 }

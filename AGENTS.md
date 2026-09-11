@@ -1,7 +1,7 @@
 # Agent guidance
 
-Ric is a language implementation, not an application repository.
+noqeri is a programming-language implementation. Before changing syntax, read `Grammar/noqeri.grammar.md`, `Doc/LANGUAGE_REFERENCE.md`, and `Include/noqeri/noqeri.hpp`.
 
-Before changing syntax, read `Grammar/ric.grammar.md`, `Doc/LANGUAGE_REFERENCE.md`, and the compiler header in `Include/ric/ric.hpp`. Keep lexer, parser, type checker, NIR, interpreter/native backend and tests aligned. Do not create empty placeholder files. Prefer small changes with executable tests. Public language spelling is `Ric`, executable `ric`, source extension `.ric`, manifest `project.ric`, lockfile `ric.lock`.
+Keep lexer, parser, type checker, NIR, interpreter/native backend and tests aligned. Do not create empty placeholder files. Public language spelling is `noqeri`, executable `noqeri`, source extension `.nqr`, manifest `project.nqr`, and lock file `noqeri.lock`.
 
-Run the build and test scripts for the target platform, then run `ric doctor .` before release-oriented changes.
+Run build/tests for the target platform and `noqeri doctor .` before release-oriented changes.

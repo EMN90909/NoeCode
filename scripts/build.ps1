@@ -3,4 +3,4 @@ $BuildDir = if ($env:BUILD_DIR) { $env:BUILD_DIR } else { 'build' }
 $BuildType = if ($env:BUILD_TYPE) { $env:BUILD_TYPE } else { 'Release' }
 cmake -S . -B $BuildDir -DCMAKE_BUILD_TYPE=$BuildType
 cmake --build $BuildDir --config $BuildType --parallel
-Write-Host "Ric bootstrap built in $BuildDir"
+Write-Host "noqeri bootstrap built in $BuildDir"

@@ -1,0 +1,21 @@
+name: Bug report
+description: Report a reproducible noqeri compiler/runtime/tooling problem
+title: "[bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: summary
+    attributes: {label: What happened?, description: Describe the observed and expected behavior.}
+    validations: {required: true}
+  - type: textarea
+    id: repro
+    attributes: {label: Minimal .nqr reproducer, render: nqr}
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes: {label: noqeri version, description: Output of `noqeri --version`}
+    validations: {required: true}
+  - type: input
+    id: platform
+    attributes: {label: Platform and architecture}
+    validations: {required: true}

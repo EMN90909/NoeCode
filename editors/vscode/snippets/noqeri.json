@@ -1,0 +1,4 @@
+{
+  "function": {"prefix":"fn","body":["function ${1:name}(${2}): ${3:void} {","    ${0}","}"],"description":"noqeri function"},
+  "main hello": {"prefix":"hello","body":["print(\"Hello from noqeri\")"],"description":"noqeri hello world"}
+}

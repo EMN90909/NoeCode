@@ -1,15 +1,16 @@
 {
-  "name": "ric-language",
-  "displayName": "Ric Language",
-  "description": "Language support for Ric (.ric)",
+  "name": "noqeri-language",
+  "displayName": "noqeri Language",
+  "description": "Language support for noqeri (.nqr)",
   "version": "1.0.0",
-  "publisher": "ric-lang",
+  "publisher": "noqeri-lang",
   "engines": {"vscode": "^1.85.0"},
-  "categories": ["Programming Languages", "Themes"],
+  "categories": ["Programming Languages", "Themes", "Snippets"],
   "activationEvents": [],
   "contributes": {
-    "languages": [{"id": "ric", "aliases": ["Ric", "ric"], "extensions": [".ric"], "configuration": "./language-configuration.json"}],
-    "grammars": [{"language": "ric", "scopeName": "source.ric", "path": "./syntaxes/ric.tmLanguage.json"}],
-    "iconThemes": [{"id": "ric-icons", "label": "Ric File Icons", "path": "./icons/icon-theme.json"}]
+    "languages": [{"id": "noqeri", "aliases": ["noqeri", "NQR"], "extensions": [".nqr"], "configuration": "./language-configuration.json"}],
+    "grammars": [{"language": "noqeri", "scopeName": "source.nqr", "path": "./syntaxes/noqeri.tmLanguage.json"}],
+    "snippets": [{"language":"noqeri","path":"./snippets/noqeri.json"}],
+    "iconThemes": [{"id": "noqeri-icons", "label": "noqeri File Icons", "path": "./icons/icon-theme.json"}]
   }
 }

@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
 set -eu
 ./scripts/build.sh
-RIC=./build/ric
-if [ ! -x "$RIC" ] && [ -x ./build/Release/ric ]; then RIC=./build/Release/ric; fi
-"$RIC" --version
-"$RIC" check examples/hello.ric
-"$RIC" run examples/hello.ric
-"$RIC" test tests
-"$RIC" doctor .
+NQ=./build/noqeri
+if [ ! -x "$NQ" ] && [ -x ./build/Release/noqeri ]; then NQ=./build/Release/noqeri; fi
+"$NQ" --version
+"$NQ" check examples/hello.nqr
+"$NQ" run examples/hello.nqr
+"$NQ" test tests
+"$NQ" doctor .

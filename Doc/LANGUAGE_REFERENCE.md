@@ -1,6 +1,6 @@
-# Ric 1.0 core language reference
+# noqeri 1.0 core language reference
 
-Ric is statically checked before NIR execution or native code generation.
+noqeri is statically checked before NIR execution or native code generation.
 
 ## Lexical form
 
@@ -8,20 +8,20 @@ Identifiers use ASCII letters/underscore followed by letters, digits or undersco
 
 ## Declarations
 
-```ric
+```nqr
 let count: int = 0
-const name: string = "Ric"
+const name: string = "noqeri"
 
 function add(a: int, b: int): int {
     return a + b
 }
 ```
 
-`const` bindings cannot be reassigned. Type annotations use `:`. Core type names are `void`, `null`, `bool`, `int`, `float` and `string`.
+`const` bindings cannot be reassigned. Core type names are `void`, `null`, `bool`, `int`, `float` and `string`.
 
 ## Control flow
 
-```ric
+```nqr
 if count < 10 {
     print(count)
 } else {
@@ -37,10 +37,4 @@ while count < 10 {
 
 The bootstrap supports calls, unary `!`/`-`, arithmetic `+ - * / %`, comparisons, equality and logical `&&` / `||`, with conventional precedence.
 
-## Built-ins
-
-`print(...)` is available in the current runtime. Additional standard-library and module APIs in `Lib/` are staged conservatively and must not be documented as implemented until parser/runtime support exists.
-
-## Files and projects
-
-Program files use `.ric`. Project metadata is `project.ric`; deterministic dependency state is `ric.lock`.
+The lexer reserves `import`, `record` and `class`, but they are not documented as stable implemented grammar until parser/type/runtime support exists.

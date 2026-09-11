@@ -1,15 +1,18 @@
-# Ric documentation
+# noqeri documentation
 
-<p align="center"><img src="_static/ric-logo.svg" alt="Ric logo" width="360"></p>
+<p align="center"><img src="_static/noqeri-logo.svg" alt="noqeri logo" width="360"></p>
 
-This directory is the public documentation home, mirroring the clear separation used by mature language repositories.
+The public documentation is separated from implementation notes so users can learn the language without reading bootstrap internals.
 
 - `GETTING_STARTED.md` — build and first program.
-- `LANGUAGE_REFERENCE.md` — Ric 1.0 core syntax and semantics.
+- `LANGUAGE_REFERENCE.md` — noqeri 1.0 core syntax and semantics.
 - `TOOLCHAIN.md` — compiler pipeline and CLI.
 - `PLATFORM_SUPPORT.md` — exact Linux/Windows/macOS status.
 - `PRODUCTION_READINESS.md` — release gates and limitations.
-- `PROJECTS.md` — `project.ric` and `ric.lock`.
-- `ROADMAP.md` — work needed beyond the bootstrap.
+- `PROJECTS.md` — `project.nqr` and `noqeri.lock`.
+- `ROADMAP.md` — work beyond the bootstrap.
+- `reference/` — focused reference pages.
+- `using/` — command-line and project usage.
+- `howto/` — editor/setup guides.
 
-Compiler-internal documents live in `InternalDocs/` so user docs do not become mixed with implementation notes.
+Compiler-internal documents live in `InternalDocs/`.

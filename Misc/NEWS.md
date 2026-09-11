@@ -1,5 +1,5 @@
-# Ric news
+# noqeri news
 
 ## 2026-09-11
 
-Ric became the public language name and `.ric` became the source extension. The repository was reorganized around explicit language-runtime responsibilities, gained editor integration and a static public site, and retained the existing buildable compiler bootstrap.
+noqeri became the canonical public language name and `.nqr` became the source extension. The repository was expanded around mature language-runtime responsibilities, the wolf/code mark became the shared site/IDE identity, and the existing buildable compiler bootstrap was preserved under `Compiler/bootstrap/`.

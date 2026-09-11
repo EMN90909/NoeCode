@@ -10,10 +10,10 @@ build:
 
 test: build
 	ctest --test-dir $(BUILD_DIR) -C $(BUILD_TYPE) --output-on-failure
-	dash scripts/test_core.sh
+	./scripts/test_core.sh
 
 doctor: build
-	./$(BUILD_DIR)/ric doctor .
+	./$(BUILD_DIR)/noqeri doctor .
 
 install: build
 	cmake --install $(BUILD_DIR) --config $(BUILD_TYPE)

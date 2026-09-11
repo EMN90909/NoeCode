@@ -3,7 +3,7 @@ set -eu
 ./scripts/test_core.sh
 case "$(uname -s)-$(uname -m)" in
   Linux-x86_64)
-    ./build/ric build examples/native_hello.ric build/native_hello
+    ./build/noqeri build examples/native_hello.nqr build/native_hello
     ./build/native_hello
     ;;
   *)

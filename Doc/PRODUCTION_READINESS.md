@@ -1,27 +1,9 @@
 # Production readiness
 
-Ric 1.0 is on a production track, not yet a claim of full production maturity.
+noqeri 1.0 is on a production track, not yet a claim of full production maturity.
 
-## Gates already represented in the repository
+Already represented: cross-platform bootstrap CI, lexer/parser/type-check/NIR/interpreter pipeline, Linux x86-64 native smoke path, `.nqr` tests, project/lock format, diagnostics, formatter, LSP foundation, public policies, editor support and repository-doctor checks.
 
-- deterministic build entry points and CI on Linux, Windows and macOS;
-- lexer/parser/type-check/NIR/interpreter pipeline;
-- Linux x86-64 native backend smoke path;
-- `.ric` test discovery;
-- project/lock format;
-- diagnostics, formatter and LSP foundation;
-- license, security policy, contribution rules and changelog;
-- editor syntax package and static public site.
+Still required for a stable production release: broader positive/negative conformance and fuzzing; implemented import/module semantics; PE/COFF and Mach-O native backends; package registry/signature/trust design; stable diagnostic/compiler API policy; performance/memory regression suites; reproducible signed release artifacts; and a self-hosted compiler or formally supported long-term bootstrap strategy.
 
-## Gates still required for a stable production release
-
-- broader conformance, negative and fuzz testing;
-- import/module semantics connected to the parser and runtime;
-- Windows PE/COFF and macOS Mach-O native backends;
-- package registry/signature/trust design;
-- stable diagnostic and compiler API policy;
-- performance and memory regression suites;
-- self-hosting milestone or a formally supported bootstrap strategy;
-- reproducible release artifacts and signed checksums.
-
-`ric doctor` verifies repository structure. It is not a substitute for the missing technical release gates above.
+`noqeri doctor` validates repository structure. It does not pretend the unfinished gates are complete.

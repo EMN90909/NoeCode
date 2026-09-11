@@ -1,0 +1,25 @@
+%YAML 1.2
+---
+name: noqeri
+file_extensions: [nqr]
+scope: source.nqr
+contexts:
+  main:
+    - match: '//.*$'
+      scope: comment.line.double-slash.nqr
+    - match: '\b(let|const|function|if|else|while|return)\b'
+      scope: keyword.control.nqr
+    - match: '\b(true|false|null)\b'
+      scope: constant.language.nqr
+    - match: '\b(void|bool|int|int64|float|float64|string)\b'
+      scope: storage.type.nqr
+    - match: '"'
+      push: string
+    - match: '\b[0-9]+(?:\.[0-9]+)?\b'
+      scope: constant.numeric.nqr
+  string:
+    - meta_scope: string.quoted.double.nqr
+    - match: '\\.'
+      scope: constant.character.escape.nqr
+    - match: '"'
+      pop: true

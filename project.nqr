@@ -1,0 +1,7 @@
+project {
+    name: "noqeri"
+    version: "1.0.0"
+    entry: "examples/hello.nqr"
+    profile: "compiler"
+    target: "native"
+}

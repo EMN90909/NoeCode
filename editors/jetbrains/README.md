@@ -1,5 +1,5 @@
 # JetBrains / TextMate setup
 
-JetBrains IDEs with TextMate bundle support can import the Ric TextMate grammar from `../vscode/syntaxes/ric.tmLanguage.json` and associate it with `*.ric`.
+JetBrains IDEs with TextMate bundle support can import `../vscode/syntaxes/noqeri.tmLanguage.json` and associate it with `*.nqr`. Use the wolf/code asset from `../vscode/assets/noqeri-logo.svg` when building a dedicated plugin icon.
 
-The repository intentionally keeps one grammar definition so editor highlighting does not drift. A dedicated JetBrains plugin should be added only when it implements richer behavior such as LSP lifecycle, navigation or diagnostics.
+A generic LSP plugin can launch `noqeri lsp`. A dedicated JetBrains plugin should be added only when it implements richer behavior such as lifecycle management, navigation or diagnostics.

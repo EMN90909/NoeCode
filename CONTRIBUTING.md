@@ -1,21 +1,17 @@
-# Contributing to Ric
+# Contributing to noqeri
 
-Ric accepts focused changes that preserve the language contract and keep Linux, Windows and macOS bootstrap builds healthy.
+Keep the language contract, compiler, tests and documentation synchronized.
 
 ## Development flow
 
 1. Build with CMake (`scripts/build.sh` or `scripts/build.ps1`).
-2. Add or update `.ric` tests for language behavior.
-3. Run `ric check`, `ric test`, and `ric doctor`.
+2. Add or update `.nqr` tests for language behavior.
+3. Run `noqeri check`, `noqeri test`, and `noqeri doctor`.
 4. Run the platform-appropriate release script before opening a pull request.
-5. Update `Doc/` when behavior or user-facing syntax changes.
+5. Update `Doc/` and `Grammar/` when user-visible syntax or semantics change.
 
-## Repository ownership
+Compiler implementation lives in `Compiler/bootstrap/` until a self-hosted noqeri compiler replaces the bootstrap. Public API changes belong in `Include/noqeri/`. Grammar changes must update `Grammar/noqeri.grammar.md`, tests and the language reference together.
 
-Compiler implementation belongs in `compiler/bootstrap/` until a self-hosted Ric compiler replaces it. Public API changes belong in `Include/ric/`. Grammar changes must update `Grammar/ric.grammar.md`, tests and the language reference together.
+Do not create empty placeholder modules. A new file must implement, test, configure or document a real responsibility.
 
-Do not add empty placeholder modules. A new file should implement or document a real responsibility.
-
-## Compatibility
-
-`.ric`, `project.ric`, `ric.lock` and the `ric` command are the public names. New user-facing references to the previous language name are not accepted.
+Public naming is `noqeri`, `.nqr`, `project.nqr`, `noqeri.lock`, and the `noqeri` executable.

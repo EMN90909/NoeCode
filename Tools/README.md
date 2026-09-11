@@ -1,5 +1,5 @@
 # Developer tools
 
-Build, test and release entry points live in `scripts/`. Editor integration lives in `editors/`. The `ric format`, `ric test`, `ric doctor` and `ric lsp` subcommands are compiler-integrated tools.
+Build, test and release entry points live in `scripts/`. Editor integration lives in `editors/`. Compiler-integrated tools include `noqeri format`, `noqeri test`, `noqeri doctor` and `noqeri lsp`.
 
-Future generators, fuzz harnesses and release utilities belong here only when they perform real work; do not add empty tool placeholders.
+`Tools/build/`, `Tools/fuzz/` and `Tools/scripts/` document ownership for build/release automation, fuzzing and repository maintenance. They should gain implementation files only when those files perform real work.

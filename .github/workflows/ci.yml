@@ -1,4 +1,4 @@
-name: Ric CI
+name: noqeri CI
 
 on:
   push:
@@ -26,15 +26,15 @@ jobs:
         run: cmake --build build --config Release --parallel
       - name: CTest
         run: ctest --test-dir build -C Release --output-on-failure
-      - name: Ric doctor (Unix)
+      - name: noqeri doctor (Unix)
         if: runner.os != 'Windows'
-        run: ./build/ric doctor .
-      - name: Ric doctor (Windows)
+        run: ./build/noqeri doctor .
+      - name: noqeri doctor (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $ric = if (Test-Path 'build/Release/ric.exe') { 'build/Release/ric.exe' } else { 'build/ric.exe' }
-          & $ric doctor .
+          $nq = if (Test-Path 'build/Release/noqeri.exe') { 'build/Release/noqeri.exe' } else { 'build/noqeri.exe' }
+          & $nq doctor .
 
   linux-native:
     runs-on: ubuntu-latest

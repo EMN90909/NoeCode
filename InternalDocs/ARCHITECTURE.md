@@ -1,7 +1,7 @@
 # Compiler architecture
 
-`compiler/bootstrap/` is the currently buildable compiler. Source is lexed into tokens, parsed into an AST, statically checked, lowered to NIR, optimized and then passed to either the interpreter or native backend.
+`Compiler/bootstrap/` is the currently buildable compiler. Source is lexed into tokens, parsed into an AST, statically checked, lowered to NIR, optimized and then passed to either the reference interpreter or native backend.
 
-`Include/ric/ric.hpp` is the public bootstrap API contract. The bootstrap implementation still uses an internal compatibility namespace inherited from the pre-Ric codebase; external code should use the `ric` namespace alias and Ric public names. This compatibility layer can be removed at an ABI-breaking compiler milestone without affecting `.ric` language syntax.
+`Include/noqeri/noqeri.hpp` is the public bootstrap API contract. The implementation retains one internal compatibility namespace/include name from the earliest bootstrap; those names are not part of the `.nqr` language surface or installed API and can be removed at a deliberate compiler-ABI break.
 
-`Parser/`, `Python/`, `Objects/`, `Modules/` and `Runtime/` document subsystem ownership so future implementation does not collapse back into a single undifferentiated source directory.
+Subsystem ownership is separated into `Parser/`, `Objects/`, `Modules/`, `Runtime/`, `Programs/` and `Tools/` so future implementation does not collapse into an undifferentiated source tree.

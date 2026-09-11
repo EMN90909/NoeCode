@@ -1,5 +1,5 @@
-# Ric VS Code language package
+# noqeri VS Code language package
 
-For local development, open this directory as a VS Code extension project or copy/link it into an extension-development workspace. It registers `.ric`, syntax highlighting, language configuration and the optional **Ric File Icons** icon theme.
+This package registers `.nqr`, syntax highlighting, language configuration, snippets and the **noqeri File Icons** theme. The file-icon theme uses the wolf/code logo.
 
-The compiler's `ric lsp` command is the language-server process; a future extension release can add a small client when the LSP feature set is stable.
+The compiler's `noqeri lsp` command is the language-server process; a future extension release can add an automatic LSP client when the protocol feature set is stable.

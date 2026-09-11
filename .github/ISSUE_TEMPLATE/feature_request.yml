@@ -1,0 +1,16 @@
+name: Language/tooling proposal
+description: Propose a focused noqeri language, compiler or tooling improvement
+title: "[proposal] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes: {label: Problem, description: What concrete problem should this solve?}
+    validations: {required: true}
+  - type: textarea
+    id: proposal
+    attributes: {label: Proposed behavior, description: Include syntax/examples when relevant.}
+    validations: {required: true}
+  - type: textarea
+    id: compatibility
+    attributes: {label: Compatibility and implementation impact}

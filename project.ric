@@ -1,7 +1,0 @@
-project {
-    name: "Ric"
-    version: "1.0.0"
-    entry: "examples/hello.ric"
-    profile: "compiler"
-    target: "native"
-}

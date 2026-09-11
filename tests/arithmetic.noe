@@ -1,0 +1,6 @@
+function twice(value: int): int {
+    return value * 2
+}
+
+let result = twice(21)
+print(result)

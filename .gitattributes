@@ -1,6 +1,9 @@
-*.noe linguist-detectable=true
-*.noe text eol=lf
-*.md text eol=lf
-*.cpp text eol=lf
-*.hpp text eol=lf
-*.sh text eol=lf
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ric text eol=lf
+*.svg text eol=lf
+*.png binary
+*.jpg binary
+*.ico binary

@@ -8,8 +8,11 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 4
 
+[*.{yml,yaml,json}]
+indent_size = 2
+
 [*.md]
 trim_trailing_whitespace = false
 
-[*.{yml,yaml}]
-indent_size = 2
+[*.ric]
+indent_size = 4

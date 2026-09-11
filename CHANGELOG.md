@@ -1,24 +1,14 @@
 # Changelog
 
-## 0.1.0-bootstrap
+All notable public language and toolchain changes are recorded here.
 
-Public-ready bootstrap release foundation.
+## 1.0.0-production-track — 2026-09-11
 
-- Added polished public README.
-- Added MIT license.
-- Added legal notice, security policy, and contribution guide.
-- Added complete documentation index and user-facing guides.
-- Documented the supported language subset and honest implementation limits.
-- Kept Noe project metadata as `project.noe`; no TOML.
-
-## 0.0.8-bootstrap
-
-- Completed bootstrap phases 4-8.
-- Added custom Linux x86-64 native backend for the supported subset.
-- Added assembler/linker driver.
-- Added `noe build` native executable generation.
-- Added `noe new`, `noe lock`, formatter improvements, JSON-RPC LSP diagnostics, CI, and native smoke tests.
-
-## 0.0.3-bootstrap
-
-- Added lexer, parser, primitive type checker, NIR lowering, optimizer foundation, interpreter, package-manifest reader, formatter foundation, test runner, and CLI.
+- Renamed the language from Noe to **Ric**.
+- Changed the source extension from `.noe` to **`.ric`**.
+- Renamed the CLI to `ric`, manifest to `project.ric`, and lockfile to `ric.lock`.
+- Reorganized the repository around mature language-runtime responsibilities inspired by CPython.
+- Added Ric public docs, internal architecture docs, platform directories and release gates.
+- Added a Ric VS Code/TextMate language package and file-icon theme.
+- Added a public static site using the Ric wolf/code logo.
+- Kept the existing C++17 compiler bootstrap while exposing the Ric public API and branding.

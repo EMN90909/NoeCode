@@ -1,30 +1,21 @@
-# Contributing to NoeCode
+# Contributing to Ric
 
-Thanks for helping build Noe.
+Ric accepts focused changes that preserve the language contract and keep Linux, Windows and macOS bootstrap builds healthy.
 
-Noe is still a bootstrap language implementation. Contributions should keep the project aligned with the design contract: simple syntax, static typing, explicit safety boundaries, native capability, reproducible tooling, text/visual/AI-ready structure, and no TOML for Noe projects.
+## Development flow
 
-## Priorities
+1. Build with CMake (`scripts/build.sh` or `scripts/build.ps1`).
+2. Add or update `.ric` tests for language behavior.
+3. Run `ric check`, `ric test`, and `ric doctor`.
+4. Run the platform-appropriate release script before opening a pull request.
+5. Update `Doc/` when behavior or user-facing syntax changes.
 
-1. Keep the compiler pipeline working: lexer -> parser -> type checker -> NIR -> optimizer -> interpreter/native backend.
-2. Add tests before or with compiler changes.
-3. Prefer small, reviewable changes over large rewrites.
-4. Do not claim unsupported language features are complete.
-5. Keep Noe project metadata in `project.noe`.
+## Repository ownership
 
-## Local verification
+Compiler implementation belongs in `compiler/bootstrap/` until a self-hosted Ric compiler replaces it. Public API changes belong in `Include/ric/`. Grammar changes must update `Grammar/ric.grammar.md`, tests and the language reference together.
 
-```sh
-sh scripts/test.sh
-```
+Do not add empty placeholder modules. A new file should implement or document a real responsibility.
 
-## Style
+## Compatibility
 
-- Bootstrap code targets C++17.
-- Noe examples should stay simple and readable.
-- Diagnostics should use stable `NOE-*` codes.
-- Documentation must clearly separate implemented features from roadmap features.
-
-## License
-
-Unless explicitly stated otherwise, contributions are submitted under the repository license in `LICENSE`.
+`.ric`, `project.ric`, `ric.lock` and the `ric` command are the public names. New user-facing references to the previous language name are not accepted.

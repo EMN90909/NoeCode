@@ -1,15 +1,15 @@
-# Security Policy
+# Security policy
 
-NoeCode is an experimental compiler/toolchain bootstrap. Do not use it yet for security-critical, safety-critical, medical, financial, aviation, industrial-control, or production isolation workloads.
+## Supported branch
 
-## Reporting security issues
+Security fixes target the `main` branch while Ric is on the 1.0 production track.
 
-Please report security-sensitive issues privately to the repository owner instead of opening a public issue with exploit details.
+## Reporting
 
-## Current support status
+Please avoid publishing exploit details in a public issue before maintainers have had a reasonable opportunity to investigate. Use GitHub's private vulnerability reporting feature when it is enabled for this repository.
 
-Only the current `main` branch is maintained during bootstrap development. There are no long-term support releases yet.
+Include the affected command, platform, compiler build information, a minimal `.ric` reproducer and the security impact.
 
 ## Scope
 
-Security reports may include incorrect code generation, crashes on malformed `.noe` input, unsafe file writes from CLI commands, path traversal in project/package tooling, or generated binary behavior that differs from checked Noe semantics.
+High-priority reports include compiler memory-safety failures, malicious-source crashes with security impact, native-backend code-generation issues that can escape intended semantics, package/path traversal, unsafe LSP input handling and CI/release-chain compromise.

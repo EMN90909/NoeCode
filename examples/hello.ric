@@ -1,0 +1,6 @@
+function add(a: int, b: int): int {
+    return a + b
+}
+
+print("Hello from Ric")
+print(add(10, 20))

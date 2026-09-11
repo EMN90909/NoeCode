@@ -1,5 +1,0 @@
-// Noe standard library seed: std.math
-
-function square(value: int): int {
-    return value * value
-}

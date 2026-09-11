@@ -1,65 +1,43 @@
 <p align="center">
-  <img src="docs/assets/noe-logo.svg" alt="Noe wolf code logo" width="420">
+  <img src="Doc/_static/ric-logo.svg" alt="Ric wolf code logo" width="520">
 </p>
 
-# NoeCode
+<h1 align="center">Ric</h1>
+<p align="center"><strong>A statically typed, native-oriented general-purpose programming language.</strong></p>
 
-![Noe compiler CI](https://github.com/EMN90909/NoeCode/actions/workflows/ci.yml/badge.svg)
-![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
-![Status](https://img.shields.io/badge/status-1.0.0--production--track-orange)
-![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-blueviolet)
+<p align="center">
+  <img alt="Ric CI" src="https://github.com/EMN90909/NoeCode/actions/workflows/ci.yml/badge.svg">
+  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-4c6fff.svg">
+  <img alt="language Ric" src="https://img.shields.io/badge/source-.ric-101b3d.svg">
+  <img alt="platforms" src="https://img.shields.io/badge/bootstrap-Linux%20%7C%20Windows%20%7C%20macOS-4c6fff.svg">
+</p>
 
-**NoeCode** is the production-track bootstrap implementation of **Noe**, a standalone, statically typed, native-oriented general-purpose programming language.
+**Ric** is the renamed successor to the Noe language in this repository. The public language name is **Ric**, source files use **`.ric`**, project manifests use **`project.ric`**, lock files use **`ric.lock`**, and the command-line tool is **`ric`**.
 
-Noe source files use `.noe`. Project manifests use `project.noe`. Noe projects do **not** use TOML, Cargo, Rust, Python, or LLVM.
+The repository is organized after the engineering lessons of mature language runtimes such as CPython: grammar, public headers, parser/compiler internals, runtime/object documentation, standard library, platform build areas, tools, tests, docs, editor integration, CI and release policy all have explicit homes. This is an architectural-completeness target, not a claim of CPython feature parity.
 
-```noe
+```ric
 function add(a: int, b: int): int {
     return a + b
 }
 
-print("Hello from Noe")
+print("Hello from Ric")
 print(add(10, 20))
 ```
 
-## What works now
+## Current implementation
 
-The current codebase is organized as a real language implementation, inspired by the completeness of mature interpreter/compiler repositories while staying original to Noe.
-
-- Lexer, parser, AST, type checker, NIR and optimizer
-- Reference interpreter: `noe run`
-- Custom Linux x86-64 native backend: `noe build`
-- Assembler/linker driver for generated Linux ELF executables
-- `project.noe` manifests and deterministic `noe.lock`
-- `const` reassignment safety diagnostics
-- Formatter foundation and `.noe` test runner
-- JSON-RPC language-server bootstrap diagnostics
-- Cross-platform bootstrap compiler build on Linux, Windows and macOS
-- Production doctor/release-check scripts
-- GitHub Actions CI validation
-- Public docs, MIT license, legal notice, security policy and contribution guide
-
-## Platform support
-
-| Platform | Build compiler | `noe check` | `noe run` interpreter | `noe lsp` | Native executable backend |
-|---|---:|---:|---:|---:|---:|
-| Linux x86-64 | ✅ | ✅ | ✅ | ✅ | ✅ ELF via custom backend |
-| macOS | ✅ | ✅ | ✅ | ✅ | ⚠️ planned |
-| Windows | ✅ | ✅ | ✅ | ✅ | ⚠️ planned |
-
-Windows and macOS are ready for compiler/frontend usage, diagnostics, formatting, tests, project tooling and interpreted `.noe` execution. The current native executable backend is intentionally limited to Linux x86-64 until the Windows PE/COFF and macOS Mach-O backends are implemented.
-
-See [`docs/PLATFORM_SUPPORT.md`](docs/PLATFORM_SUPPORT.md) for exact platform behavior.
+The checked-in C++17 bootstrap implements the Ric 1.0 production-track core: lexer, parser, AST, static type checking, NIR lowering, optimizer, interpreter, formatter, project/lock tooling, test discovery and a JSON-RPC language-server foundation. Linux x86-64 also has the current native assembly backend and linker driver. Windows and macOS build and run the frontend/interpreter/tooling while native PE/COFF and Mach-O emission remain future backend work.
 
 ## Quick start
 
-Linux/macOS:
+Linux or macOS:
 
 ```sh
 git clone https://github.com/EMN90909/NoeCode.git
 cd NoeCode
-sh scripts/build.sh
-sh scripts/test_core.sh
+./scripts/build.sh
+./build/ric run examples/hello.ric
 ```
 
 Windows PowerShell:
@@ -68,110 +46,85 @@ Windows PowerShell:
 git clone https://github.com/EMN90909/NoeCode.git
 cd NoeCode
 .\scripts\build.ps1
-.\scripts\test_core.ps1
+.\build\Release\ric.exe run examples\hello.ric
 ```
 
-Run a Noe program through the interpreter:
+Run the repository checks:
 
 ```sh
-./build/noe run examples/native_hello.noe
-```
-
-Build and run a native executable on Linux x86-64:
-
-```sh
-./build/noe build examples/native_hello.noe build/native_hello
-./build/native_hello
-```
-
-Expected output:
-
-```text
-Hello from native Noe
-30
-0
-1
-2
-```
-
-Run the complete Linux release verification suite:
-
-```sh
-sh scripts/release_check.sh
-```
-
-## Repository layout
-
-```text
-NoeCode/
-├── compiler/bootstrap/      # C++17 one-time bootstrap compiler implementation
-├── include/noe/             # public bootstrap compiler header/API surface
-├── grammar/                 # Noe grammar and syntax notes
-├── stdlib/std/              # Noe standard-library seed modules
-├── runtime/                 # runtime design and future runtime components
-├── platforms/               # Linux, Windows and macOS target notes
-├── tools/                   # developer tooling area
-├── docs/                    # user and implementer documentation
-├── examples/                # runnable .noe examples
-├── tests/                   # .noe compiler/runtime tests
-├── scripts/                 # build/test/release scripts
-├── project.noe              # Noe-native project manifest
-├── CMakeLists.txt           # optional cross-platform C++ bootstrap build
-├── Makefile                 # simple POSIX convenience build
-├── LICENSE
-└── LEGAL.md
-```
-
-A Noe app looks like this:
-
-```text
-myapp/
-├── project.noe
-├── src/
-│   └── main.noe
-└── noe.lock
+./scripts/test_core.sh
+./scripts/release_check.sh
 ```
 
 ## CLI
 
 ```text
-noe --version
-noe new <name>
-noe check <file>
-noe lex <file>
-noe nir <file>
-noe run <file>
-noe build <file> <output>
-noe format <file>
-noe manifest [project.noe]
-noe lock [project.noe]
-noe test [directory]
-noe doctor [directory]
-noe release-check [directory]
-noe lsp
+ric --version
+ric new <name> [directory]
+ric lex <file.ric>
+ric check [file.ric]
+ric nir [file.ric]
+ric run [file.ric]
+ric build [file.ric] [output]
+ric format <file.ric>
+ric manifest [project.ric]
+ric lock [project.ric]
+ric test [directory]
+ric doctor [directory]
+ric release-check [directory]
+ric lsp
 ```
+
+## Repository map
+
+| Area | Responsibility |
+|---|---|
+| `Grammar/` | Ric syntax and grammar contract |
+| `Include/ric/` | public bootstrap compiler API |
+| `Parser/` | parser architecture and parser ownership |
+| `Python/` | compiler pipeline/core implementation map, analogous to CPython's core-runtime area |
+| `Objects/` | Ric runtime value/object model |
+| `Modules/` | built-in/native module boundary |
+| `Lib/` | Ric standard-library sources |
+| `Programs/` | CLI program entry points and command contract |
+| `Runtime/` | execution/runtime architecture |
+| `Tools/` | developer and release tooling |
+| `Doc/` | user and implementer documentation |
+| `InternalDocs/` | compiler internals and CPython structure study |
+| `PC/`, `PCbuild/`, `Mac/`, `Android/` | platform integration/build notes |
+| `editors/` | VS Code/TextMate and IDE integration |
+| `site/` | public static project site, using the Ric logo |
+| `compiler/bootstrap/` | buildable C++17 bootstrap implementation |
+| `examples/`, `tests/` | runnable `.ric` programs and verification cases |
+
+## IDE support
+
+`editors/vscode/` contains a complete local VS Code language package: `.ric` registration, bracket/comment rules, TextMate syntax highlighting and a Ric file-icon theme using the wolf/code mark. The same TextMate grammar can be imported by editors that support TextMate bundles. The compiler's `ric lsp` command provides the language-server foundation.
+
+## Project format
+
+A Ric project is deliberately simple:
+
+```text
+myapp/
+├── project.ric
+├── ric.lock
+├── src/
+│   └── main.ric
+└── tests/
+    └── basic.ric
+```
+
+Ric does not require TOML, Cargo, Python, Rust or LLVM to describe a Ric project.
 
 ## Documentation
 
-Start at [`docs/README.md`](docs/README.md).
+Start with [`Doc/README.md`](Doc/README.md), then read the [`language reference`](Doc/LANGUAGE_REFERENCE.md), [`toolchain`](Doc/TOOLCHAIN.md), [`platform support`](Doc/PLATFORM_SUPPORT.md), and [`production readiness`](Doc/PRODUCTION_READINESS.md). Repository architecture and the CPython comparison are in [`InternalDocs/CPYTHON_STRUCTURE.md`](InternalDocs/CPYTHON_STRUCTURE.md).
 
-Important pages:
+## Status and versioning
 
-- [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md)
-- [`docs/LANGUAGE_REFERENCE.md`](docs/LANGUAGE_REFERENCE.md)
-- [`docs/TOOLCHAIN.md`](docs/TOOLCHAIN.md)
-- [`docs/NATIVE_BACKEND.md`](docs/NATIVE_BACKEND.md)
-- [`docs/PROJECTS.md`](docs/PROJECTS.md)
-- [`docs/STATUS.md`](docs/STATUS.md)
-- [`docs/PLATFORM_SUPPORT.md`](docs/PLATFORM_SUPPORT.md)
-- [`docs/CPYTHON_STRUCTURE_REVIEW.md`](docs/CPYTHON_STRUCTURE_REVIEW.md)
-- [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md)
-- [`docs/ROADMAP.md`](docs/ROADMAP.md)
-
-## Design direction
-
-Noe's design goal is simple syntax without a weak language: readable everyday code, static type checking, native execution, explicit advanced systems features, and tooling that can serve text editors, visual programming, and AI agents through the same compiler model.
+The language surface is named **Ric 1.0**. The bootstrap implementation is intentionally marked **production-track** until the native backends, module/import semantics, self-hosting and broader conformance suite meet the release gates documented in `Doc/PRODUCTION_READINESS.md`.
 
 ## License
 
-NoeCode is licensed under the MIT License. See [`LICENSE`](LICENSE) and [`LEGAL.md`](LEGAL.md).
+MIT. See [`LICENSE`](LICENSE) and [`LEGAL.md`](LEGAL.md).

@@ -1,0 +1,15 @@
+{
+  "name": "ric-language",
+  "displayName": "Ric Language",
+  "description": "Language support for Ric (.ric)",
+  "version": "1.0.0",
+  "publisher": "ric-lang",
+  "engines": {"vscode": "^1.85.0"},
+  "categories": ["Programming Languages", "Themes"],
+  "activationEvents": [],
+  "contributes": {
+    "languages": [{"id": "ric", "aliases": ["Ric", "ric"], "extensions": [".ric"], "configuration": "./language-configuration.json"}],
+    "grammars": [{"language": "ric", "scopeName": "source.ric", "path": "./syntaxes/ric.tmLanguage.json"}],
+    "iconThemes": [{"id": "ric-icons", "label": "Ric File Icons", "path": "./icons/icon-theme.json"}]
+  }
+}

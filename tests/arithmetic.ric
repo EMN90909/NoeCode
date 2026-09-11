@@ -1,0 +1,5 @@
+let a: int = 7
+let b: int = 5
+print(a + b)
+print(a * b)
+print(a - b)

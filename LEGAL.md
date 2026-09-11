@@ -1,11 +1,11 @@
-# Legal
+# Ric legal notice
 
-NoeCode is provided under the MIT License. See `LICENSE` for the full license text.
+Copyright (c) Ric contributors.
 
-This project is experimental compiler infrastructure for the Noe language. It is provided as-is, without warranties or guarantees of fitness for production, safety-critical, security-critical, financial, medical, aviation, industrial, or legal use.
+The source code in this repository is provided under the MIT License in `LICENSE`.
 
-Noe, `.noe`, `project.noe`, NIR, and related names are project identifiers used by this repository. Third-party names, trademarks, platforms, operating systems, and tools belong to their respective owners.
+The Ric name, wolf/code logo and related project identity are project branding. The software license grants rights to the code; it does not independently grant trademark rights in names or logos.
 
-Contributions are intended to be licensed under the same license as the repository unless another written agreement is made by the project owner.
+Third-party names mentioned in documentation, including CPython, Python, CMake, Visual Studio Code, Windows, macOS, Linux and Android, remain the property of their respective owners. Ric is an independent project and is not endorsed by those projects or vendors.
 
-This file is not legal advice.
+The repository's CPython comparison concerns repository engineering and organization only. Ric does not copy CPython source code and does not claim Python compatibility.

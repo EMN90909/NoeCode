@@ -6,93 +6,14 @@
 
 namespace noe {
 
-const char* tokenKindName(TokenKind k) {
-    switch (k) {
-        case TokenKind::Eof: return "eof";
-        case TokenKind::Identifier: return "identifier";
-        case TokenKind::Integer: return "integer";
-        case TokenKind::Float: return "float";
-        case TokenKind::String: return "string";
-        case TokenKind::Let: return "let"; case TokenKind::Const: return "const";
-        case TokenKind::Function: return "function"; case TokenKind::If: return "if";
-        case TokenKind::Else: return "else"; case TokenKind::While: return "while";
-        case TokenKind::Return: return "return"; case TokenKind::True: return "true";
-        case TokenKind::False: return "false"; case TokenKind::Null: return "null";
-        case TokenKind::Import: return "import"; case TokenKind::Record: return "record"; case TokenKind::Class: return "class";
-        case TokenKind::LParen: return "("; case TokenKind::RParen: return ")";
-        case TokenKind::LBrace: return "{"; case TokenKind::RBrace: return "}";
-        case TokenKind::Comma: return ","; case TokenKind::Colon: return ":"; case TokenKind::Semicolon: return ";"; case TokenKind::Dot: return ".";
-        case TokenKind::Plus: return "+"; case TokenKind::Minus: return "-"; case TokenKind::Star: return "*"; case TokenKind::Slash: return "/"; case TokenKind::Percent: return "%";
-        case TokenKind::Bang: return "!"; case TokenKind::BangEqual: return "!="; case TokenKind::Equal: return "="; case TokenKind::EqualEqual: return "==";
-        case TokenKind::Less: return "<"; case TokenKind::LessEqual: return "<="; case TokenKind::Greater: return ">"; case TokenKind::GreaterEqual: return ">=";
-        case TokenKind::AndAnd: return "&&"; case TokenKind::OrOr: return "||";
-    }
-    return "?";
-}
+const char* tokenKindName(TokenKind k){switch(k){case TokenKind::Eof:return"eof";case TokenKind::Identifier:return"identifier";case TokenKind::Integer:return"integer";case TokenKind::Float:return"float";case TokenKind::String:return"string";case TokenKind::Let:return"let";case TokenKind::Const:return"const";case TokenKind::Function:return"function";case TokenKind::If:return"if";case TokenKind::Else:return"else";case TokenKind::While:return"while";case TokenKind::Return:return"return";case TokenKind::True:return"true";case TokenKind::False:return"false";case TokenKind::Null:return"null";case TokenKind::Import:return"import";case TokenKind::Record:return"record";case TokenKind::Class:return"class";case TokenKind::LParen:return"(";case TokenKind::RParen:return")";case TokenKind::LBrace:return"{";case TokenKind::RBrace:return"}";case TokenKind::Comma:return",";case TokenKind::Colon:return":";case TokenKind::Semicolon:return";";case TokenKind::Dot:return".";case TokenKind::Plus:return"+";case TokenKind::Minus:return"-";case TokenKind::Star:return"*";case TokenKind::Slash:return"/";case TokenKind::Percent:return"%";case TokenKind::Bang:return"!";case TokenKind::BangEqual:return"!=";case TokenKind::Equal:return"=";case TokenKind::EqualEqual:return"==";case TokenKind::Less:return"<";case TokenKind::LessEqual:return"<=";case TokenKind::Greater:return">";case TokenKind::GreaterEqual:return">=";case TokenKind::AndAnd:return"&&";case TokenKind::OrOr:return"||";}return"?";}
 
-void Diagnostics::error(std::string code, Span span, std::string message, std::string help) {
-    items_.push_back({std::move(code), std::move(message), span, std::move(help)});
-}
-
-void Diagnostics::print(const std::string& sourceName) const {
-    for (const auto& d : items_) {
-        std::cerr << d.code << ": " << d.message << "\n"
-                  << " --> " << sourceName << ':' << d.span.line << ':' << d.span.column << "\n";
-        if (!d.help.empty()) std::cerr << " help: " << d.help << "\n";
-    }
-}
-
-std::string Type::name() const {
-    switch (kind) {
-        case TypeKind::Unknown: return "unknown";
-        case TypeKind::Void: return "void";
-        case TypeKind::Null: return "null";
-        case TypeKind::Bool: return "bool";
-        case TypeKind::Int: return "int";
-        case TypeKind::Float: return "float";
-        case TypeKind::String: return "string";
-    }
-    return "unknown";
-}
-
-Type typeFromName(const std::string& n) {
-    if (n == "void") return {TypeKind::Void};
-    if (n == "bool") return {TypeKind::Bool};
-    if (n == "int" || n == "int64") return {TypeKind::Int};
-    if (n == "float" || n == "float64") return {TypeKind::Float};
-    if (n == "string") return {TypeKind::String};
-    return {TypeKind::Unknown};
-}
-
-bool canAssign(Type target, Type value) {
-    if (target.kind == TypeKind::Unknown || value.kind == TypeKind::Unknown) return true;
-    if (target == value) return true;
-    return target.kind == TypeKind::Float && value.kind == TypeKind::Int;
-}
-
-std::string readTextFile(const std::filesystem::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) throw std::runtime_error("cannot open file: " + path.string());
-    std::ostringstream out;
-    out << in.rdbuf();
-    return out.str();
-}
-
-CompileResult compileSource(const std::string& source) {
-    CompileResult result;
-    Lexer lexer(source, result.diagnostics);
-    auto tokens = lexer.lex();
-    if (result.diagnostics.hasErrors()) return result;
-    Parser parser(std::move(tokens), result.diagnostics);
-    result.ast = parser.parse();
-    if (result.diagnostics.hasErrors()) return result;
-    TypeChecker checker(result.diagnostics);
-    if (!checker.check(result.ast)) return result;
-    Lowerer lowerer;
-    result.nir = lowerer.lower(result.ast);
-    Optimizer optimizer;
-    optimizer.optimize(result.nir);
-    return result;
-}
+void Diagnostics::error(std::string code,Span span,std::string message,std::string help){if(code.rfind("NOE-",0)==0)code.replace(0,4,"RIC-");items_.push_back({std::move(code),std::move(message),span,std::move(help)});} 
+void Diagnostics::print(const std::string& sourceName)const{for(const auto& d:items_){std::cerr<<d.code<<": "<<d.message<<"\n --> "<<sourceName<<':'<<d.span.line<<':'<<d.span.column<<"\n";if(!d.help.empty())std::cerr<<" help: "<<d.help<<"\n";}}
+std::string Type::name()const{switch(kind){case TypeKind::Unknown:return"unknown";case TypeKind::Void:return"void";case TypeKind::Null:return"null";case TypeKind::Bool:return"bool";case TypeKind::Int:return"int";case TypeKind::Float:return"float";case TypeKind::String:return"string";}return"unknown";}
+Type typeFromName(const std::string& n){if(n=="void")return{TypeKind::Void};if(n=="bool")return{TypeKind::Bool};if(n=="int"||n=="int64")return{TypeKind::Int};if(n=="float"||n=="float64")return{TypeKind::Float};if(n=="string")return{TypeKind::String};return{TypeKind::Unknown};}
+bool canAssign(Type target,Type value){if(target.kind==TypeKind::Unknown||value.kind==TypeKind::Unknown)return true;if(target==value)return true;return target.kind==TypeKind::Float&&value.kind==TypeKind::Int;}
+std::string readTextFile(const std::filesystem::path& path){std::ifstream in(path,std::ios::binary);if(!in)throw std::runtime_error("cannot open file: "+path.string());std::ostringstream out;out<<in.rdbuf();return out.str();}
+CompileResult compileSource(const std::string& source){CompileResult result;Lexer lexer(source,result.diagnostics);auto tokens=lexer.lex();if(result.diagnostics.hasErrors())return result;Parser parser(std::move(tokens),result.diagnostics);result.ast=parser.parse();if(result.diagnostics.hasErrors())return result;TypeChecker checker(result.diagnostics);if(!checker.check(result.ast))return result;Lowerer lowerer;result.nir=lowerer.lower(result.ast);Optimizer optimizer;optimizer.optimize(result.nir);return result;}
 
 } // namespace noe

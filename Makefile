@@ -1,23 +1,22 @@
-CXX ?= c++
-NOE_BIN ?= build/noe
-NOE_SOURCES := $(wildcard compiler/bootstrap/*.cpp)
+BUILD_DIR ?= build
+BUILD_TYPE ?= Release
 
-.PHONY: all test core release clean
+.PHONY: all build test doctor clean install
+all: build
 
-all: $(NOE_BIN)
+build:
+	cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
+	cmake --build $(BUILD_DIR) --config $(BUILD_TYPE)
 
-$(NOE_BIN): $(NOE_SOURCES) include/noe/noe.hpp
-	@mkdir -p build
-	$(CXX) -std=c++17 -O2 -Wall -Wextra -pedantic -Iinclude/noe $(NOE_SOURCES) -o $(NOE_BIN)
+test: build
+	ctest --test-dir $(BUILD_DIR) -C $(BUILD_TYPE) --output-on-failure
+	dash scripts/test_core.sh
 
-core: $(NOE_BIN)
-	NOE_BIN=./$(NOE_BIN) sh scripts/test_core.sh
+doctor: build
+	./$(BUILD_DIR)/ric doctor .
 
-test: $(NOE_BIN)
-	sh scripts/test.sh
-
-release: $(NOE_BIN)
-	sh scripts/release_check.sh
+install: build
+	cmake --install $(BUILD_DIR) --config $(BUILD_TYPE)
 
 clean:
-	rm -rf build
+	cmake -E remove_directory $(BUILD_DIR)

@@ -1,0 +1,7 @@
+function identity_int(value: int): int {
+    return value
+}
+
+function identity_bool(value: bool): bool {
+    return value
+}

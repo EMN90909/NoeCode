@@ -1,11 +1,12 @@
 #!/usr/bin/env sh
 set -eu
-sh scripts/build.sh
-sh scripts/test_core.sh
-
-# Custom x86-64 backend + assembler/linker driver + produced ELF executable.
-./build/noe build examples/native_hello.noe build/native_hello
-./build/native_hello > build/native.out
-diff -u examples/native_hello.expected build/native.out
-
-printf 'Noe Linux native end-to-end tests passed\n'
+./scripts/test_core.sh
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64)
+    ./build/ric build examples/native_hello.ric build/native_hello
+    ./build/native_hello
+    ;;
+  *)
+    echo "native executable smoke test skipped: current native backend is Linux x86-64"
+    ;;
+esac

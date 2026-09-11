@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
-CXX="${CXX:-c++}"
-OUT="${NOE_OUT:-build/noe}"
-mkdir -p "$(dirname "$OUT")"
-"$CXX" -std=c++17 -O2 -Wall -Wextra -pedantic -Iinclude/noe compiler/bootstrap/*.cpp -o "$OUT"
-printf 'Built %s\n' "$OUT"
+BUILD_DIR="${BUILD_DIR:-build}"
+BUILD_TYPE="${BUILD_TYPE:-Release}"
+cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" --parallel
+printf 'Ric bootstrap built in %s\n' "$BUILD_DIR"

@@ -1,0 +1,5 @@
+{
+  "iconDefinitions": {"_ric": {"iconPath": "./ric.svg"}},
+  "fileExtensions": {"ric": "_ric"},
+  "fileNames": {"project.ric": "_ric", "ric.lock": "_ric"}
+}

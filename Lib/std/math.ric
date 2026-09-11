@@ -1,0 +1,11 @@
+function abs_int(value: int): int {
+    if value < 0 {
+        return -value
+    }
+    return value
+}
+
+function min_int(a: int, b: int): int {
+    if a < b { return a }
+    return b
+}

@@ -9,9 +9,34 @@ permissions:
   contents: read
 
 jobs:
-  linux-x86_64:
+  cross-platform-core:
+    name: core-${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Noe bootstrap compiler
+        if: runner.os != 'Windows'
+        run: sh scripts/build.sh
+      - name: Build Noe bootstrap compiler on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\scripts\build.ps1
+      - name: Run cross-platform core tests
+        if: runner.os != 'Windows'
+        run: sh scripts/test_core.sh
+      - name: Run cross-platform core tests on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\scripts\test_core.ps1
+
+  linux-native-release:
+    name: linux-native-release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build and run end-to-end Noe tests
-        run: sh scripts/test.sh
+      - name: Run full native release check
+        run: sh scripts/release_check.sh

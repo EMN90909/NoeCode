@@ -1,0 +1,8 @@
+// Noe standard library seed: std.io
+//
+// `print` is currently a bootstrap built-in implemented by the compiler/runtime.
+// Future versions will move console and stream APIs into Noe-native modules.
+
+function printInt(value: int) {
+    print(value)
+}

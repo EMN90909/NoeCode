@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Noe wolf code logo</title>
+  <desc id="desc">A dark oval programming-language badge containing a geometric N-shaped wolf head and integrated angle brackets.</desc>
+  <defs>
+    <linearGradient id="ring" x1="120" x2="904" y1="160" y2="864" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5f7cff"/>
+      <stop offset="1" stop-color="#3e64ff"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="160" x2="864" y1="260" y2="764" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6f91ff"/>
+      <stop offset="1" stop-color="#4d72ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="#ffffff"/>
+  <ellipse cx="512" cy="512" rx="452" ry="338" fill="url(#ring)"/>
+  <ellipse cx="512" cy="512" rx="420" ry="304" fill="#071a3d"/>
+  <path d="M183 512 318 394c17-15 42-3 42 20v44L266 512l94 54v44c0 23-25 35-42 20L183 512Z" fill="url(#accent)"/>
+  <path d="M841 512 706 394c-17-15-42-3-42 20v44l94 54-94 54v44c0 23 25 35 42 20L841 512Z" fill="url(#accent)"/>
+  <path d="M336 247 505 440v114L414 452l-75 120 69 55v-53l78 88 25 134-109-97-66-127-92-60 118-118-26-147Z" fill="#f8fbff"/>
+  <path d="M688 247 519 440v114l91-102 75 120-69 55v-53l-78 88-25 134 109-97 66-127 92-60-118-118 26-147Z" fill="#f8fbff"/>
+  <path d="M338 247 505 440v114L408 445l-62 99 60 48v-42l89 100 17 91V253l-79 91-95-97Z" fill="#ffffff"/>
+  <path d="M686 247 519 440v114l97-109 62 99-60 48v-42l-89 100-17 91V253l79 91 95-97Z" fill="#ffffff"/>
+  <path d="M355 300 381 424 329 458Z" fill="url(#accent)"/>
+  <path d="M669 300 643 424 695 458Z" fill="url(#accent)"/>
+  <path d="M418 493c42 10 66 34 71 67-41 0-66-20-71-67Z" fill="url(#accent)"/>
+  <path d="M606 493c-42 10-66 34-71 67 41 0 66-20 71-67Z" fill="url(#accent)"/>
+  <path d="M455 700h114l40 39-23 47-74 37-74-37-23-47 40-39Z" fill="#ffffff"/>
+  <path d="M467 721h90l25 25-32 44h-76l-32-44 25-25Z" fill="#06183a"/>
+  <path d="M512 759v44M488 803h48" stroke="#06183a" stroke-width="16" stroke-linecap="round"/>
+</svg>

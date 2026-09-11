@@ -1,0 +1,9 @@
+// Noe standard library seed: std.core
+//
+// The bootstrap compiler currently provides primitive built-ins directly.
+// This file documents the intended Noe-native location for core library code
+// as the compiler becomes self-hosted.
+
+function identity(value: int): int {
+    return value
+}

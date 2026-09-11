@@ -1,0 +1,7 @@
+print("platform=" + platform())
+print(textLength("noqeri"))
+let now: int = clockMillis()
+if now > 0 {
+    print("abi runtime ok")
+}
+print(host("textLength", "host-boundary"))

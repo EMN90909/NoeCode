@@ -23,6 +23,9 @@ bool TypeChecker::isConstSymbol(const std::string& name) const {
 
 bool TypeChecker::check(const Program& program){
     functions_["print"] = FunctionType{{Type{TypeKind::Unknown}}, Type{TypeKind::Void}};
+    functions_["clockMillis"] = FunctionType{{}, Type{TypeKind::Int}};
+    functions_["platform"] = FunctionType{{}, Type{TypeKind::String}};
+    functions_["textLength"] = FunctionType{{Type{TypeKind::String}}, Type{TypeKind::Int}};
     for(const auto& stmt:program.statements){
         if(auto fn=std::dynamic_pointer_cast<FunctionStmt>(stmt)){
             std::vector<Type> params;
@@ -81,7 +84,7 @@ Type TypeChecker::checkExpr(const ExprPtr& expr){
     }
     if(auto e=std::dynamic_pointer_cast<NameExpr>(expr)){
         auto t=resolve(e->name); if(t) return *t;
-        if(functions_.count(e->name)) return {TypeKind::Unknown};
+        if(functions_.count(e->name) || e->name=="host") return {TypeKind::Unknown};
         diagnostics_.error("NOE-T3002",e->span,"unknown symbol '"+e->name+"'"); return {TypeKind::Unknown};
     }
     if(auto e=std::dynamic_pointer_cast<UnaryExpr>(expr)){
@@ -118,7 +121,18 @@ Type TypeChecker::checkExpr(const ExprPtr& expr){
     }
     if(auto e=std::dynamic_pointer_cast<CallExpr>(expr)){
         auto n=std::dynamic_pointer_cast<NameExpr>(e->callee);
-        if(!n){ diagnostics_.error("NOE-T3010",e->span,"only named functions are callable in bootstrap Noe"); return {TypeKind::Unknown}; }
+        if(!n){ diagnostics_.error("NOE-T3010",e->span,"only named functions are callable in bootstrap noqeri"); return {TypeKind::Unknown}; }
+        if(n->name=="host"){
+            if(e->args.empty()){
+                diagnostics_.error("NOE-T3015",e->span,"host requires a service name as its first argument");
+                return {TypeKind::Unknown};
+            }
+            Type service=checkExpr(e->args[0]);
+            if(service.kind!=TypeKind::String && service.kind!=TypeKind::Unknown)
+                diagnostics_.error("NOE-T3016",e->args[0]->span,"host service name must be a string");
+            for(std::size_t i=1;i<e->args.size();++i) checkExpr(e->args[i]);
+            return {TypeKind::Unknown};
+        }
         auto it=functions_.find(n->name); if(it==functions_.end()){ diagnostics_.error("NOE-T3011",e->span,"unknown function '"+n->name+"'"); return {TypeKind::Unknown}; }
         auto& sig=it->second;
         if(n->name!="print" && e->args.size()!=sig.params.size()) diagnostics_.error("NOE-T3012",e->span,"wrong argument count for '"+n->name+"'");

@@ -1,7 +1,7 @@
 project {
     name: "noqeri"
-    version: "1.0.0"
+    version: "1.2.0"
     entry: "examples/hello.nqr"
     profile: "compiler"
-    target: "native"
+    target: "freestanding-x86_64"
 }

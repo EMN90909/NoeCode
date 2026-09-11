@@ -15,7 +15,7 @@ The native backend and linker driver are intentionally explicit boundaries at th
 Linux/macOS:
 
 ```sh
-./scripts/build.sh
+sh scripts/build.sh
 ```
 
 Windows PowerShell with MSVC or g++:

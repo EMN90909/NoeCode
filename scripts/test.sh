@@ -45,7 +45,8 @@ grep -q 'mov DWORD PTR \[rax\], ebx' build/systems_types.s
 
 ./build/noqeri build examples/general_systems.nqr build/general_systems.s
 test -s build/general_systems.s
-grep -q 'lock xchg' build/general_systems.s
+# x86 memory xchg is implicitly atomic; no lock prefix is required.
+grep -q 'xchg QWORD PTR \[rax\], rbx' build/general_systems.s
 grep -q 'pause' build/general_systems.s
 grep -q '^exercise:$' build/general_systems.s
 

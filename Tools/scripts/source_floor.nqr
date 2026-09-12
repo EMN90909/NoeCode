@@ -1,0 +1,13 @@
+module noqeri.tools.source_floor
+
+export function nqMinimumStandardLibraryModules(): usize {
+    return 16 as usize
+}
+
+export function nqMinimumNoqeriSourceFiles(): usize {
+    return 30 as usize
+}
+
+export function nqSourceFloorSatisfied(noqeriFiles: usize, standardLibraryModules: usize): bool {
+    return noqeriFiles >= nqMinimumNoqeriSourceFiles() && standardLibraryModules >= nqMinimumStandardLibraryModules()
+}

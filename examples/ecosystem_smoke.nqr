@@ -1,0 +1,87 @@
+import "../Lib/test/assert.nqr"
+import "../Lib/std/int.nqr"
+import "../Lib/std/slice_i64.nqr"
+import "../Lib/std/search.nqr"
+import "../Lib/std/sort.nqr"
+import "../Lib/std/stats.nqr"
+import "../Lib/std/bytes.nqr"
+import "../Lib/std/utf8.nqr"
+import "../Lib/std/checksum.nqr"
+import "../Lib/std/memory.nqr"
+import "../Lib/std/status.nqr"
+import "../Lib/std/time.nqr"
+import "../Lib/std/random.nqr"
+import "../Lib/std/matrix_i64.nqr"
+import "../Lib/std/range.nqr"
+import "../Lib/std/text.nqr"
+import "../Lib/std/set_i64.nqr"
+import "../Lib/std/map_i64.nqr"
+import "../Lib/std/stack_i64.nqr"
+import "../Lib/std/queue_i64.nqr"
+import "../Lib/std/algorithm.nqr"
+import "../Lib/std/bit.nqr"
+import "../Lib/std/validation.nqr"
+import "../Lib/std/window.nqr"
+import "../Lib/std/pair_i64.nqr"
+import "../Lib/std/counter.nqr"
+import "../Lib/std/compare.nqr"
+import "../Lib/security/memory.nqr"
+
+function require(ok: bool): void {
+    if !ok {
+        let invalid: *u8 = 0 as *u8
+        print(invalid[0])
+    }
+}
+
+let values: [i64; 6] = [9 as i64, 1 as i64, 5 as i64, 3 as i64, 7 as i64, 3 as i64]
+let view: []i64 = slice(values)
+nqInsertionSortI64(view)
+require(nqIsSortedI64(view))
+require(nqBinarySearchI64(view, 7 as i64) >= 0 as isize)
+require(nqStatsMinI64(view) == 1 as i64)
+require(nqStatsMaxI64(view) == 9 as i64)
+require(nqGcdI64(84 as i64, 30 as i64) == 6 as i64)
+require(nqPowI64(2 as i64, 10 as u32) == 1024 as i64)
+require(nqBitCountU64(255 as u64) == 8 as u32)
+require(nqTextJoin3("NO", "QE", "RI") == "NOQERI")
+
+let bytes: [u8; 6] = [78 as u8, 79 as u8, 81 as u8, 69 as u8, 82 as u8, 73 as u8]
+let byteView: []u8 = slice(bytes)
+require(nqBytesAreAscii(byteView))
+require(nqUtf8Valid(byteView))
+require(nqSecureEqual(byteView, byteView))
+require(nqAdler32(byteView) != 0 as u32)
+
+let setValues: [i64; 4] = [0 as i64, 0 as i64, 0 as i64, 0 as i64]
+let setCount: isize = nqSetInsertI64(&setValues[0], 0 as usize, 4 as usize, 42 as i64)
+require(setCount == 1 as isize)
+require(nqSetContainsI64(&setValues[0], 1 as usize, 42 as i64))
+
+let mapKeys: [i64; 4] = [0 as i64, 0 as i64, 0 as i64, 0 as i64]
+let mapValues: [i64; 4] = [0 as i64, 0 as i64, 0 as i64, 0 as i64]
+let mapCount: isize = nqMapPutI64(&mapKeys[0], &mapValues[0], 0 as usize, 4 as usize, 7 as i64, 70 as i64)
+require(mapCount == 1 as isize)
+require(nqMapGetI64(&mapKeys[0], &mapValues[0], 1 as usize, 7 as i64, -1 as i64) == 70 as i64)
+
+let stackValues: [i64; 2] = [0 as i64, 0 as i64]
+let stackCount: isize = nqStackPushI64(&stackValues[0], 0 as usize, 2 as usize, 99 as i64)
+require(stackCount == 1 as isize)
+require(nqStackPeekI64(&stackValues[0], 1 as usize, 0 as i64) == 99 as i64)
+
+let queueValues: [i64; 2] = [0 as i64, 0 as i64]
+let nextTail: isize = nqQueueWriteI64(&queueValues[0], 2 as usize, 0 as usize, 0 as usize, 55 as i64)
+require(nextTail == 1 as isize)
+require(nqQueueReadI64(&queueValues[0], 2 as usize, 0 as usize, 1 as usize, 0 as i64) == 55 as i64)
+
+require(nqValidIndex(1 as usize, 2 as usize))
+require(nqWindowFits(1 as usize, 1 as usize, 2 as usize))
+require(nqRangeWithin(0 as usize, 2 as usize, 2 as usize))
+require(nqCompareI64(3 as i64, 8 as i64) < 0 as i64)
+require(nqPairMinI64(8 as i64, 3 as i64) == 3 as i64)
+require(nqCounterRemaining(3 as usize, 10 as usize) == 7 as usize)
+require(nqStatusOk(0 as isize))
+require(nqElapsedMillis(100 as i64, 250 as i64) == 150 as i64)
+require(nqRandomNext(1 as i64) == 48271 as i64)
+
+print("NOQERI ecosystem smoke: local libraries OK")

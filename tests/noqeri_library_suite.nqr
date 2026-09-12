@@ -1,0 +1,112 @@
+import "../Lib/test/assert.nqr"
+import "../Lib/std/int.nqr"
+import "../Lib/std/slice_i64.nqr"
+import "../Lib/std/search.nqr"
+import "../Lib/std/sort.nqr"
+import "../Lib/std/stats.nqr"
+import "../Lib/std/bytes.nqr"
+import "../Lib/std/utf8.nqr"
+import "../Lib/std/checksum.nqr"
+import "../Lib/std/memory.nqr"
+import "../Lib/std/status.nqr"
+import "../Lib/std/time.nqr"
+import "../Lib/std/random.nqr"
+import "../Lib/std/matrix_i64.nqr"
+import "../Lib/std/range.nqr"
+import "../Lib/std/text.nqr"
+import "../Lib/std/set_i64.nqr"
+import "../Lib/std/map_i64.nqr"
+import "../Lib/std/stack_i64.nqr"
+import "../Lib/security/memory.nqr"
+import "../Parser/ascii.nqr"
+import "../Compiler/semantic_rules.nqr"
+import "../Runtime/status.nqr"
+import "../Runtime/memory.nqr"
+import "../Platforms/capabilities.nqr"
+import "../PC/platform.nqr"
+import "../Mac/platform.nqr"
+import "../Android/platform.nqr"
+import "../PCbuild/profile.nqr"
+import "../Tools/fuzz/generator.nqr"
+import "../Tools/build/policy.nqr"
+
+function failIfLibrary(status: isize): void {
+    if status != 0 {
+        let invalid: *u8 = 0 as *u8
+        print(invalid[0])
+    }
+}
+
+failIfLibrary(nqAssertTrue(nqClampI64(12 as i64, 0 as i64, 10 as i64) == 10 as i64))
+failIfLibrary(nqAssertTrue(nqBetweenI64(5 as i64, 1 as i64, 9 as i64)))
+
+let values: [i64; 6] = [7 as i64, 2 as i64, 9 as i64, 2 as i64, 1 as i64, 4 as i64]
+let view: []i64 = slice(values)
+failIfLibrary(nqAssertTrue(nqSliceSumI64(view) == 25 as i64))
+failIfLibrary(nqAssertTrue(nqSliceCountI64(view, 2 as i64) == 2 as usize))
+nqInsertionSortI64(view)
+failIfLibrary(nqAssertTrue(nqIsSortedI64(view)))
+failIfLibrary(nqAssertTrue(nqBinarySearchI64(view, 9 as i64) >= 0))
+failIfLibrary(nqAssertTrue(nqLowerBoundI64(view, 2 as i64) == 1 as usize))
+failIfLibrary(nqAssertTrue(nqStatsMinI64(view) == 1 as i64))
+failIfLibrary(nqAssertTrue(nqStatsMaxI64(view) == 9 as i64))
+failIfLibrary(nqAssertTrue(nqStatsMeanFloorI64(view) == 4 as i64))
+
+let asciiBytes: [u8; 3] = [65 as u8, 66 as u8, 67 as u8]
+let asciiView: []u8 = slice(asciiBytes)
+failIfLibrary(nqAssertTrue(nqBytesAreAscii(asciiView)))
+failIfLibrary(nqAssertTrue(nqAsciiToLower(65 as u8) == 97 as u8))
+failIfLibrary(nqAssertTrue(nqUtf8Valid(asciiView)))
+failIfLibrary(nqAssertTrue(nqUtf8CodeUnitCount(asciiView) == 3 as usize))
+failIfLibrary(nqAssertTrue(nqAdler32(asciiView) == 26017991 as u32))
+
+let copied: [u8; 3] = [0 as u8, 0 as u8, 0 as u8]
+nqMemoryCopyU8(&asciiBytes[0], &copied[0], 3 as usize)
+failIfLibrary(nqAssertTrue(nqMemoryEqualU8(&asciiBytes[0], &copied[0], 3 as usize)))
+failIfLibrary(nqAssertTrue(nqSecureEqual(asciiView, slice(copied))))
+failIfLibrary(nqAssertTrue(nqSecureRange(2 as usize, 3 as usize, 8 as usize)))
+
+failIfLibrary(nqAssertTrue(nqStatusOk(0)))
+failIfLibrary(nqAssertTrue(nqStatusCode(-7) == 7))
+failIfLibrary(nqAssertTrue(nqElapsedMillis(100 as i64, 250 as i64) == 150 as i64))
+failIfLibrary(nqAssertTrue(nqRandomNext(1 as i64) == 48271 as i64))
+failIfLibrary(nqAssertTrue(nqRangeWithin(3 as usize, 4 as usize, 8 as usize)))
+failIfLibrary(nqAssertTrue(nqTextJoin3("no", "qe", "ri") == "noqeri"))
+
+let matrix: [i64; 4] = [0 as i64, 0 as i64, 0 as i64, 0 as i64]
+failIfLibrary(nqAssertStatus(nqMatrixSetI64(&matrix[0], 2 as usize, 2 as usize, 1 as usize, 1 as usize, 42 as i64), 0))
+failIfLibrary(nqAssertTrue(nqMatrixGetI64(&matrix[0], 2 as usize, 2 as usize, 1 as usize, 1 as usize) == 42 as i64))
+
+let setValues: [i64; 4] = [0 as i64, 0 as i64, 0 as i64, 0 as i64]
+let setCount: isize = nqSetInsertI64(&setValues[0], 0 as usize, 4 as usize, 11 as i64)
+failIfLibrary(nqAssertTrue(setCount == 1))
+failIfLibrary(nqAssertTrue(nqSetContainsI64(&setValues[0], setCount as usize, 11 as i64)))
+
+let mapKeys: [i64; 4] = [0 as i64, 0 as i64, 0 as i64, 0 as i64]
+let mapValues: [i64; 4] = [0 as i64, 0 as i64, 0 as i64, 0 as i64]
+let mapCount: isize = nqMapPutI64(&mapKeys[0], &mapValues[0], 0 as usize, 4 as usize, 5 as i64, 50 as i64)
+failIfLibrary(nqAssertTrue(mapCount == 1))
+failIfLibrary(nqAssertTrue(nqMapGetI64(&mapKeys[0], &mapValues[0], mapCount as usize, 5 as i64, -1 as i64) == 50 as i64))
+
+let stackValues: [i64; 3] = [0 as i64, 0 as i64, 0 as i64]
+let stackCount: isize = nqStackPushI64(&stackValues[0], 0 as usize, 3 as usize, 99 as i64)
+failIfLibrary(nqAssertTrue(stackCount == 1))
+failIfLibrary(nqAssertTrue(nqStackPeekI64(&stackValues[0], stackCount as usize, 0 as i64) == 99 as i64))
+
+let sourceText: [u8; 8] = [32 as u8, 32 as u8, 110 as u8, 111 as u8, 113 as u8, 101 as u8, 114 as u8, 105 as u8]
+let sourceView: []u8 = slice(sourceText)
+let tokenStart: usize = nqLexSkipWhitespace(sourceView, 0 as usize)
+failIfLibrary(nqAssertTrue(tokenStart == 2 as usize))
+failIfLibrary(nqAssertTrue(nqLexScanIdentifier(sourceView, tokenStart) == 8 as usize))
+
+failIfLibrary(nqAssertTrue(nqFitsU8(255 as i64)))
+failIfLibrary(nqAssertFalse(nqFitsU8(256 as i64)))
+failIfLibrary(nqAssertTrue(nqRuntimeIsError(-3)))
+failIfLibrary(nqAssertTrue(nqRuntimeErrorCode(-3) == 3))
+failIfLibrary(nqAssertTrue(nqPlatformPointerBits() == 64 as u32))
+failIfLibrary(nqAssertTrue(nqWindowsFrontendSupported()))
+failIfLibrary(nqAssertTrue(nqMacFrontendSupported()))
+failIfLibrary(nqAssertTrue(nqAndroidNdkBridgeRequired()))
+failIfLibrary(nqAssertTrue(nqBuildProfileOptimized(nqBuildProfileRelease())))
+failIfLibrary(nqAssertTrue(nqFuzzNext(1 as i64) == 48271 as i64))
+failIfLibrary(nqAssertTrue(nqOwnedAreaRequiresNoqeri(2)))

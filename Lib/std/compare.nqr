@@ -1,0 +1,13 @@
+module noqeri.std.compare
+
+export function nqCompareI64(left: i64, right: i64): i64 {
+    if left < right { return -1 as i64 }
+    if left > right { return 1 as i64 }
+    return 0 as i64
+}
+
+export function nqCompareU64(left: u64, right: u64): i64 {
+    if left < right { return -1 as i64 }
+    if left > right { return 1 as i64 }
+    return 0 as i64
+}

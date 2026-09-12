@@ -1,0 +1,13 @@
+module noqeri.pcbuild.profile
+
+export function nqBuildProfileDebug(): int { return 0 }
+export function nqBuildProfileRelease(): int { return 1 }
+export function nqBuildProfileSanitized(): int { return 2 }
+
+export function nqBuildProfileOptimized(profile: int): bool {
+    return profile == nqBuildProfileRelease()
+}
+
+export function nqBuildProfileChecksMemory(profile: int): bool {
+    return profile == nqBuildProfileSanitized()
+}

@@ -5,14 +5,32 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$StartedAt = Get-Date
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $BannerPath = Join-Path $RepoRoot 'Brand\noqeri-banner.txt'
-if (Test-Path $BannerPath) {
-    Write-Host (Get-Content -Path $BannerPath -Raw -Encoding UTF8)
-}
-
 $BuildDir = if ($env:BUILD_DIR) { $env:BUILD_DIR } else { 'build' }
 $BuildType = if ($env:BUILD_TYPE) { $env:BUILD_TYPE } else { 'Release' }
+
+function Show-NoqeriBanner {
+    if (Test-Path $BannerPath) {
+        Write-Host (Get-Content -Path $BannerPath -Raw -Encoding UTF8)
+    }
+}
+
+function Format-Elapsed {
+    param([Parameter(Mandatory = $true)][TimeSpan]$Elapsed)
+    return ('{0:00}:{1:00}:{2:00}' -f [int]$Elapsed.TotalHours, $Elapsed.Minutes, $Elapsed.Seconds)
+}
+
+function Show-NextSteps {
+    param([Parameter(Mandatory = $true)][string]$Compiler)
+    Write-Host ''
+    Write-Host 'How to use:'
+    Write-Host "  & `"$Compiler`" --version"
+    Write-Host "  & `"$Compiler`" run examples\hello.nqr"
+    Write-Host "  & `"$Compiler`" check examples\hello.nqr"
+    Write-Host "  ctest --test-dir $BuildDir -C $BuildType --output-on-failure"
+}
 
 function Test-Command {
     param([Parameter(Mandatory = $true)][string]$Name)
@@ -104,6 +122,14 @@ function Install-MissingPrerequisites {
     return $true
 }
 
+function Use-SingleConfigBuildType {
+    if ($env:CMAKE_GENERATOR) {
+        return $env:CMAKE_GENERATOR -notmatch '(?i)visual studio|xcode|ninja multi-config'
+    }
+    return $false
+}
+
+Show-NoqeriBanner
 Refresh-ProcessPath
 $missing = @(Get-MissingPrerequisites)
 
@@ -143,7 +169,10 @@ if ($remaining.Count -gt 0) {
 Push-Location $RepoRoot
 try {
     Write-Host "building Noqeri bootstrap ($BuildType)"
-    cmake -S . -B $BuildDir -DCMAKE_BUILD_TYPE=$BuildType
+    $configureArgs = @('-S', '.', '-B', $BuildDir)
+    if ($env:CMAKE_GENERATOR) { $configureArgs += @('-G', $env:CMAKE_GENERATOR) }
+    if (Use-SingleConfigBuildType) { $configureArgs += "-DCMAKE_BUILD_TYPE=$BuildType" }
+    cmake @configureArgs
     cmake --build $BuildDir --config $BuildType --parallel
 
     $candidates = @(
@@ -155,8 +184,16 @@ try {
         throw "build completed but noqeri.exe was not found in $BuildDir"
     }
 
-    Write-Host "noqeri bootstrap built: $compiler"
+    $elapsed = Format-Elapsed ((Get-Date) - $StartedAt)
+    Write-Host ''
+    Show-NoqeriBanner
+    Write-Host 'Noqeri build worked.'
+    Write-Host "Time taken: $elapsed"
+    Write-Host "Compiler: $compiler"
+    Write-Host ''
+    Write-Host 'Version:'
     & $compiler --version
+    Show-NextSteps -Compiler $compiler
 } finally {
     Pop-Location
 }

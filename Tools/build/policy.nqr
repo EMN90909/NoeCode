@@ -1,0 +1,20 @@
+module noqeri.tools.build.policy
+
+export function nqOwnedAreaAllowsCpp(area: int): bool {
+    if area == 0 { return true }
+    if area == 1 { return true }
+    return false
+}
+
+export function nqOwnedAreaRequiresNoqeri(area: int): bool {
+    return !nqOwnedAreaAllowsCpp(area)
+}
+
+export function nqBuildStatusPass(failures: usize): bool {
+    return failures == 0
+}
+
+export function nqBuildStatusCode(failures: usize): isize {
+    if failures == 0 { return 0 }
+    return -1
+}

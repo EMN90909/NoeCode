@@ -1,0 +1,9 @@
+module noqeri.programs.version
+
+export function nqLanguageVersionMajor(): int { return 1 }
+export function nqLanguageVersionMinor(): int { return 4 }
+export function nqAbiVersion(): int { return 2 }
+
+export function nqVersionCompatible(requiredMajor: int, actualMajor: int): bool {
+    return requiredMajor == actualMajor
+}

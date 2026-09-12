@@ -3,7 +3,7 @@ $required = @(
   'README.md','LICENSE','LEGAL.md','SECURITY.md','CONTRIBUTING.md','CMakeLists.txt','project.nqr','noqeri.lock',
   'Brand/noqeri-logo.webp','Brand/noqeri-mark.png','Grammar/noqeri.grammar.md','Include/noqeri/noqeri.hpp',
   'Parser/lexer.cpp','Parser/parser.cpp','Compiler/core.cpp','Runtime/interpreter.cpp','Programs/noqeri.cpp',
-  'Tools/build/production.cpp','Modules/native.nqr','Objects/value.nqr','Objects/text.nqr','Database/noqeridb.nqr',
+  'Tools/build/production.cpp','Modules/builtin.nqr','Modules/native.nqr','Objects/value.nqr','Objects/text.nqr','Database/noqeridb.nqr',
   'Tools/security/policy.nqr','Lib/test/assert.nqr','tests/noqeri_owned_components.nqr','editors/vscode/package.json','site/index.html'
 )
 foreach ($path in $required) { if (-not (Test-Path $path)) { throw "missing required repository path: $path" } }

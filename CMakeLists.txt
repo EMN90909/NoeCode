@@ -3,21 +3,22 @@ project(noqeri VERSION 1.0.0 LANGUAGES CXX)
 include(GNUInstallDirs)
 option(NOQERI_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(NOQERI_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+if(DEFINED CMAKE_BUILD_TYPE AND CMAKE_CONFIGURATION_TYPES)
+ message(STATUS "Multi-config generator detected; cmake --build --config selects the active configuration (${CMAKE_BUILD_TYPE}).")
+endif()
 # C++ is restricted to the compiler/bootstrap and public embedding ABI layer.
 # Reusable language-facing modules, parser helpers, runtime helpers, platform
 # policy, security and data structures live in .nqr. Bootstrap C++ remains until
 # the Noqeri compiler can compile the corresponding compiler/toolchain pieces.
 set(NOQERI_FRONTEND_SOURCES
  Compiler/core.cpp Compiler/modules.cpp Compiler/workspace.cpp Compiler/type_checker.cpp
- Compiler/lifetime.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp
- Compiler/register_alloc.cpp Compiler/optimizer.cpp
- Compiler/bootstrap/lexer_host.cpp Compiler/bootstrap/parser_host.cpp
- Compiler/bootstrap/abi_runtime_host.cpp Compiler/bootstrap/interpreter_host.cpp
+ Compiler/lifetime.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp Compiler/register_alloc.cpp Compiler/optimizer.cpp
+ Compiler/bootstrap/lexer_host.cpp Compiler/bootstrap/parser_host.cpp Compiler/bootstrap/abi_runtime_host.cpp Compiler/bootstrap/interpreter_host.cpp
  Compiler/bootstrap/noqeridb_host.cpp)
 set(NOQERI_SOURCES ${NOQERI_FRONTEND_SOURCES}
  Compiler/native_backend.cpp Compiler/web_backend.cpp Compiler/linker.cpp
- Compiler/bootstrap/cli_host.cpp Compiler/bootstrap/formatter_host.cpp
- Compiler/bootstrap/package_host.cpp Compiler/bootstrap/lsp_host.cpp
+ Compiler/bootstrap/cli_host.cpp Compiler/bootstrap/formatter_host.cpp Compiler/bootstrap/package_host.cpp
+ Compiler/bootstrap/lsp_host.cpp
  Compiler/bootstrap/test_runner_host.cpp Compiler/bootstrap/production_doctor_host.cpp
  Compiler/bootstrap/security_audit_host.cpp)
 add_executable(noqeri ${NOQERI_SOURCES})
@@ -32,12 +33,13 @@ set_source_files_properties(Compiler/bootstrap/noqeridb_host.cpp PROPERTIES COMP
 set_target_properties(noqeri_abi PROPERTIES OUTPUT_NAME noqeri-abi WINDOWS_EXPORT_ALL_SYMBOLS ON)
 function(noqeri_apply_warnings target)
  if(MSVC)
-  target_compile_options(${target} PRIVATE /W4 /permissive- /EHsc)
+  target_compile_options(${target} PRIVATE /W4 /permissive- /EHsc /wd4456 /wd4701)
+  target_compile_definitions(${target} PRIVATE _CRT_SECURE_NO_WARNINGS)
   if(NOQERI_WARNINGS_AS_ERRORS)
    target_compile_options(${target} PRIVATE /WX)
   endif()
  else()
-  target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wno-misleading-indentation)
   if(NOQERI_WARNINGS_AS_ERRORS)
    target_compile_options(${target} PRIVATE -Werror)
   endif()

@@ -1,0 +1,29 @@
+module noqeri.test.assert
+
+export function nqAssertTrue(condition: bool): isize {
+    if !condition {
+        return -1
+    }
+    return 0
+}
+
+export function nqAssertFalse(condition: bool): isize {
+    if condition {
+        return -1
+    }
+    return 0
+}
+
+export function nqAssertStatus(actual: isize, expected: isize): isize {
+    if actual != expected {
+        return -1
+    }
+    return 0
+}
+
+export function nqAssertInt(actual: int, expected: int): isize {
+    if actual != expected {
+        return -1
+    }
+    return 0
+}

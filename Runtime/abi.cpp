@@ -7,8 +7,6 @@
 #include <vector>
 namespace noe {
 namespace {
-thread_local std::string lastAbiError;
-void setError(noqeri_abi_error* error,int code,const std::string& message){lastAbiError=message;if(error){error->code=code;error->message=lastAbiError.c_str();}}
 std::string valueText(const noqeri_abi_value& value){switch(value.tag){case NOQERI_ABI_NULL:return"null";case NOQERI_ABI_BOOL:return value.as.boolean?"true":"false";case NOQERI_ABI_INT:return std::to_string(value.as.integer);case NOQERI_ABI_FLOAT:return std::to_string(value.as.floating);case NOQERI_ABI_STRING:return value.as.string.data?std::string(value.as.string.data,value.as.string.size):std::string{};default:return"<invalid>";}}
 int32_t desktopWrite(void*,const char* data,size_t size){if(data&&size)std::cout.write(data,static_cast<std::streamsize>(size));return std::cout?0:1;}
 int64_t desktopClock(void*){return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());}

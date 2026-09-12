@@ -3,7 +3,6 @@ set -eu
 
 ./scripts/test_core.sh
 
-# Execute the general systems fixture and assert exact language semantics.
 expected='4
 3
 42
@@ -14,10 +13,7 @@ expected='4
 actual="$(./build/noqeri run tests/general_capabilities.nqr)"
 if [ "$actual" != "$expected" ]; then
   echo "general capability semantics mismatch" >&2
-  echo "expected:" >&2
-  printf '%s\n' "$expected" >&2
-  echo "actual:" >&2
-  printf '%s\n' "$actual" >&2
+  printf 'expected:\n%s\nactual:\n%s\n' "$expected" "$actual" >&2
   exit 1
 fi
 
@@ -25,14 +21,11 @@ reject_file() {
   file="$1"
   label="$2"
   if ./build/noqeri check "$file" >/dev/null 2>&1; then
-    echo "type checker accepted invalid program: $label" >&2
+    echo "checker accepted invalid program: $label" >&2
     exit 1
   fi
 }
 
-# The checker must reject category mismatches, mutation violations, unsafe
-# pointer conversions, invalid atomic use, generic disagreement and integer
-# narrowing/signedness hazards.
 cat > build/invalid_type.nqr <<'EOF'
 let count: u32 = "not a number"
 EOF
@@ -88,7 +81,17 @@ let unsigned: u32 = signed
 EOF
 reject_file build/invalid_signedness.nqr "implicit signed to unsigned conversion"
 
-# Proven-safe literal initialization and widening remain concise.
+# A slice is borrowed. Returning a view into function-local fixed-array storage
+# would create a dangling descriptor and must be rejected statically.
+cat > build/invalid_slice_escape.nqr <<'EOF'
+function bad(): []u32 {
+    let local: [u32; 2] = [1 as u32, 2 as u32]
+    let view: []u32 = slice(local)
+    return view
+}
+EOF
+reject_file build/invalid_slice_escape.nqr "slice borrowed from local array escapes function"
+
 cat > build/valid_integer_safety.nqr <<'EOF'
 let port: u16 = 8080
 let small: u8 = 42
@@ -105,8 +108,43 @@ if [ "$valid_output" != '8080
   exit 1
 fi
 
-# Native codegen is freestanding: verify emitted artifacts instead of assuming
-# an OS executable format or process runtime.
+# The formatter must preserve both comment forms.
+cat > build/comment_format.nqr <<'EOF'
+// line comment
+let value:int=1 /* block comment */
+print(value)
+EOF
+./build/noqeri format build/comment_format.nqr >/dev/null
+grep -q '// line comment' build/comment_format.nqr
+grep -q '/\* block comment \*/' build/comment_format.nqr
+
+# project.nqr is parsed structurally and lock v2 never falls back to FNV.
+mkdir -p build/manifest-test/src
+cat > build/manifest-test/project.nqr <<'EOF'
+project {
+    name: "manifest-test"
+    version: "0.1.0"
+    edition: "2026"
+    entry: "src/main.nqr"
+    profile: "app"
+    target: "x86_64-unknown-none"
+    registry: "https://github.com/EMN90909/noqeri-registry"
+}
+EOF
+./build/noqeri manifest build/manifest-test/project.nqr | grep -q 'edition=2026'
+./build/noqeri lock build/manifest-test/project.nqr >/dev/null
+grep -q '^noqeri-lock 2$' build/manifest-test/noqeri.lock
+if grep -qi 'fnv' build/manifest-test/noqeri.lock; then
+  echo "legacy non-content lock hash returned" >&2
+  exit 1
+fi
+
+./build/noqeri targets | grep -q '^x86_64-unknown-none '
+./build/noqeri targets | grep -q '^aarch64-unknown-none '
+./build/noqeri --version | grep -q '^edition=2026$'
+
+# Native codegen is currently implemented for the x86-64 target adapter. The
+# language/frontend itself remains environment-neutral.
 ./build/noqeri build examples/native_hello.nqr build/native_hello.s
 test -s build/native_hello.s
 grep -q '^\.global noqeri_entry$' build/native_hello.s
@@ -120,7 +158,6 @@ grep -q 'mov DWORD PTR \[rax\], ebx' build/systems_types.s
 
 ./build/noqeri build examples/general_systems.nqr build/general_systems.s
 test -s build/general_systems.s
-# x86 memory xchg is implicitly atomic; no lock prefix is required.
 grep -q 'xchg QWORD PTR \[rax\], rbx' build/general_systems.s
 grep -q 'pause' build/general_systems.s
 grep -q '^exercise:$' build/general_systems.s
@@ -130,8 +167,6 @@ if grep -Eq '\bsyscall\b|\b_start\b|elf_x86_64|\.note\.GNU-stack' build/native_h
   exit 1
 fi
 
-# On the current x86-64 GAS target, prove the emitted text is real assembler,
-# not merely plausible-looking output. Linking stays outside the core compiler.
 case "$(uname -s)-$(uname -m)" in
   Linux-x86_64)
     ${CXX:-c++} -c build/native_hello.s -o build/native_hello.o
@@ -143,4 +178,4 @@ case "$(uname -s)-$(uname -m)" in
     ;;
 esac
 
-echo "semantic, type-safety, and freestanding native codegen tests passed"
+echo "semantic, type-safety, lifetime, package, formatter, target, and native codegen tests passed"

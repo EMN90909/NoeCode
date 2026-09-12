@@ -1,0 +1,18 @@
+module noqeri.std.random
+
+export function nqRandomSeed(seed: i64): i64 {
+    let normalized: i64 = seed % (2147483647 as i64)
+    if normalized <= 0 { return 1 as i64 }
+    return normalized
+}
+
+export function nqRandomNext(seed: i64): i64 {
+    let normalized: i64 = nqRandomSeed(seed)
+    return (normalized * (48271 as i64)) % (2147483647 as i64)
+}
+
+export function nqRandomRange(seed: i64, low: i64, highExclusive: i64): i64 {
+    if highExclusive <= low { return low }
+    let span: i64 = highExclusive - low
+    return low + (nqRandomNext(seed) % span)
+}

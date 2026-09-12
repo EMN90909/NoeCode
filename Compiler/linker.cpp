@@ -1,21 +1,31 @@
 #include "noe.hpp"
 #include <cstdlib>
 #include <filesystem>
+#include <sstream>
 #include <string>
-namespace noe {
-namespace {
-std::string quote(const std::filesystem::path& path){std::string s=path.string();std::string out="\"";for(char c:s){if(c=='\"')out+="\\\"";else out+=c;}out+='\"';return out;}
-std::string replaceAll(std::string text,const std::string& key,const std::string& value){std::size_t pos=0;while((pos=text.find(key,pos))!=std::string::npos){text.replace(pos,key.size(),value);pos+=value.size();}return text;}
+#include <vector>
+#if defined(_WIN32)
+#define NOMINMAX
+#include <windows.h>
+#else
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+namespace noe { namespace {std::vector<std::string>splitTriple(const std::string&text){std::vector<std::string>parts;std::stringstream input(text);std::string part;while(std::getline(input,part,'-'))parts.push_back(part);return parts;}std::string archName(Architecture a){switch(a){case Architecture::X86_64:return"x86_64";case Architecture::AArch64:return"aarch64";case Architecture::Wasm32:return"wasm32";default:return"unknown";}}
+#if defined(_WIN32)
+std::string quoteWindows(const std::string&v){if(v.find_first_of(" \t\"")==std::string::npos)return v;std::string out="\"";std::size_t slashes=0;for(char c:v){if(c=='\\'){++slashes;continue;}if(c=='\"'){out.append(slashes*2+1,'\\');out.push_back('\"');slashes=0;continue;}out.append(slashes,'\\');slashes=0;out.push_back(c);}out.append(slashes*2,'\\');out.push_back('\"');return out;}
+#endif
 }
-bool LinkerDriver::link(const std::filesystem::path& assembly,const std::filesystem::path& output,Diagnostics& diagnostics)const{
-    if(!std::filesystem::exists(assembly)){diagnostics.error("NQR-K5101",{},"assembly input not found: "+assembly.string());return false;}
-    const char* configured=std::getenv("NOQERI_NATIVE_ASSEMBLER");
-    if(!configured||!*configured){diagnostics.error("NQR-K5100",{},"Noqeri native output is freestanding and is not linked to an OS automatically","use 'noqeri build' to keep the .s artifact, or set NOQERI_NATIVE_ASSEMBLER to a command template containing {input} and {output}");return false;}
-    std::filesystem::create_directories(output.parent_path().empty()?std::filesystem::path("."):output.parent_path());
-    std::string command=configured;
-    command=replaceAll(command,"{input}",quote(assembly));
-    command=replaceAll(command,"{output}",quote(output));
-    if(std::system(command.c_str())!=0){diagnostics.error("NQR-K5103",{},"configured assembler failed","the compiler does not assume ELF, Mach-O, COFF, Linux, Windows, macOS, or a kernel linker; configure the adapter for your target");return false;}
-    return true;
+TargetTriple TargetTriple::parse(const std::string&text){TargetTriple t;auto p=splitTriple(text);if(p.empty())return t;if(p[0]=="x86_64"||p[0]=="amd64")t.architecture=Architecture::X86_64;else if(p[0]=="aarch64"||p[0]=="arm64")t.architecture=Architecture::AArch64;else if(p[0]=="wasm32")t.architecture=Architecture::Wasm32;if(p.size()>1)t.vendor=p[1];if(p.size()>2)t.environment=p[2];if(t.architecture==Architecture::Wasm32)t.objectFormat=ObjectFormat::Wasm;else if(t.environment=="linux"||t.environment=="gnu"||t.environment=="elf")t.objectFormat=ObjectFormat::Elf64;else if(t.environment=="windows"||t.environment=="msvc"||t.environment=="coff")t.objectFormat=ObjectFormat::Coff64;else if(t.environment=="darwin"||t.environment=="macos"||t.environment=="macho")t.objectFormat=ObjectFormat::MachO64;else t.objectFormat=ObjectFormat::Assembly;return t;}
+std::string TargetTriple::str()const{return archName(architecture)+"-"+vendor+"-"+environment;}TargetInfo TargetRegistry::resolve(const std::string&triple){TargetInfo i;i.triple=TargetTriple::parse(triple);switch(i.triple.architecture){case Architecture::X86_64:case Architecture::AArch64:i.pointerWidth=8;i.stackAlignment=16;break;case Architecture::Wasm32:i.pointerWidth=4;i.stackAlignment=16;break;default:i.pointerWidth=sizeof(void*);i.stackAlignment=alignof(std::max_align_t);break;}return i;}std::vector<std::string>TargetRegistry::supported(){return{"x86_64-unknown-none","x86_64-unknown-linux","x86_64-pc-windows","x86_64-apple-darwin","aarch64-unknown-none","wasm32-unknown-none"};}
+ProcessResult ProcessRunner::run(const std::filesystem::path&exe,const std::vector<std::string>&args,Diagnostics&d)const{if(exe.empty()){d.error("NQR-K5100",{},"tool executable is not configured");return{};}
+#if defined(_WIN32)
+std::string command=quoteWindows(exe.string());for(const auto&a:args){command.push_back(' ');command+=quoteWindows(a);}std::vector<char>mutableCommand(command.begin(),command.end());mutableCommand.push_back('\0');STARTUPINFOA startup{};startup.cb=sizeof(startup);PROCESS_INFORMATION process{};BOOL ok=CreateProcessA(nullptr,mutableCommand.data(),nullptr,nullptr,FALSE,0,nullptr,nullptr,&startup,&process);if(!ok){d.error("NQR-K5102",{},"failed to launch tool: "+exe.string());return{};}WaitForSingleObject(process.hProcess,INFINITE);DWORD code=1;GetExitCodeProcess(process.hProcess,&code);CloseHandle(process.hThread);CloseHandle(process.hProcess);return ProcessResult{static_cast<int>(code),true};
+#else
+pid_t child=fork();if(child<0){d.error("NQR-K5102",{},"failed to fork tool process");return{};}if(child==0){std::vector<std::string>storage;storage.reserve(args.size()+1);storage.push_back(exe.string());storage.insert(storage.end(),args.begin(),args.end());std::vector<char*>argv;argv.reserve(storage.size()+1);for(auto&v:storage)argv.push_back(v.data());argv.push_back(nullptr);execvp(argv[0],argv.data());_exit(127);}int status=0;if(waitpid(child,&status,0)<0){d.error("NQR-K5102",{},"failed waiting for tool process");return{};}if(WIFEXITED(status))return ProcessResult{WEXITSTATUS(status),true};if(WIFSIGNALED(status))return ProcessResult{128+WTERMSIG(status),true};return ProcessResult{1,true};
+#endif
 }
-}
+bool AssemblerDriver::assemble(const std::filesystem::path&assembly,const std::filesystem::path&output,const TargetTriple&,Diagnostics&d)const{if(!std::filesystem::exists(assembly)){d.error("NQR-K5101",{},"assembly input not found: "+assembly.string());return false;}const char*configured=std::getenv("NOQERI_ASSEMBLER");if(!configured||!*configured){d.error("NQR-K5100",{},"assembler executable is not configured","set NOQERI_ASSEMBLER to an executable path; Noqeri never invokes a command through a shell");return false;}std::filesystem::create_directories(output.parent_path().empty()?std::filesystem::path("."):output.parent_path());const char*styleEnv=std::getenv("NOQERI_ASSEMBLER_STYLE");std::string style=styleEnv?styleEnv:"cc";std::vector<std::string>args=style=="as"?std::vector<std::string>{assembly.string(),"-o",output.string()}:std::vector<std::string>{"-c",assembly.string(),"-o",output.string()};auto result=ProcessRunner{}.run(configured,args,d);if(!result.launched||result.exitCode!=0){d.error("NQR-K5103",{},"assembler failed with exit code "+std::to_string(result.exitCode));return false;}return true;}
+bool LinkerDriver::link(const std::filesystem::path&assembly,const std::filesystem::path&output,Diagnostics&d)const{return AssemblerDriver{}.assemble(assembly,output,TargetTriple::parse(NOQERI_DEFAULT_TARGET),d);}bool LinkerDriver::linkObjects(const std::vector<std::filesystem::path>&objects,const std::filesystem::path&output,const TargetTriple&,Diagnostics&d)const{if(objects.empty()){d.error("NQR-K5110",{},"link requires at least one object file");return false;}const char*configured=std::getenv("NOQERI_LINKER");if(!configured||!*configured){d.error("NQR-K5111",{},"linker executable is not configured","set NOQERI_LINKER to an executable path");return false;}std::vector<std::string>args;for(const auto&o:objects){if(!std::filesystem::exists(o)){d.error("NQR-K5112",{},"object input not found: "+o.string());return false;}args.push_back(o.string());}args.push_back("-o");args.push_back(output.string());auto result=ProcessRunner{}.run(configured,args,d);if(!result.launched||result.exitCode!=0){d.error("NQR-K5113",{},"linker failed with exit code "+std::to_string(result.exitCode));return false;}return true;}
+} // namespace noe

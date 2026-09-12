@@ -1,2 +1,3 @@
-noqeri-lock 1
-project noqeri 1.0.0
+noqeri-lock 2
+project noqeri 1.5.0 edition 2026 target x86_64-unknown-none
+registry https://github.com/EMN90909/noqeri-registry

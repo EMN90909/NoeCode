@@ -1,0 +1,13 @@
+module noqeri.parser.token_rules
+
+export function nqTokenIsSingleCharacter(value: u8): bool {
+    return value == 40 as u8 || value == 41 as u8 || value == 91 as u8 || value == 93 as u8 || value == 123 as u8 || value == 125 as u8 || value == 44 as u8 || value == 46 as u8 || value == 58 as u8 || value == 59 as u8
+}
+
+export function nqTokenIsArithmetic(value: u8): bool {
+    return value == 43 as u8 || value == 45 as u8 || value == 42 as u8 || value == 47 as u8 || value == 37 as u8
+}
+
+export function nqTokenStartsComparison(value: u8): bool {
+    return value == 33 as u8 || value == 60 as u8 || value == 61 as u8 || value == 62 as u8
+}

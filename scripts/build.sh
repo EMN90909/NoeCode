@@ -121,5 +121,5 @@ printf 'noqeri bootstrap built in %s\n' "$BUILD_DIR"
 if [ -x "$BUILD_DIR/noqeri" ]; then
   "$BUILD_DIR/noqeri" --version
 elif [ -x "$BUILD_DIR/$BUILD_TYPE/noqeri" ]; then
-  "$BUILD_DIR/$BuildType/noqeri" --version
+  "$BUILD_DIR/$BUILD_TYPE/noqeri" --version
 fi

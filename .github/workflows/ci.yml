@@ -52,7 +52,7 @@ jobs:
       - name: Release and semantic checks
         run: ./scripts/release_check.sh
       - name: Compiler throughput benchmark
-        run: ./scripts/benchmark.sh
+        run: sh ./scripts/benchmark.sh
 
   sanitizers:
     runs-on: ubuntu-latest

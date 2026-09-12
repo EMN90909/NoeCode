@@ -1,0 +1,9 @@
+module noqeri.runtime.limits
+
+export function nqRuntimeWordBytes(): usize { return 8 as usize }
+export function nqRuntimePointerBytes(): usize { return 8 as usize }
+export function nqRuntimeAtomicMaxBytes(): usize { return 8 as usize }
+
+export function nqRuntimeRegisterValueSupported(size: usize): bool {
+    return size > 0 as usize && size <= nqRuntimeWordBytes()
+}

@@ -1,0 +1,86 @@
+module noqeri.std.bytes
+
+export function nqBytesEqual(left: []u8, right: []u8): bool {
+    if len(left) != len(right) { return false }
+    let index: usize = 0 as usize
+    while index < len(left) {
+        if left[index] != right[index] { return false }
+        index = index + 1
+    }
+    return true
+}
+
+export function nqBytesStartsWith(value: []u8, prefix: []u8): bool {
+    if len(prefix) > len(value) { return false }
+    let index: usize = 0 as usize
+    while index < len(prefix) {
+        if value[index] != prefix[index] { return false }
+        index = index + 1
+    }
+    return true
+}
+
+export function nqBytesEndsWith(value: []u8, suffix: []u8): bool {
+    if len(suffix) > len(value) { return false }
+    let offset: usize = len(value) - len(suffix)
+    let index: usize = 0 as usize
+    while index < len(suffix) {
+        if value[offset + index] != suffix[index] { return false }
+        index = index + 1
+    }
+    return true
+}
+
+export function nqBytesIndexOf(value: []u8, target: u8): isize {
+    let index: usize = 0 as usize
+    while index < len(value) {
+        if value[index] == target { return index as isize }
+        index = index + 1
+    }
+    return -1
+}
+
+export function nqBytesCount(value: []u8, target: u8): usize {
+    let count: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(value) {
+        if value[index] == target { count = count + 1 }
+        index = index + 1
+    }
+    return count
+}
+
+export function nqAsciiIsDigit(value: u8): bool {
+    return value >= 48 as u8 && value <= 57 as u8
+}
+
+export function nqAsciiIsUpper(value: u8): bool {
+    return value >= 65 as u8 && value <= 90 as u8
+}
+
+export function nqAsciiIsLower(value: u8): bool {
+    return value >= 97 as u8 && value <= 122 as u8
+}
+
+export function nqAsciiIsAlpha(value: u8): bool {
+    return nqAsciiIsUpper(value) || nqAsciiIsLower(value)
+}
+
+export function nqAsciiToLower(value: u8): u8 {
+    if nqAsciiIsUpper(value) { return value + 32 as u8 }
+    return value
+}
+
+export function nqAsciiToUpper(value: u8): u8 {
+    if nqAsciiIsLower(value) { return value - 32 as u8 }
+    return value
+}
+
+export function nqBytesAreAscii(value: []u8): bool {
+    let index: usize = 0 as usize
+    while index < len(value) {
+        if value[index] > 127 as u8 { return false }
+        index = index + 1
+    }
+    return true
+}

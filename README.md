@@ -55,8 +55,9 @@ The bootstrap is still C++, but reusable non-compiler logic is now being moved i
 
 Current Noqeri-owned components include:
 
+- `Modules/builtin.nqr` — executable helpers around actual built-in language operations such as `len`, slices and typed indices;
 - `Modules/native.nqr` — native-module ABI/API compatibility and status rules;
-- `Objects/value.nqr` — value-tag/header primitives;
+- `Objects/value.nqr` — ABI-compatible value-tag/header primitives;
 - `Objects/text.nqr` — byte-string equality, ordering and prefix operations;
 - `Database/noqeridb.nqr` — executable fixed-capacity database-core lookup/insert/update/delete/read algorithms;
 - `Tools/security/policy.nqr` — reusable range/index and full-scan byte validation helpers;
@@ -64,7 +65,9 @@ Current Noqeri-owned components include:
 
 `tests/noqeri_owned_components.nqr` imports these components together and runs them through the actual compiler and reference runtime. They are source code, not future-feature Markdown placeholders.
 
-C++ remains where it is currently necessary to bootstrap Noqeri: parsing/type checking/code generation, the reference NIR interpreter, the ABI bridge, and host adapters that need filesystem/process/platform access. The remaining `.nqd` grammar/persistent `.nqdb` file adapter is isolated at `Compiler/bootstrap/noqeridb_host.cpp`, while the repository/package security scanner is isolated at `Compiler/bootstrap/security_audit_host.cpp`. `Database/` and `Tools/security/` themselves are now Noqeri-owned implementation areas. Removing those host adapters before Noqeri has equivalent typed filesystem capabilities would regress working behavior, so the boundary is kept explicit instead of making a false self-hosting claim.
+C++ remains where it is currently necessary to bootstrap Noqeri: parsing/type checking/code generation, the reference NIR interpreter, the ABI bridge, and host adapters that need filesystem/process/platform access. The remaining `.nqd` grammar/persistent `.nqdb` file adapter is isolated at `Compiler/bootstrap/noqeridb_host.cpp`, while the repository/package security scanner is isolated at `Compiler/bootstrap/security_audit_host.cpp`. `Database/`, `Modules/`, `Objects/`, `Lib/`, and `Tools/security/` are now Noqeri-owned implementation areas. Removing those host adapters before Noqeri has equivalent typed filesystem capabilities would regress working behavior, so the boundary is kept explicit instead of making a false self-hosting claim.
+
+The repository verifiers and `noqeri doctor` enforce this rule: C/C++ source is rejected inside those Noqeri-owned areas and the old Markdown-only implementation placeholders are forbidden from returning.
 
 The architectural rule going forward is: **library/policy/algorithm code in Noqeri first; C/C++ only at the compiler/bootstrap/host edge when the language cannot yet perform the required environment operation.**
 
@@ -156,7 +159,7 @@ Core verification:
 ./scripts/test.sh
 ```
 
-The semantic suite includes positive and negative type-safety cases, constrained generics, string escaping, `.nqo` generation, Noqeri-owned modules/objects/security/database algorithms, NoqeriDB CRUD/persistence/constraint checks, formatter preservation, package locking and native assembly validation.
+The semantic suite includes positive and negative type-safety cases, constrained generics, string escaping, `.nqo` generation, Noqeri-owned built-in/native modules, object/security/database algorithms, NoqeriDB CRUD/persistence/constraint checks, formatter preservation, package locking and native assembly validation.
 
 ## CLI
 
@@ -210,7 +213,7 @@ These limits are kept explicit so documentation tracks executable behavior inste
 | `Compiler/` | bootstrap checking, generics, NIR, optimization and target backends |
 | `Compiler/bootstrap/` | narrow C++ host/compatibility adapters still needed during self-hosting |
 | `Runtime/` | reference interpreter and ABI bridge |
-| `Modules/` | Noqeri-native module contracts |
+| `Modules/` | Noqeri built-in helpers and native-module contracts |
 | `Objects/` | Noqeri value and byte/text model |
 | `Lib/` | Noqeri standard/test library source |
 | `Database/` | Noqeri database-core source |

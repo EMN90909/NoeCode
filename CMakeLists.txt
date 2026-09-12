@@ -13,6 +13,10 @@ add_library(noqeri_abi SHARED ${NOQERI_FRONTEND_SOURCES})
 target_include_directories(noqeri_abi PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Include/noqeri> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/noqeri> PRIVATE Compiler/bootstrap)
 target_compile_features(noqeri_abi PUBLIC cxx_std_17)
 target_compile_definitions(noqeri_abi PRIVATE NOQERI_BOOTSTRAP=1)
+# Database/noqeridb.cpp contains a deliberately separate tiny lexer/parser for
+# the .nqd data language. Compile it against database.hpp only so those private
+# names do not collide with the Noqeri language frontend classes.
+set_source_files_properties(Database/noqeridb.cpp PROPERTIES COMPILE_DEFINITIONS NOQERI_DATABASE_SOURCE=1)
 set_target_properties(noqeri_abi PROPERTIES OUTPUT_NAME noqeri-abi WINDOWS_EXPORT_ALL_SYMBOLS ON)
 function(noqeri_apply_warnings target)
  if(MSVC)

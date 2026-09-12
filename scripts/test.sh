@@ -21,12 +21,87 @@ if [ "$actual" != "$expected" ]; then
   exit 1
 fi
 
-# Invalid programs must be rejected by the static checker.
+reject_file() {
+  file="$1"
+  label="$2"
+  if ./build/noqeri check "$file" >/dev/null 2>&1; then
+    echo "type checker accepted invalid program: $label" >&2
+    exit 1
+  fi
+}
+
+# The checker must reject category mismatches, mutation violations, unsafe
+# pointer conversions, invalid atomic use, generic disagreement and integer
+# narrowing/signedness hazards.
 cat > build/invalid_type.nqr <<'EOF'
 let count: u32 = "not a number"
 EOF
-if ./build/noqeri check build/invalid_type.nqr >/dev/null 2>&1; then
-  echo "type checker accepted an invalid assignment" >&2
+reject_file build/invalid_type.nqr "string assigned to u32"
+
+cat > build/invalid_const.nqr <<'EOF'
+const answer: int = 42
+answer = 43
+EOF
+reject_file build/invalid_const.nqr "const reassignment"
+
+cat > build/invalid_condition.nqr <<'EOF'
+if 1 {
+    print(1)
+}
+EOF
+reject_file build/invalid_condition.nqr "integer used as bool condition"
+
+cat > build/invalid_pointer.nqr <<'EOF'
+let word: u32 = 1
+let wordPtr: *u32 = &word
+let bytePtr: *u8 = wordPtr
+EOF
+reject_file build/invalid_pointer.nqr "incompatible pointer assignment"
+
+cat > build/invalid_atomic.nqr <<'EOF'
+let value: int = atomic.load(7)
+EOF
+reject_file build/invalid_atomic.nqr "atomic operation without pointer"
+
+cat > build/invalid_generic.nqr <<'EOF'
+function same<T>(left: T, right: T): T {
+    return left
+}
+print(same(1, "one"))
+EOF
+reject_file build/invalid_generic.nqr "generic type disagreement"
+
+cat > build/invalid_narrowing.nqr <<'EOF'
+let wide: u64 = 300
+let byte: u8 = wide
+EOF
+reject_file build/invalid_narrowing.nqr "implicit u64 to u8 narrowing"
+
+cat > build/invalid_literal_range.nqr <<'EOF'
+let byte: u8 = 300
+EOF
+reject_file build/invalid_literal_range.nqr "out-of-range integer literal"
+
+cat > build/invalid_signedness.nqr <<'EOF'
+let signed: i32 = -1
+let unsigned: u32 = signed
+EOF
+reject_file build/invalid_signedness.nqr "implicit signed to unsigned conversion"
+
+# Proven-safe literal initialization and widening remain concise.
+cat > build/valid_integer_safety.nqr <<'EOF'
+let port: u16 = 8080
+let small: u8 = 42
+let wider: u32 = small
+let signedWide: i64 = wider
+print(port)
+print(signedWide)
+EOF
+./build/noqeri check build/valid_integer_safety.nqr >/dev/null
+valid_output="$(./build/noqeri run build/valid_integer_safety.nqr)"
+if [ "$valid_output" != '8080
+42' ]; then
+  echo "safe integer conversion regression" >&2
   exit 1
 fi
 

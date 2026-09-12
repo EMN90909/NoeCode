@@ -1,0 +1,24 @@
+module noqeri.std.status
+
+export function nqStatusOk(status: isize): bool {
+    return status >= 0
+}
+
+export function nqStatusFailed(status: isize): bool {
+    return status < 0
+}
+
+export function nqStatusFromCode(code: isize): isize {
+    if code <= 0 { return code }
+    return -code
+}
+
+export function nqStatusCode(status: isize): isize {
+    if status < 0 { return -status }
+    return 0
+}
+
+export function nqStatusValueOr(status: isize, fallback: isize): isize {
+    if status < 0 { return fallback }
+    return status
+}

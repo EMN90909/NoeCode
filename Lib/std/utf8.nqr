@@ -1,0 +1,49 @@
+module noqeri.std.utf8
+
+export function nqUtf8IsContinuation(value: u8): bool {
+    return value >= 128 as u8 && value <= 191 as u8
+}
+
+export function nqUtf8Valid(value: []u8): bool {
+    let index: usize = 0 as usize
+    while index < len(value) {
+        let first: u8 = value[index]
+        if first <= 127 as u8 {
+            index = index + 1
+        } else {
+            if first >= 194 as u8 && first <= 223 as u8 {
+                if index + 1 >= len(value) { return false }
+                if !nqUtf8IsContinuation(value[index + 1]) { return false }
+                index = index + 2
+            } else {
+                if first >= 224 as u8 && first <= 239 as u8 {
+                    if index + 2 >= len(value) { return false }
+                    if !nqUtf8IsContinuation(value[index + 1]) { return false }
+                    if !nqUtf8IsContinuation(value[index + 2]) { return false }
+                    index = index + 3
+                } else {
+                    if first >= 240 as u8 && first <= 244 as u8 {
+                        if index + 3 >= len(value) { return false }
+                        if !nqUtf8IsContinuation(value[index + 1]) { return false }
+                        if !nqUtf8IsContinuation(value[index + 2]) { return false }
+                        if !nqUtf8IsContinuation(value[index + 3]) { return false }
+                        index = index + 4
+                    } else {
+                        return false
+                    }
+                }
+            }
+        }
+    }
+    return true
+}
+
+export function nqUtf8CodeUnitCount(value: []u8): usize {
+    let count: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(value) {
+        if !nqUtf8IsContinuation(value[index]) { count = count + 1 }
+        index = index + 1
+    }
+    return count
+}

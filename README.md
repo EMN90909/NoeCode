@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Brand/noqeri-logo.webp" alt="Noqeri wolf code logo" width="560">
+  <img src="Brand/noqeri-logo.webp" alt="Noqeri fox code logo" width="560">
 </p>
 
 <h1 align="center">Noqeri</h1>
@@ -45,9 +45,28 @@ The C++17 bootstrap compiler currently includes:
 - atomics, volatile memory, target intrinsics and deliberately constrained inline assembly;
 - modules/import graphs, formatter, diagnostics, project manifests, SHA-256 locks, audit tooling and an LSP foundation;
 - portable **`.nqo`** web-object generation;
-- the embedded **NoqeriDB** `.nqd` / `.nqdb` engine.
+- the embedded **NoqeriDB** `.nqd` / `.nqdb` compatibility engine.
 
 The CI matrix builds and tests the compiler on Linux, macOS and Windows, runs sanitizers, exercises freestanding native output and runs semantic regressions.
+
+## Noqeri-first implementation
+
+The bootstrap is still C++, but reusable non-compiler logic is now being moved into Noqeri source instead of leaving implementation folders as Markdown roadmaps.
+
+Current Noqeri-owned components include:
+
+- `Modules/native.nqr` — native-module ABI/API compatibility and status rules;
+- `Objects/value.nqr` — value-tag/header primitives;
+- `Objects/text.nqr` — byte-string equality, ordering and prefix operations;
+- `Database/noqeridb.nqr` — executable fixed-capacity database-core lookup/insert/update/delete/read algorithms;
+- `Tools/security/policy.nqr` — reusable range/index and full-scan byte validation helpers;
+- `Lib/test/assert.nqr` — source-level Noqeri assertions.
+
+`tests/noqeri_owned_components.nqr` imports these components together and runs them through the actual compiler and reference runtime. They are source code, not future-feature Markdown placeholders.
+
+C++ remains where it is currently necessary to bootstrap Noqeri: parsing/type checking/code generation, the reference NIR interpreter, the ABI bridge, and host adapters that need filesystem/process/platform access. In particular, `Database/noqeridb.cpp` still provides compatibility parsing and persistent `.nqdb` file I/O for the existing `.nqd` CLI while database algorithms migrate into `.nqr`. Removing that adapter before Noqeri has equivalent typed filesystem capabilities would regress working database behavior, so the boundary is kept explicit instead of making a false self-hosting claim.
+
+The architectural rule going forward is: **library/policy/algorithm code in Noqeri first; C/C++ only at the compiler/bootstrap/host edge when the language cannot yet perform the required environment operation.**
 
 ## Portable web objects (`.nqo`)
 
@@ -65,7 +84,9 @@ The host boundary is intentional. Noqeri source decides application behavior whi
 
 ## NoqeriDB (`.nqd` / `.nqdb`)
 
-NoqeriDB is a small embedded typed database included in the toolchain. It currently supports:
+NoqeriDB is a small embedded typed database included in the toolchain. The source-level database core now lives in `Database/noqeridb.nqr`; the bootstrap compatibility adapter keeps the established `.nqd` parser and `.nqdb` persistence working while more database behavior moves into Noqeri.
+
+The current CLI path supports:
 
 - `int`, `real`, `bool` and `text` columns;
 - `required`, `unique` and `key` constraints;
@@ -73,6 +94,8 @@ NoqeriDB is a small embedded typed database included in the toolchain. It curren
 - atomic whole-script persistence through a temporary-file commit;
 - reopening `.nqdb` files across separate CLI executions;
 - duplicate key/unique rejection.
+
+The Noqeri-owned core is separately exercised for key lookup, insert, duplicate rejection, update, delete and read operations.
 
 Example:
 
@@ -124,6 +147,8 @@ cd Noqeri
 .\build\Release\noqeri.exe run examples\hello.nqr
 ```
 
+Both build scripts print the Noqeri fox mark before configuring the bootstrap compiler.
+
 Core verification:
 
 ```sh
@@ -131,7 +156,7 @@ Core verification:
 ./scripts/test.sh
 ```
 
-The semantic suite includes positive and negative type-safety cases, constrained generics, string escaping, `.nqo` generation, NoqeriDB CRUD/persistence/constraint checks, formatter preservation, package locking and native assembly validation.
+The semantic suite includes positive and negative type-safety cases, constrained generics, string escaping, `.nqo` generation, Noqeri-owned modules/objects/security/database algorithms, NoqeriDB CRUD/persistence/constraint checks, formatter preservation, package locking and native assembly validation.
 
 ## CLI
 
@@ -164,6 +189,8 @@ noqeri lsp
 
 Noqeri 1.0 should be read as the current project API line, not as a claim of ecosystem parity with long-established languages. Important limits include:
 
+- the compiler/runtime is not self-hosted yet; C++ remains the bootstrap frontend, reference runtime and host-adapter layer;
+- the `.nqd` grammar/persistent `.nqdb` file adapter still uses bootstrap C++ while the database core migrates into Noqeri;
 - native machine-code/object writing is not yet implemented; the native backend emits x86-64 assembly and uses explicit assembler/linker adapters;
 - the current register allocator produces allocation plans but the established x86 emitter has not fully switched from its stack-backed virtual-register representation;
 - typed NIR/basic blocks exist, but canonical SSA with PHI insertion is not complete;
@@ -179,12 +206,16 @@ These limits are kept explicit so documentation tracks executable behavior inste
 |---|---|
 | `Grammar/` | implemented syntax contract |
 | `Include/noqeri/` | public compiler, database and ABI APIs |
-| `Parser/` | lexer/parser implementation |
-| `Compiler/` | checking, generics, NIR, optimization and target backends |
+| `Parser/` | bootstrap lexer/parser implementation |
+| `Compiler/` | bootstrap checking, generics, NIR, optimization and target backends |
 | `Runtime/` | reference interpreter and ABI bridge |
-| `Database/` | NoqeriDB `.nqd` parser and `.nqdb` storage engine |
-| `Programs/` | CLI, formatter, LSP, package and test tooling |
-| `Tools/` | build, security/audit and maintenance tooling |
+| `Modules/` | Noqeri-native module contracts |
+| `Objects/` | Noqeri value and byte/text model |
+| `Lib/` | Noqeri standard/test library source |
+| `Database/` | Noqeri database core plus temporary bootstrap `.nqd/.nqdb` compatibility adapter |
+| `Programs/` | CLI, formatter, LSP, package and test host tooling |
+| `Tools/security/` | Noqeri security policy plus bootstrap repository-audit adapter |
+| `Tools/build/` | bootstrap build/production checks |
 | `tests/`, `Benchmarks/`, `examples/` | conformance, performance seeds and runnable programs |
 | `Doc/` | user-facing language/toolchain documentation |
 | `InternalDocs/` | compiler/repository internals and testing policy |

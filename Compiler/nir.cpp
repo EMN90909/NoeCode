@@ -60,6 +60,18 @@ Reg Lowerer::lowerExpr(NirFunction&fn,const ExprPtr&expr){
     if(auto e=std::dynamic_pointer_cast<CastExpr>(expr)){Reg a=lowerExpr(fn,e->value);NirInstruction i;i.op=NirOp::Cast;i.dest=fn.nextReg++;i.text=e->typeName;i.args={a};emit(fn,i);return*i.dest;}
     if(auto e=std::dynamic_pointer_cast<BinaryExpr>(expr)){
         if(e->op==TokenKind::Equal){Reg r=lowerExpr(fn,e->right);if(auto n=std::dynamic_pointer_cast<NameExpr>(e->left)){NirInstruction st;st.op=NirOp::Store;st.text=n->name;st.args={r};emit(fn,st);return r;}Reg addr=lowerAddress(fn,e->left);auto info=memoryInfo(e->left);NirInstruction st;st.op=NirOp::StoreMemory;st.args={addr,r};st.width=info.first;st.isVolatile=info.second;emit(fn,st);return r;}
+        if(e->op==TokenKind::AndAnd||e->op==TokenKind::OrOr){
+            Reg left=lowerExpr(fn,e->left);
+            const std::string temp="$noqeri.logic."+std::to_string(fn.code.size())+"."+std::to_string(fn.nextReg);
+            NirInstruction saveLeft;saveLeft.op=NirOp::Store;saveLeft.text=temp;saveLeft.args={left};emit(fn,std::move(saveLeft));
+            NirInstruction test;test.op=NirOp::JumpIfFalse;test.args={left};const auto testPos=fn.code.size();emit(fn,std::move(test));
+            if(e->op==TokenKind::AndAnd){
+                Reg right=lowerExpr(fn,e->right);NirInstruction saveRight;saveRight.op=NirOp::Store;saveRight.text=temp;saveRight.args={right};emit(fn,std::move(saveRight));fn.code[testPos].target=fn.code.size();
+            }else{
+                NirInstruction skipRight;skipRight.op=NirOp::Jump;const auto skipPos=fn.code.size();emit(fn,std::move(skipRight));fn.code[testPos].target=fn.code.size();Reg right=lowerExpr(fn,e->right);NirInstruction saveRight;saveRight.op=NirOp::Store;saveRight.text=temp;saveRight.args={right};emit(fn,std::move(saveRight));fn.code[skipPos].target=fn.code.size();
+            }
+            NirInstruction result;result.op=NirOp::Load;result.dest=fn.nextReg++;result.text=temp;emit(fn,result);return*result.dest;
+        }
         Reg l=lowerExpr(fn,e->left),r=lowerExpr(fn,e->right);NirInstruction i;i.op=NirOp::Binary;i.dest=fn.nextReg++;i.text=opText(e->op);i.args={l,r};emit(fn,i);return*i.dest;
     }
     if(auto e=std::dynamic_pointer_cast<CallExpr>(expr)){

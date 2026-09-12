@@ -1,0 +1,24 @@
+module noqeri.std.queue_i64
+
+export function nqQueueNext(index: usize, capacity: usize): usize {
+    if capacity == 0 { return 0 as usize }
+    let next: usize = index + 1
+    if next >= capacity { return 0 as usize }
+    return next
+}
+
+export function nqQueueWriteI64(values: *i64, capacity: usize, tail: usize, count: usize, value: i64): isize {
+    if capacity == 0 || count >= capacity { return -1 }
+    values[tail] = value
+    return nqQueueNext(tail, capacity) as isize
+}
+
+export function nqQueueReadI64(values: *i64, capacity: usize, head: usize, count: usize, fallback: i64): i64 {
+    if capacity == 0 || count == 0 { return fallback }
+    return values[head]
+}
+
+export function nqQueueAdvanceHead(capacity: usize, head: usize, count: usize): isize {
+    if capacity == 0 || count == 0 { return -1 }
+    return nqQueueNext(head, capacity) as isize
+}

@@ -23,7 +23,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Verify repository (Unix)
         if: runner.os != 'Windows'
         run: ./scripts/verify_repository.sh
@@ -55,13 +55,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build current Noqeri compiler
         run: ./scripts/build.sh
       - name: Run complete local library smoke program
         run: ./build/noqeri run examples/ecosystem_smoke.nqr
       - name: Check out official Noqeri registry
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: EMN90909/noqeri-registry
           path: noqeri-registry
@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Release and semantic checks
         run: ./scripts/release_check.sh
       - name: Compiler throughput benchmark
@@ -92,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Configure ASan/UBSan
         run: cmake -S . -B build-sanitize -DCMAKE_BUILD_TYPE=Debug -DNOQERI_ENABLE_SANITIZERS=ON
       - name: Build

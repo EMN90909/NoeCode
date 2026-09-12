@@ -1,0 +1,43 @@
+module noqeri.objects.value
+
+record ValueHeader {
+    tag: u8
+    flags: u8
+    reserved: u16
+}
+
+export function valueNullTag(): u8 {
+    return 0 as u8
+}
+
+export function valueBoolTag(): u8 {
+    return 1 as u8
+}
+
+export function valueIntTag(): u8 {
+    return 2 as u8
+}
+
+export function valueFloatTag(): u8 {
+    return 3 as u8
+}
+
+export function valueStringTag(): u8 {
+    return 4 as u8
+}
+
+export function valueTagKnown(tag: u8): bool {
+    return tag <= valueStringTag()
+}
+
+export function valueTagsEqual(left: u8, right: u8): bool {
+    return left == right
+}
+
+export function valueHeaderTag(header: *ValueHeader): u8 {
+    return header.tag
+}
+
+export function valueHeaderFlags(header: *ValueHeader): u8 {
+    return header.flags
+}

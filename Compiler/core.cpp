@@ -70,10 +70,35 @@ Type typeFromName(const std::string& raw){
     if(n=="void")return Type{TypeKind::Void};if(n=="null")return Type{TypeKind::Null};if(n=="bool")return Type{TypeKind::Bool};if(n=="i8")return Type{TypeKind::I8};if(n=="i16")return Type{TypeKind::I16};if(n=="i32")return Type{TypeKind::I32};if(n=="i64")return Type{TypeKind::I64};if(n=="u8")return Type{TypeKind::U8};if(n=="u16")return Type{TypeKind::U16};if(n=="u32")return Type{TypeKind::U32};if(n=="u64")return Type{TypeKind::U64};if(n=="isize")return Type{TypeKind::Isize};if(n=="usize")return Type{TypeKind::Usize};if(n=="int"||n=="int64")return Type{TypeKind::Int};if(n=="float"||n=="float64")return Type{TypeKind::Float};if(n=="string")return Type{TypeKind::String};
     Type r;r.kind=TypeKind::Record;r.recordName=n;return r;
 }
+
+namespace {
+std::size_t integerBits(TypeKind kind){
+    switch(kind){
+        case TypeKind::I8:case TypeKind::U8:return 8;
+        case TypeKind::I16:case TypeKind::U16:return 16;
+        case TypeKind::I32:case TypeKind::U32:return 32;
+        case TypeKind::I64:case TypeKind::U64:case TypeKind::Isize:case TypeKind::Usize:case TypeKind::Int:return 64;
+        default:return 0;
+    }
+}
+bool integerSigned(TypeKind kind){
+    switch(kind){
+        case TypeKind::I8:case TypeKind::I16:case TypeKind::I32:case TypeKind::I64:case TypeKind::Isize:case TypeKind::Int:return true;
+        default:return false;
+    }
+}
+}
+
 bool canAssign(Type target,Type value){
     if(target.kind==TypeKind::Unknown||value.kind==TypeKind::Unknown||target.kind==TypeKind::Generic||value.kind==TypeKind::Generic)return true;
     if(target==value)return true;
-    if(target.isInteger()&&value.isInteger())return true;
+    if(target.isInteger()&&value.isInteger()){
+        const auto targetBits=integerBits(target.kind),valueBits=integerBits(value.kind);
+        const bool targetSigned=integerSigned(target.kind),valueSigned=integerSigned(value.kind);
+        if(targetSigned==valueSigned)return targetBits>=valueBits;
+        if(targetSigned&&!valueSigned)return targetBits>valueBits;
+        return false;
+    }
     if(target.kind==TypeKind::Float&&value.isInteger())return true;
     if(target.kind==TypeKind::Pointer&&value.kind==TypeKind::Null)return true;
     if(target.kind==TypeKind::Pointer&&value.kind==TypeKind::Pointer&&target.pointee&&value.pointee)return target.pointee->kind==TypeKind::Void||value.pointee->kind==TypeKind::Void||*target.pointee==*value.pointee;

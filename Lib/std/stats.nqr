@@ -1,0 +1,53 @@
+module noqeri.std.stats
+
+export function nqStatsSumI64(values: []i64): i64 {
+    let total: i64 = 0 as i64
+    let index: usize = 0 as usize
+    while index < len(values) {
+        total = total + values[index]
+        index = index + 1
+    }
+    return total
+}
+
+export function nqStatsMeanFloorI64(values: []i64): i64 {
+    if len(values) == 0 { return 0 as i64 }
+    return nqStatsSumI64(values) / len(values) as i64
+}
+
+export function nqStatsMinI64(values: []i64): i64 {
+    if len(values) == 0 { return 0 as i64 }
+    let answer: i64 = values[0]
+    let index: usize = 1 as usize
+    while index < len(values) {
+        if values[index] < answer { answer = values[index] }
+        index = index + 1
+    }
+    return answer
+}
+
+export function nqStatsMaxI64(values: []i64): i64 {
+    if len(values) == 0 { return 0 as i64 }
+    let answer: i64 = values[0]
+    let index: usize = 1 as usize
+    while index < len(values) {
+        if values[index] > answer { answer = values[index] }
+        index = index + 1
+    }
+    return answer
+}
+
+export function nqStatsRangeI64(values: []i64): i64 {
+    if len(values) == 0 { return 0 as i64 }
+    return nqStatsMaxI64(values) - nqStatsMinI64(values)
+}
+
+export function nqStatsCountPositiveI64(values: []i64): usize {
+    let count: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(values) {
+        if values[index] > 0 { count = count + 1 }
+        index = index + 1
+    }
+    return count
+}

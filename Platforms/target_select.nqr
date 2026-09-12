@@ -1,0 +1,15 @@
+module noqeri.platforms.target_select
+
+export function nqTargetLinuxX64(): int { return 1 }
+export function nqTargetPortableWeb(): int { return 2 }
+export function nqTargetWindowsX64(): int { return 3 }
+export function nqTargetMacX64(): int { return 4 }
+export function nqTargetAndroid(): int { return 5 }
+
+export function nqTargetNativeReady(target: int): bool {
+    return target == nqTargetLinuxX64()
+}
+
+export function nqTargetPortableReady(target: int): bool {
+    return target == nqTargetLinuxX64() || target == nqTargetPortableWeb()
+}

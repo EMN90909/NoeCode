@@ -12,8 +12,9 @@ The compilation path is:
 
 The repository no longer uses Markdown placeholders as substitutes for these implementation areas:
 
+- `Modules/builtin.nqr` owns executable helpers built on the language's actual built-ins (`len`, slice values and typed integer operations).
 - `Modules/native.nqr` owns source-level native-module compatibility/version/status rules.
-- `Objects/value.nqr` owns the source-level value-tag/header contract.
+- `Objects/value.nqr` owns the source-level ABI-compatible value-tag/header contract.
 - `Objects/text.nqr` owns byte-string comparison and prefix semantics.
 - `Database/noqeridb.nqr` owns the first executable database-core algorithms: fixed-capacity key lookup, insert, update, delete and read operations.
 - `Tools/security/policy.nqr` owns reusable range/index/full-scan validation helpers.
@@ -31,7 +32,7 @@ The following C++ remains intentional bootstrap/host infrastructure rather than 
 - `Compiler/bootstrap/noqeridb_host.cpp`: compatibility adapter for the existing `.nqd` grammar and persistent `.nqdb` file format. Database algorithms are being moved into `Database/noqeridb.nqr`, but deleting this adapter today would remove working typed text/real/bool tables and persistence before equivalent typed filesystem capabilities exist in Noqeri.
 - `Compiler/bootstrap/security_audit_host.cpp`: repository/package-lock scanner. Reusable security policy belongs in Noqeri; the scanner still needs host filesystem traversal.
 
-The `Database/` and `Tools/security/` implementation directories are therefore Noqeri-owned; their C++ environment bridges are isolated under `Compiler/bootstrap/`.
+The `Database/`, `Modules/`, `Objects/`, `Lib/`, and `Tools/security/` implementation directories are Noqeri-owned; their C++ environment bridges, when still necessary, are isolated under `Compiler/bootstrap/`.
 
 That distinction is deliberate: **do not rewrite a working host boundary in Noqeri by replacing it with an unimplemented filesystem/network primitive.** Move logic inward as the language gains the capability to execute it, while keeping interoperability at a narrow bootstrap edge.
 
@@ -43,5 +44,7 @@ When adding functionality, use this order:
 2. Expose the smallest necessary host capability through the ABI when the language cannot reach the environment itself.
 3. Keep C/C++ inside compiler/bootstrap/reference-host code rather than growing new C++ application libraries.
 4. Add a `.nqr` integration test so a source file is executable behavior, not another placeholder.
+
+The Unix/Windows repository verifiers and `noqeri doctor` enforce this boundary by rejecting C/C++ source inside the Noqeri-owned implementation directories and by rejecting the removed Markdown placeholder paths.
 
 This is the path toward progressive self-hosting without pretending the bootstrap is already self-hosted.

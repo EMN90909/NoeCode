@@ -1,0 +1,13 @@
+module noqeri.programs.diagnostics
+
+export function nqExitSuccess(): isize { return 0 }
+export function nqExitFailure(): isize { return 1 }
+
+export function nqExitFromFailures(failures: usize): isize {
+    if failures == 0 { return nqExitSuccess() }
+    return nqExitFailure()
+}
+
+export function nqDiagnosticSeverityError(): int { return 2 }
+export function nqDiagnosticSeverityWarning(): int { return 1 }
+export function nqDiagnosticSeverityInfo(): int { return 0 }

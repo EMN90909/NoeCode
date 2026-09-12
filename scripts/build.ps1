@@ -5,17 +5,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$NoqeriBanner = @'
-███╗   ██╗ ██████╗  ██████╗ ███████╗██████╗ ██╗
-████╗  ██║██╔═══██╗██╔═══██╗██╔════╝██╔══██╗██║
-██╔██╗ ██║██║   ██║██║   ██║█████╗  ██████╔╝██║
-██║╚██╗██║██║   ██║██║▄▄ ██║██╔══╝  ██╔══██╗██║
-██║ ╚████║╚██████╔╝╚██████╔╝███████╗██║  ██║██║
-╚═╝  ╚═══╝ ╚═════╝  ╚══▀▀═╝ ╚══════╝╚═╝  ╚═╝╚═╝
-'@
-Write-Host $NoqeriBanner
-
 $RepoRoot = Split-Path -Parent $PSScriptRoot
+$BannerPath = Join-Path $RepoRoot 'Brand\noqeri-banner.txt'
+if (Test-Path $BannerPath) {
+    Write-Host (Get-Content -Path $BannerPath -Raw -Encoding UTF8)
+}
+
 $BuildDir = if ($env:BUILD_DIR) { $env:BUILD_DIR } else { 'build' }
 $BuildType = if ($env:BUILD_TYPE) { $env:BUILD_TYPE } else { 'Release' }
 
@@ -123,7 +118,7 @@ if ($missing.Count -gt 0) {
     if ($Yes -or $env:NOQERI_INSTALL_MISSING -eq '1') {
         $install = $true
     } else {
-        $answer = Read-Host "Do you want to install all missing prerequisites now? [Y/N]"
+        $answer = Read-Host 'Do you want to install all missing prerequisites now? [Y/N]'
         $install = $answer -match '^(?i:y|yes)$'
     }
 

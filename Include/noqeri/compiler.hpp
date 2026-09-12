@@ -12,6 +12,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace noe {
@@ -20,7 +21,18 @@ class Lexer { public: Lexer(std::string source,Diagnostics& diagnostics); Lexer(
 
 class Parser { public: Parser(std::vector<Token> tokens,Diagnostics& diagnostics); Program parse(); private: StmtPtr declaration(); StmtPtr functionDeclaration(bool isExtern=false,bool isExport=false); StmtPtr recordDeclaration(); StmtPtr importDeclaration(); StmtPtr moduleDeclaration(); StmtPtr letDeclaration(bool isConst); StmtPtr statement(); StmtPtr ifStatement(); StmtPtr whileStatement(); StmtPtr returnStatement(); StmtPtr throwStatement(); std::shared_ptr<BlockStmt> block(); StmtPtr expressionStatement(); ExprPtr expression(); ExprPtr assignment(); ExprPtr logicalOr(); ExprPtr logicalAnd(); ExprPtr equality(); ExprPtr comparison(); ExprPtr term(); ExprPtr factor(); ExprPtr unary(); ExprPtr cast(); ExprPtr call(); ExprPtr primary(); std::string parseTypeName(); std::vector<std::string> parseGenericParams(); bool match(std::initializer_list<TokenKind> kinds); bool check(TokenKind kind) const; const Token& advance(); const Token& previous() const; const Token& peek() const; const Token& consume(TokenKind kind,const std::string& message); void synchronize(); std::vector<Token> tokens_; Diagnostics& diagnostics_; std::size_t current_=0; };
 
-struct FunctionType { std::vector<Type> params; Type result; std::vector<std::string> genericParams; bool isExtern=false; bool isExport=false; std::unordered_map<std::string,std::vector<std::string>> genericConstraints; };
+struct FunctionType {
+    std::vector<Type> params;
+    Type result;
+    std::vector<std::string> genericParams;
+    bool isExtern=false;
+    bool isExport=false;
+    std::unordered_map<std::string,std::vector<std::string>> genericConstraints;
+
+    FunctionType()=default;
+    FunctionType(std::vector<Type> p,Type r,std::vector<std::string> generic={},bool external=false,bool exported=false,std::unordered_map<std::string,std::vector<std::string>> constraints={})
+        :params(std::move(p)),result(std::move(r)),genericParams(std::move(generic)),isExtern(external),isExport(exported),genericConstraints(std::move(constraints)){}
+};
 struct RecordType { std::vector<RecordField> fields; std::size_t size=0,alignment=1; };
 class TypeChecker { public: explicit TypeChecker(Diagnostics& diagnostics); bool check(const Program& program); private: void checkStmt(const StmtPtr& stmt); Type checkExpr(const ExprPtr& expr); void pushScope(); void popScope(); void define(const std::string& name,Type type,bool isConst,Span span); std::optional<Type> resolve(const std::string& name) const; bool isConstSymbol(const std::string& name) const; Type resolveType(const std::string& name,Span span); std::optional<RecordField> resolveField(const Type& base,const std::string& member) const; Type substituteGeneric(const Type& type,const std::unordered_map<std::string,Type>& bindings) const; bool bindGeneric(const Type& pattern,const Type& actual,std::unordered_map<std::string,Type>& bindings) const; Diagnostics& diagnostics_; std::vector<std::unordered_map<std::string,Type>> scopes_; std::vector<std::unordered_map<std::string,bool>> constScopes_; std::unordered_map<std::string,FunctionType> functions_; std::unordered_map<std::string,RecordType> records_; std::unordered_set<std::string> activeGenericParams_; Type currentReturn_{}; bool insideFunction_=false; };
 

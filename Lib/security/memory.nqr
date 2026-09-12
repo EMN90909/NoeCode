@@ -1,0 +1,25 @@
+module noqeri.security.memory
+
+export function nqSecureZero(memory: *volatile u8, count: usize): void {
+    let index: usize = 0 as usize
+    while index < count {
+        memory[index] = 0 as u8
+        index = index + 1
+    }
+}
+
+export function nqSecureEqual(left: []u8, right: []u8): bool {
+    if len(left) != len(right) { return false }
+    let mismatch: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(left) {
+        if left[index] != right[index] { mismatch = mismatch + 1 }
+        index = index + 1
+    }
+    return mismatch == 0
+}
+
+export function nqSecureRange(offset: usize, count: usize, capacity: usize): bool {
+    if offset > capacity { return false }
+    return count <= capacity - offset
+}

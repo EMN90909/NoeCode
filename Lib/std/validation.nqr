@@ -1,0 +1,21 @@
+module noqeri.std.validation
+
+export function nqValidIndex(index: usize, count: usize): bool {
+    return index < count
+}
+
+export function nqValidCapacity(count: usize, capacity: usize): bool {
+    return count <= capacity
+}
+
+export function nqNonEmpty(count: usize): bool {
+    return count > 0 as usize
+}
+
+export function nqPositiveI64(value: i64): bool {
+    return value > 0 as i64
+}
+
+export function nqNonNegativeI64(value: i64): bool {
+    return value >= 0 as i64
+}

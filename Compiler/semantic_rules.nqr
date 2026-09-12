@@ -1,0 +1,32 @@
+module noqeri.compiler.semantic_rules
+
+export function nqFitsU8(value: i64): bool {
+    return value >= 0 && value <= 255 as i64
+}
+
+export function nqFitsI8(value: i64): bool {
+    return value >= -128 as i64 && value <= 127 as i64
+}
+
+export function nqFitsU16(value: i64): bool {
+    return value >= 0 && value <= 65535 as i64
+}
+
+export function nqFitsI16(value: i64): bool {
+    return value >= -32768 as i64 && value <= 32767 as i64
+}
+
+export function nqFitsU32FromI64(value: i64): bool {
+    return value >= 0 && value <= 4294967295 as i64
+}
+
+export function nqCanNarrowUnsigned(value: i64, bits: int): bool {
+    if bits == 8 { return nqFitsU8(value) }
+    if bits == 16 { return nqFitsU16(value) }
+    if bits == 32 { return nqFitsU32FromI64(value) }
+    return value >= 0
+}
+
+export function nqBooleanConditionRequired(typeCode: int): bool {
+    return typeCode != 1
+}

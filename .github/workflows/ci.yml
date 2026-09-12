@@ -49,7 +49,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - run: ./scripts/release_check.sh
+      - name: Release and semantic checks
+        run: ./scripts/release_check.sh
+      - name: Compiler throughput benchmark
+        run: ./scripts/benchmark.sh
 
   sanitizers:
     runs-on: ubuntu-latest

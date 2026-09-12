@@ -64,7 +64,7 @@ Current Noqeri-owned components include:
 
 `tests/noqeri_owned_components.nqr` imports these components together and runs them through the actual compiler and reference runtime. They are source code, not future-feature Markdown placeholders.
 
-C++ remains where it is currently necessary to bootstrap Noqeri: parsing/type checking/code generation, the reference NIR interpreter, the ABI bridge, and host adapters that need filesystem/process/platform access. In particular, `Database/noqeridb.cpp` still provides compatibility parsing and persistent `.nqdb` file I/O for the existing `.nqd` CLI while database algorithms migrate into `.nqr`. Removing that adapter before Noqeri has equivalent typed filesystem capabilities would regress working database behavior, so the boundary is kept explicit instead of making a false self-hosting claim.
+C++ remains where it is currently necessary to bootstrap Noqeri: parsing/type checking/code generation, the reference NIR interpreter, the ABI bridge, and host adapters that need filesystem/process/platform access. The remaining `.nqd` grammar/persistent `.nqdb` file adapter is isolated at `Compiler/bootstrap/noqeridb_host.cpp`, while the repository/package security scanner is isolated at `Compiler/bootstrap/security_audit_host.cpp`. `Database/` and `Tools/security/` themselves are now Noqeri-owned implementation areas. Removing those host adapters before Noqeri has equivalent typed filesystem capabilities would regress working behavior, so the boundary is kept explicit instead of making a false self-hosting claim.
 
 The architectural rule going forward is: **library/policy/algorithm code in Noqeri first; C/C++ only at the compiler/bootstrap/host edge when the language cannot yet perform the required environment operation.**
 
@@ -84,7 +84,7 @@ The host boundary is intentional. Noqeri source decides application behavior whi
 
 ## NoqeriDB (`.nqd` / `.nqdb`)
 
-NoqeriDB is a small embedded typed database included in the toolchain. The source-level database core now lives in `Database/noqeridb.nqr`; the bootstrap compatibility adapter keeps the established `.nqd` parser and `.nqdb` persistence working while more database behavior moves into Noqeri.
+NoqeriDB is a small embedded typed database included in the toolchain. The source-level database core now lives in `Database/noqeridb.nqr`; the bootstrap compatibility adapter at `Compiler/bootstrap/noqeridb_host.cpp` keeps the established `.nqd` parser and `.nqdb` persistence working while more database behavior moves into Noqeri.
 
 The current CLI path supports:
 
@@ -208,13 +208,14 @@ These limits are kept explicit so documentation tracks executable behavior inste
 | `Include/noqeri/` | public compiler, database and ABI APIs |
 | `Parser/` | bootstrap lexer/parser implementation |
 | `Compiler/` | bootstrap checking, generics, NIR, optimization and target backends |
+| `Compiler/bootstrap/` | narrow C++ host/compatibility adapters still needed during self-hosting |
 | `Runtime/` | reference interpreter and ABI bridge |
 | `Modules/` | Noqeri-native module contracts |
 | `Objects/` | Noqeri value and byte/text model |
 | `Lib/` | Noqeri standard/test library source |
-| `Database/` | Noqeri database core plus temporary bootstrap `.nqd/.nqdb` compatibility adapter |
+| `Database/` | Noqeri database-core source |
 | `Programs/` | CLI, formatter, LSP, package and test host tooling |
-| `Tools/security/` | Noqeri security policy plus bootstrap repository-audit adapter |
+| `Tools/security/` | Noqeri security-policy source |
 | `Tools/build/` | bootstrap build/production checks |
 | `tests/`, `Benchmarks/`, `examples/` | conformance, performance seeds and runnable programs |
 | `Doc/` | user-facing language/toolchain documentation |

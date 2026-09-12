@@ -8,4 +8,5 @@ class Formatter { public: std::string format(const std::string& source,Diagnosti
 class TestRunner { public: int runDirectory(const std::filesystem::path& dir) const; };
 class LanguageServer { public: int run(); };
 int runProductionDoctor(const std::filesystem::path& root);
+int runSecurityAudit(const std::filesystem::path& root);
 } // namespace noe

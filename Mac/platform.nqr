@@ -1,0 +1,7 @@
+module noqeri.platform.macos
+
+export function nqMacFrontendSupported(): bool { return true }
+export function nqMacInterpreterSupported(): bool { return true }
+export function nqMacLspSupported(): bool { return true }
+export function nqMacNativeObjectSupported(): bool { return false }
+export function nqMacExecutableLinkSupported(): bool { return false }

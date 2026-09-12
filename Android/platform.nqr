@@ -1,0 +1,6 @@
+module noqeri.platform.android
+
+export function nqAndroidTargetKnown(): bool { return true }
+export function nqAndroidFrontendPortable(): bool { return true }
+export function nqAndroidNativeBackendSupported(): bool { return false }
+export function nqAndroidNdkBridgeRequired(): bool { return true }

@@ -1,6 +1,7 @@
 #include "noe.hpp"
 #include <algorithm>
 #include <functional>
+#include <limits>
 #include <memory>
 
 namespace noe {
@@ -18,6 +19,41 @@ std::optional<std::string> literalString(const ExprPtr& expr){
     if(!l)return std::nullopt;
     if(auto s=std::get_if<std::string>(&l->value))return *s;
     return std::nullopt;
+}
+std::optional<std::int64_t> literalInteger(const ExprPtr& expr){
+    if(auto l=std::dynamic_pointer_cast<LiteralExpr>(expr)){
+        if(auto n=std::get_if<std::int64_t>(&l->value))return *n;
+    }
+    if(auto u=std::dynamic_pointer_cast<UnaryExpr>(expr)){
+        auto value=literalInteger(u->operand);
+        if(!value)return std::nullopt;
+        if(u->op==TokenKind::Plus)return *value;
+        if(u->op==TokenKind::Minus){
+            if(*value==std::numeric_limits<std::int64_t>::min())return std::nullopt;
+            return -*value;
+        }
+    }
+    return std::nullopt;
+}
+bool literalFitsInteger(const Type& target,std::int64_t value){
+    switch(target.kind){
+        case TypeKind::U8:return value>=0&&value<=std::numeric_limits<std::uint8_t>::max();
+        case TypeKind::U16:return value>=0&&value<=std::numeric_limits<std::uint16_t>::max();
+        case TypeKind::U32:return value>=0&&static_cast<std::uint64_t>(value)<=std::numeric_limits<std::uint32_t>::max();
+        case TypeKind::U64:case TypeKind::Usize:return value>=0;
+        case TypeKind::I8:return value>=std::numeric_limits<std::int8_t>::min()&&value<=std::numeric_limits<std::int8_t>::max();
+        case TypeKind::I16:return value>=std::numeric_limits<std::int16_t>::min()&&value<=std::numeric_limits<std::int16_t>::max();
+        case TypeKind::I32:return value>=std::numeric_limits<std::int32_t>::min()&&value<=std::numeric_limits<std::int32_t>::max();
+        case TypeKind::I64:case TypeKind::Isize:case TypeKind::Int:return true;
+        default:return false;
+    }
+}
+bool canAssignValue(const Type& target,const Type& value,const ExprPtr& expr){
+    if(canAssign(target,value))return true;
+    if(target.isInteger()&&value.isInteger()){
+        if(auto literal=literalInteger(expr))return literalFitsInteger(target,*literal);
+    }
+    return false;
 }
 }
 
@@ -87,12 +123,12 @@ bool TypeChecker::check(const Program&program){
 
 void TypeChecker::checkStmt(const StmtPtr&stmt){
     if(std::dynamic_pointer_cast<RecordStmt>(stmt)||std::dynamic_pointer_cast<ImportStmt>(stmt)||std::dynamic_pointer_cast<ModuleStmt>(stmt))return;
-    if(auto s=std::dynamic_pointer_cast<LetStmt>(stmt)){Type init=checkExpr(s->initializer);Type declared=s->annotation?resolveType(*s->annotation,s->span):init;if(!canAssign(declared,init))diagnostics_.error("NOE-T3001",s->span,"cannot assign "+init.name()+" to "+declared.name());define(s->name,declared,s->isConst,s->span);return;}
+    if(auto s=std::dynamic_pointer_cast<LetStmt>(stmt)){Type init=checkExpr(s->initializer);Type declared=s->annotation?resolveType(*s->annotation,s->span):init;if(!canAssignValue(declared,init,s->initializer))diagnostics_.error("NOE-T3001",s->span,"cannot assign "+init.name()+" to "+declared.name(),"use an explicit 'as' cast for narrowing or signedness-changing integer conversions");define(s->name,declared,s->isConst,s->span);return;}
     if(auto s=std::dynamic_pointer_cast<ExprStmt>(stmt)){checkExpr(s->expr);return;}
     if(auto s=std::dynamic_pointer_cast<BlockStmt>(stmt)){pushScope();for(const auto&x:s->statements)checkStmt(x);popScope();return;}
     if(auto s=std::dynamic_pointer_cast<IfStmt>(stmt)){Type c=checkExpr(s->condition);if(c.kind!=TypeKind::Bool&&c.kind!=TypeKind::Unknown)diagnostics_.error("NOE-T3004",s->condition->span,"if condition must be bool, found "+c.name());checkStmt(s->thenBranch);if(s->elseBranch)checkStmt(s->elseBranch);return;}
     if(auto s=std::dynamic_pointer_cast<WhileStmt>(stmt)){Type c=checkExpr(s->condition);if(c.kind!=TypeKind::Bool&&c.kind!=TypeKind::Unknown)diagnostics_.error("NOE-T3004",s->condition->span,"while condition must be bool, found "+c.name());checkStmt(s->body);return;}
-    if(auto s=std::dynamic_pointer_cast<ReturnStmt>(stmt)){Type v=s->value?checkExpr(s->value):simple(TypeKind::Void);if(!canAssign(currentReturn_,v))diagnostics_.error("NOE-T3005",s->span,"return type mismatch: expected "+currentReturn_.name()+", found "+v.name());return;}
+    if(auto s=std::dynamic_pointer_cast<ReturnStmt>(stmt)){Type v=s->value?checkExpr(s->value):simple(TypeKind::Void);if(!canAssignValue(currentReturn_,v,s->value))diagnostics_.error("NOE-T3005",s->span,"return type mismatch: expected "+currentReturn_.name()+", found "+v.name());return;}
     if(auto s=std::dynamic_pointer_cast<ThrowStmt>(stmt)){Type code=checkExpr(s->value);if(!insideFunction_)diagnostics_.error("NOE-T3031",s->span,"throw is only valid inside a function");if(!code.isInteger()&&code.kind!=TypeKind::Unknown)diagnostics_.error("NOE-T3032",s->span,"throw requires an integer error code");if(!currentReturn_.isInteger()&&currentReturn_.kind!=TypeKind::Unknown)diagnostics_.error("NOE-T3033",s->span,"throw requires an integer-returning function","use an integer status return such as isize when using lightweight try/throw");return;}
     if(auto s=std::dynamic_pointer_cast<FunctionStmt>(stmt)){
         auto sig=functions_[s->name];if(s->isExtern)return;
@@ -107,7 +143,7 @@ Type TypeChecker::checkExpr(const ExprPtr&expr){
     if(auto e=std::dynamic_pointer_cast<LiteralExpr>(expr)){if(std::holds_alternative<std::monostate>(e->value))return simple(TypeKind::Null);if(std::holds_alternative<std::int64_t>(e->value))return simple(TypeKind::Int);if(std::holds_alternative<double>(e->value))return simple(TypeKind::Float);if(std::holds_alternative<bool>(e->value))return simple(TypeKind::Bool);return simple(TypeKind::String);}
     if(auto e=std::dynamic_pointer_cast<ArrayExpr>(expr)){
         if(e->elements.empty()){diagnostics_.error("NOE-T3034",e->span,"cannot infer the element type of an empty array literal","add a typed non-empty initializer");return simple(TypeKind::Unknown);}
-        Type element=checkExpr(e->elements.front());for(std::size_t i=1;i<e->elements.size();++i){Type t=checkExpr(e->elements[i]);if(!canAssign(element,t)||!canAssign(t,element))diagnostics_.error("NOE-T3035",e->elements[i]->span,"array literal elements must have one compatible type");}
+        Type element=checkExpr(e->elements.front());for(std::size_t i=1;i<e->elements.size();++i){Type t=checkExpr(e->elements[i]);if(!canAssignValue(element,t,e->elements[i]))diagnostics_.error("NOE-T3035",e->elements[i]->span,"array literal elements must have one compatible type");}
         e->elementSize=std::max<std::size_t>(1,element.size());Type out;out.kind=TypeKind::Array;out.element=std::make_shared<Type>(element);out.count=e->elements.size();return out;
     }
     if(auto e=std::dynamic_pointer_cast<NameExpr>(expr)){auto t=resolve(e->name);if(t)return*t;if(functions_.count(e->name)||e->name=="host"||e->name=="abi")return simple(TypeKind::Unknown);diagnostics_.error("NOE-T3002",e->span,"unknown symbol '"+e->name+"'");return simple(TypeKind::Unknown);}
@@ -129,7 +165,7 @@ Type TypeChecker::checkExpr(const ExprPtr&expr){
     }
     if(auto e=std::dynamic_pointer_cast<CastExpr>(expr)){Type from=checkExpr(e->value),to=resolveType(e->typeName,e->span);bool ok=(from.isNumeric()&&to.isNumeric())||(from.kind==TypeKind::Pointer&&to.kind==TypeKind::Pointer)||(from.kind==TypeKind::Pointer&&(to.kind==TypeKind::Usize||to.kind==TypeKind::Isize))||(to.kind==TypeKind::Pointer&&(from.kind==TypeKind::Usize||from.kind==TypeKind::Isize||from.kind==TypeKind::Int))||(from.kind==TypeKind::Null&&to.kind==TypeKind::Pointer);if(!ok&&from.kind!=TypeKind::Unknown&&to.kind!=TypeKind::Unknown)diagnostics_.error("NOE-T3027",e->span,"cannot cast "+from.name()+" to "+to.name());return to;}
     if(auto e=std::dynamic_pointer_cast<BinaryExpr>(expr)){
-        if(e->op==TokenKind::Equal){Type lhs=checkExpr(e->left),rhs=checkExpr(e->right);if(auto n=std::dynamic_pointer_cast<NameExpr>(e->left))if(isConstSymbol(n->name))diagnostics_.error("NOE-T3014",e->span,"cannot assign to const '"+n->name+"'");if(!canAssign(lhs,rhs))diagnostics_.error("NOE-T3001",e->span,"cannot assign "+rhs.name()+" to "+lhs.name());return lhs;}
+        if(e->op==TokenKind::Equal){Type lhs=checkExpr(e->left),rhs=checkExpr(e->right);if(auto n=std::dynamic_pointer_cast<NameExpr>(e->left))if(isConstSymbol(n->name))diagnostics_.error("NOE-T3014",e->span,"cannot assign to const '"+n->name+"'");if(!canAssignValue(lhs,rhs,e->right))diagnostics_.error("NOE-T3001",e->span,"cannot assign "+rhs.name()+" to "+lhs.name(),"use an explicit 'as' cast for narrowing or signedness-changing integer conversions");return lhs;}
         Type l=checkExpr(e->left),r=checkExpr(e->right);switch(e->op){case TokenKind::Plus:if(l.kind==TypeKind::String&&r.kind==TypeKind::String)return simple(TypeKind::String);if(l.kind==TypeKind::Pointer&&r.isInteger())return l;if(r.kind==TypeKind::Pointer&&l.isInteger())return r;[[fallthrough]];case TokenKind::Minus:case TokenKind::Star:case TokenKind::Slash:case TokenKind::Percent:if((!l.isNumeric()||!r.isNumeric())&&l.kind!=TypeKind::Unknown&&r.kind!=TypeKind::Unknown&&l.kind!=TypeKind::Generic&&r.kind!=TypeKind::Generic)diagnostics_.error("NOE-T3007",e->span,"arithmetic operator requires numeric operands");return(l.kind==TypeKind::Float||r.kind==TypeKind::Float)?simple(TypeKind::Float):l;case TokenKind::Less:case TokenKind::LessEqual:case TokenKind::Greater:case TokenKind::GreaterEqual:case TokenKind::EqualEqual:case TokenKind::BangEqual:case TokenKind::AndAnd:case TokenKind::OrOr:return simple(TypeKind::Bool);default:return simple(TypeKind::Unknown);}
     }
     if(auto e=std::dynamic_pointer_cast<CallExpr>(expr)){
@@ -145,7 +181,7 @@ Type TypeChecker::checkExpr(const ExprPtr&expr){
         }
         if(name=="atomic.load"||name=="atomicLoad"||name=="atomic.store"||name=="atomicStore"||name=="atomic.exchange"||name=="atomicExchange"||name=="atomic.compareExchange"||name=="atomicCompareExchange"){
             std::size_t expected=(name.find("compare")!=std::string::npos||name.find("Compare")!=std::string::npos)?3:((name.find("store")!=std::string::npos||name.find("Store")!=std::string::npos||name.find("exchange")!=std::string::npos||name.find("Exchange")!=std::string::npos)?2:1);
-            if(e->args.size()!=expected){diagnostics_.error("NOE-T3046",e->span,"wrong argument count for atomic operation");return simple(TypeKind::Unknown);}Type p=checkExpr(e->args[0]);if(p.kind!=TypeKind::Pointer||!p.pointee){diagnostics_.error("NOE-T3047",e->args[0]->span,"atomic operation requires a pointer");return simple(TypeKind::Unknown);}Type value=*p.pointee;if((!value.isInteger()&&value.kind!=TypeKind::Pointer&&value.kind!=TypeKind::Bool)||value.size()>8){diagnostics_.error("NOE-T3048",e->args[0]->span,"atomic values must be integer, bool or pointer sized at most 8 bytes");}e->builtinWidth=std::max<std::size_t>(1,value.size());for(std::size_t i=1;i<e->args.size();++i){Type a=checkExpr(e->args[i]);if(!canAssign(value,a))diagnostics_.error("NOE-T3049",e->args[i]->span,"atomic value type mismatch");}if(name.find("store")!=std::string::npos||name.find("Store")!=std::string::npos)return simple(TypeKind::Void);return value;
+            if(e->args.size()!=expected){diagnostics_.error("NOE-T3046",e->span,"wrong argument count for atomic operation");return simple(TypeKind::Unknown);}Type p=checkExpr(e->args[0]);if(p.kind!=TypeKind::Pointer||!p.pointee){diagnostics_.error("NOE-T3047",e->args[0]->span,"atomic operation requires a pointer");return simple(TypeKind::Unknown);}Type value=*p.pointee;if((!value.isInteger()&&value.kind!=TypeKind::Pointer&&value.kind!=TypeKind::Bool)||value.size()>8){diagnostics_.error("NOE-T3048",e->args[0]->span,"atomic values must be integer, bool or pointer sized at most 8 bytes");}e->builtinWidth=std::max<std::size_t>(1,value.size());for(std::size_t i=1;i<e->args.size();++i){Type a=checkExpr(e->args[i]);if(!canAssignValue(value,a,e->args[i]))diagnostics_.error("NOE-T3049",e->args[i]->span,"atomic value type mismatch");}if(name.find("store")!=std::string::npos||name.find("Store")!=std::string::npos)return simple(TypeKind::Void);return value;
         }
         if(name=="atomic.fence"||name=="atomicFence"){if(!e->args.empty())diagnostics_.error("NOE-T3050",e->span,"atomic fence takes no arguments");return simple(TypeKind::Void);}
         if(name=="asm"){
@@ -156,7 +192,7 @@ Type TypeChecker::checkExpr(const ExprPtr&expr){
         }
         auto it=functions_.find(name);if(it==functions_.end()){diagnostics_.error("NOE-T3011",e->span,"unknown function '"+name+"'");return simple(TypeKind::Unknown);}const auto&sig=it->second;if(name!="print"&&e->args.size()!=sig.params.size())diagnostics_.error("NOE-T3012",e->span,"wrong argument count for '"+name+"'");
         std::unordered_map<std::string,Type> bindings;
-        for(std::size_t i=0;i<e->args.size();++i){Type a=checkExpr(e->args[i]);if(i<sig.params.size()){if(!sig.genericParams.empty()){if(!bindGeneric(sig.params[i],a,bindings))diagnostics_.error("NOE-T3054",e->args[i]->span,"generic argument does not match parameter "+sig.params[i].name());}else if(!canAssign(sig.params[i],a))diagnostics_.error("NOE-T3013",e->args[i]->span,"argument type mismatch: expected "+sig.params[i].name()+", found "+a.name());}}
+        for(std::size_t i=0;i<e->args.size();++i){Type a=checkExpr(e->args[i]);if(i<sig.params.size()){if(!sig.genericParams.empty()){if(!bindGeneric(sig.params[i],a,bindings))diagnostics_.error("NOE-T3054",e->args[i]->span,"generic argument does not match parameter "+sig.params[i].name());}else if(!canAssignValue(sig.params[i],a,e->args[i]))diagnostics_.error("NOE-T3013",e->args[i]->span,"argument type mismatch: expected "+sig.params[i].name()+", found "+a.name());}}
         return substituteGeneric(sig.result,bindings);
     }
     return simple(TypeKind::Unknown);

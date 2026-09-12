@@ -1,0 +1,31 @@
+module noqeri.security.policy
+
+export function securityRangeWithin(offset: usize, length: usize, total: usize): bool {
+    if offset > total {
+        return false
+    }
+    return length <= total - offset
+}
+
+export function securityIndexWithin(index: usize, length: usize): bool {
+    return index < length
+}
+
+export function securityBytesEqualFullScan(left: []u8, right: []u8): bool {
+    if len(left) != len(right) {
+        return false
+    }
+    let equal: bool = true
+    let index: usize = 0
+    while index < len(left) {
+        if left[index] != right[index] {
+            equal = false
+        }
+        index = index + 1
+    }
+    return equal
+}
+
+export function securityStatusAllowed(status: isize): bool {
+    return status >= 0
+}

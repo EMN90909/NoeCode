@@ -1,0 +1,45 @@
+module noqeri.std.search
+
+export function nqBinarySearchI64(values: []i64, target: i64): isize {
+    let low: usize = 0 as usize
+    let high: usize = len(values)
+    while low < high {
+        let middle: usize = low + ((high - low) / 2)
+        let current: i64 = values[middle]
+        if current == target { return middle as isize }
+        if current < target {
+            low = middle + 1
+        } else {
+            high = middle
+        }
+    }
+    return -1
+}
+
+export function nqLowerBoundI64(values: []i64, target: i64): usize {
+    let low: usize = 0 as usize
+    let high: usize = len(values)
+    while low < high {
+        let middle: usize = low + ((high - low) / 2)
+        if values[middle] < target {
+            low = middle + 1
+        } else {
+            high = middle
+        }
+    }
+    return low
+}
+
+export function nqUpperBoundI64(values: []i64, target: i64): usize {
+    let low: usize = 0 as usize
+    let high: usize = len(values)
+    while low < high {
+        let middle: usize = low + ((high - low) / 2)
+        if values[middle] <= target {
+            low = middle + 1
+        } else {
+            high = middle
+        }
+    }
+    return low
+}

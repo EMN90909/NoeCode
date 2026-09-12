@@ -1,0 +1,26 @@
+module noqeri.runtime.memory
+
+export function nqRuntimeZeroU8(memory: *u8, count: usize): void {
+    let index: usize = 0 as usize
+    while index < count {
+        memory[index] = 0 as u8
+        index = index + 1
+    }
+}
+
+export function nqRuntimeCopyU8(source: *u8, destination: *u8, count: usize): void {
+    let index: usize = 0 as usize
+    while index < count {
+        destination[index] = source[index]
+        index = index + 1
+    }
+}
+
+export function nqRuntimeMoveI64(source: *i64, destination: *i64, count: usize): void {
+    if source == destination { return }
+    let index: usize = 0 as usize
+    while index < count {
+        destination[index] = source[index]
+        index = index + 1
+    }
+}

@@ -1,0 +1,15 @@
+import "../Lib/std/int.nqr"
+import "../Lib/std/slice_i64.nqr"
+import "../Lib/std/sort.nqr"
+import "../Lib/std/search.nqr"
+import "../Lib/std/checksum.nqr"
+
+let numbers: [i64; 5] = [9 as i64, 2 as i64, 7 as i64, 1 as i64, 5 as i64]
+let view: []i64 = slice(numbers)
+nqInsertionSortI64(view)
+print(nqSliceSumI64(view))
+print(nqBinarySearchI64(view, 7 as i64))
+
+let bytes: [u8; 3] = [65 as u8, 66 as u8, 67 as u8]
+print(nqAdler32(slice(bytes)))
+print(nqClampI64(17 as i64, 0 as i64, 10 as i64))

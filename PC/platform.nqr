@@ -1,0 +1,7 @@
+module noqeri.platform.windows
+
+export function nqWindowsFrontendSupported(): bool { return true }
+export function nqWindowsInterpreterSupported(): bool { return true }
+export function nqWindowsLspSupported(): bool { return true }
+export function nqWindowsNativeObjectSupported(): bool { return false }
+export function nqWindowsExecutableLinkSupported(): bool { return false }

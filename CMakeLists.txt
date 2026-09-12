@@ -3,6 +3,10 @@ project(noqeri VERSION 1.0.0 LANGUAGES CXX)
 include(GNUInstallDirs)
 option(NOQERI_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(NOQERI_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+# C++ is the bootstrap compiler/reference-host layer. Reusable language-facing
+# modules, object helpers, security policy and database algorithms live in .nqr.
+# Database/noqeridb.cpp is retained only as the bootstrap .nqd/.nqdb file-format
+# adapter until Noqeri has typed filesystem primitives sufficient to host it.
 set(NOQERI_FRONTEND_SOURCES Compiler/core.cpp Compiler/modules.cpp Compiler/workspace.cpp Compiler/type_checker.cpp Compiler/lifetime.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp Compiler/register_alloc.cpp Compiler/optimizer.cpp Parser/lexer.cpp Parser/parser.cpp Runtime/abi.cpp Runtime/interpreter.cpp Database/noqeridb.cpp)
 set(NOQERI_SOURCES ${NOQERI_FRONTEND_SOURCES} Compiler/native_backend.cpp Compiler/web_backend.cpp Compiler/linker.cpp Programs/noqeri.cpp Programs/formatter.cpp Programs/package.cpp Programs/lsp.cpp Programs/test_runner.cpp Tools/build/production.cpp Tools/security/audit.cpp)
 add_executable(noqeri ${NOQERI_SOURCES})
@@ -13,9 +17,7 @@ add_library(noqeri_abi SHARED ${NOQERI_FRONTEND_SOURCES})
 target_include_directories(noqeri_abi PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Include/noqeri> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/noqeri> PRIVATE Compiler/bootstrap)
 target_compile_features(noqeri_abi PUBLIC cxx_std_17)
 target_compile_definitions(noqeri_abi PRIVATE NOQERI_BOOTSTRAP=1)
-# Database/noqeridb.cpp contains a deliberately separate tiny lexer/parser for
-# the .nqd data language. Compile it against database.hpp only so those private
-# names do not collide with the Noqeri language frontend classes.
+# The compatibility .nqd parser has deliberately private lexer/parser names.
 set_source_files_properties(Database/noqeridb.cpp PROPERTIES COMPILE_DEFINITIONS NOQERI_DATABASE_SOURCE=1)
 set_target_properties(noqeri_abi PROPERTIES OUTPUT_NAME noqeri-abi WINDOWS_EXPORT_ALL_SYMBOLS ON)
 function(noqeri_apply_warnings target)
@@ -42,6 +44,7 @@ if(BUILD_TESTING)
  add_test(NAME noqeri-version COMMAND noqeri --version)
  add_test(NAME noqeri-check-hello COMMAND noqeri check ${CMAKE_SOURCE_DIR}/examples/hello.nqr)
  add_test(NAME noqeri-tests COMMAND noqeri test ${CMAKE_SOURCE_DIR}/tests)
+ add_test(NAME noqeri-noqeri-owned-components COMMAND noqeri run ${CMAKE_SOURCE_DIR}/tests/noqeri_owned_components.nqr)
  add_test(NAME noqeri-systems-types COMMAND noqeri check ${CMAKE_SOURCE_DIR}/tests/systems_types.nqr)
  add_test(NAME noqeri-systems-native COMMAND noqeri build ${CMAKE_SOURCE_DIR}/tests/systems_types.nqr ${CMAKE_BINARY_DIR}/systems_types.s)
  add_test(NAME noqeri-general-capabilities COMMAND noqeri check ${CMAKE_SOURCE_DIR}/tests/general_capabilities.nqr)

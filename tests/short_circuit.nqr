@@ -1,0 +1,16 @@
+function dangerous(): bool {
+    let invalid: *u8 = 0 as *u8
+    print(invalid[0])
+    return true
+}
+
+let no: bool = false
+let yes: bool = true
+
+if no && dangerous() {
+    print(1)
+}
+
+if yes || dangerous() {
+    print(2)
+}

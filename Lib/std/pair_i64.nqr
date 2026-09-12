@@ -1,0 +1,15 @@
+module noqeri.std.pair_i64
+
+export function nqPairMinI64(first: i64, second: i64): i64 {
+    if first < second { return first }
+    return second
+}
+
+export function nqPairMaxI64(first: i64, second: i64): i64 {
+    if first > second { return first }
+    return second
+}
+
+export function nqPairOrderedI64(first: i64, second: i64): bool {
+    return first <= second
+}

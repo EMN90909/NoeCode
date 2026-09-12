@@ -20,9 +20,11 @@ function Test-Command {
 }
 
 function Refresh-ProcessPath {
+    $current = $env:Path
     $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
     $user = [Environment]::GetEnvironmentVariable('Path', 'User')
     $parts = @()
+    if ($current) { $parts += $current }
     if ($machine) { $parts += $machine }
     if ($user) { $parts += $user }
     if ($parts.Count -gt 0) { $env:Path = $parts -join ';' }

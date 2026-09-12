@@ -1,0 +1,27 @@
+module noqeri.modules.builtin
+
+export function builtinByteLength(value: []u8): usize {
+    return len(value)
+}
+
+export function builtinIndexValid(index: usize, length: usize): bool {
+    return index < length
+}
+
+export function builtinSliceEmpty(value: []u8): bool {
+    return len(value) == 0
+}
+
+export function builtinMinUsize(left: usize, right: usize): usize {
+    if left < right {
+        return left
+    }
+    return right
+}
+
+export function builtinMaxUsize(left: usize, right: usize): usize {
+    if left > right {
+        return left
+    }
+    return right
+}

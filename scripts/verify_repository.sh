@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 set -eu
-required='README.md LICENSE LEGAL.md SECURITY.md CONTRIBUTING.md CMakeLists.txt project.nqr noqeri.lock Brand/noqeri-logo.webp Brand/noqeri-mark.png Grammar/noqeri.grammar.md Include/noqeri/noqeri.hpp Parser/lexer.cpp Parser/parser.cpp Compiler/core.cpp Runtime/interpreter.cpp Programs/noqeri.cpp Tools/build/production.cpp editors/vscode/package.json site/index.html'
+required='README.md LICENSE LEGAL.md SECURITY.md CONTRIBUTING.md CMakeLists.txt project.nqr noqeri.lock Brand/noqeri-logo.webp Brand/noqeri-mark.png Grammar/noqeri.grammar.md Include/noqeri/noqeri.hpp Parser/lexer.cpp Parser/parser.cpp Compiler/core.cpp Runtime/interpreter.cpp Programs/noqeri.cpp Tools/build/production.cpp Modules/native.nqr Objects/value.nqr Objects/text.nqr Database/noqeridb.nqr Tools/security/policy.nqr Lib/test/assert.nqr tests/noqeri_owned_components.nqr editors/vscode/package.json site/index.html'
 for path in $required; do
   if [ ! -e "$path" ]; then echo "missing required repository path: $path" >&2; exit 1; fi
 done
@@ -10,4 +10,4 @@ if [ -n "$legacy" ]; then
   echo "$legacy" >&2
   exit 1
 fi
-printf '%s\n' 'repository structure verified: noqeri / .nqr'
+printf '%s\n' 'repository structure verified: compiler bootstrap + Noqeri-owned runtime/library components'

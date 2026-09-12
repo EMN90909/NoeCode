@@ -9,4 +9,9 @@ $required = @(
 foreach ($path in $required) { if (-not (Test-Path $path)) { throw "missing required repository path: $path" } }
 $legacy = Get-ChildItem -Recurse -File | Where-Object { $_.Extension -eq '.noe' -or $_.Extension -eq '.ric' }
 if ($legacy) { throw "legacy source extensions found: $($legacy.FullName -join ', ')" }
+$noqeriOwned = @('Modules','Objects','Lib','Database','Tools/security')
+$nativeLibrarySource = Get-ChildItem $noqeriOwned -Recurse -File | Where-Object { $_.Extension -in @('.c','.cc','.cpp','.h','.hpp') }
+if ($nativeLibrarySource) {
+  throw "C/C++ source found in Noqeri-owned library/runtime directories: $($nativeLibrarySource.FullName -join ', '). Move host/bootstrap adapters under Compiler/bootstrap and keep reusable implementation in .nqr"
+}
 Write-Host 'repository structure verified: compiler bootstrap + Noqeri-owned runtime/library components'

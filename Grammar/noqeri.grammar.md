@@ -1,7 +1,27 @@
 # noqeri 1.4 grammar
 
+Noqeri deliberately keeps a familiar reading order while making low-level intent explicit. Semicolons are optional at statement boundaries, types follow names, casts use `as`, error propagation uses prefix `try`, and systems operations stay visible rather than being hidden behind compiler magic.
+
+## Lexical layer
+
+```text
+IDENT          := (LETTER | "_") (LETTER | DIGIT | "_")*
+DEC_INTEGER    := DIGIT+
+HEX_INTEGER    := "0" ("x" | "X") HEX_DIGIT+
+INTEGER        := DEC_INTEGER | HEX_INTEGER
+FLOAT          := DIGIT+ "." DIGIT+
+STRING         := '"' (ESCAPE | any-character-except-quote)* '"'
+LINE_COMMENT   := "//" characters-until-newline
+BLOCK_COMMENT  := "/*" characters-until-"*/" "*/"
+```
+
+Whitespace and comments may appear between tokens.
+
+## Program structure
+
 ```text
 program        := declaration* EOF
+
 declaration    := modifiers? functionDecl
                 | moduleDecl
                 | importDecl
@@ -10,45 +30,102 @@ declaration    := modifiers? functionDecl
                 | statement
 
 modifiers      := ("export" | "extern")+
-moduleDecl     := "module" qualifiedName ";"?
-importDecl     := "import" STRING ";"?
+moduleDecl     := "module" qualifiedName terminator?
+importDecl     := "import" STRING terminator?
 qualifiedName  := IDENT ("." IDENT)*
+terminator     := ";"
 
-functionDecl   := "function" IDENT genericParams? "(" parameters? ")" (":" type)? (block | ";"?)
+functionDecl   := "function" IDENT genericParams?
+                  "(" parameters? ")"
+                  (":" type)?
+                  (block | terminator?)
+
 genericParams  := "<" IDENT ("," IDENT)* ">"
-recordDecl     := "record" IDENT "{" recordField* "}" ";"?
-recordField    := IDENT ":" type ("," | ";")?
 parameters     := parameter ("," parameter)*
 parameter      := IDENT (":" type)?
 
-type           := "*" "volatile"? type
-                | "[" "]" type
-                | "[" type ";" INTEGER "]"
-                | IDENT
+recordDecl     := "record" IDENT "{" recordField* "}" terminator?
+recordField    := IDENT ":" type ("," | terminator)?
+```
 
-letDecl        := ("let" | "const") IDENT (":" type)? "=" expression ";"?
-statement      := ifStmt | whileStmt | returnStmt | throwStmt | block | exprStmt
-ifStmt         := "if" expression block ("else" statement)?
+## Types
+
+```text
+type           := pointerType
+                | sliceType
+                | arrayType
+                | namedType
+
+pointerType    := "*" "volatile"? type
+sliceType      := "[" "]" type
+arrayType      := "[" type ";" INTEGER "]"
+namedType      := IDENT
+```
+
+Stable integer names are:
+
+```text
+u8  u16  u32  u64
+ i8  i16  i32  i64
+usize  isize
+```
+
+The existing `int`, `float`, `bool`, `string`, `null`, and `void` types remain available.
+
+Pointers are written `*T`. A volatile pointee access is written `*volatile T`. `&value` takes an address, `*pointer` dereferences, and indexing scales by the pointee or element size.
+
+Fixed arrays use `[T; N]`; slices use `[]T`. A slice is a pointer-and-length view.
+
+## Values and statements
+
+```text
+letDecl        := ("let" | "const") IDENT (":" type)? "=" expression terminator?
+
+statement      := ifStmt
+                | whileStmt
+                | returnStmt
+                | throwStmt
+                | block
+                | exprStmt
+
+ifStmt         := "if" expression block ("else" (ifStmt | block))?
 whileStmt      := "while" expression block
-returnStmt     := "return" expression? ";"?
-throwStmt      := "throw" expression ";"?
+returnStmt     := "return" expression? terminator?
+throwStmt      := "throw" expression terminator?
 block          := "{" declaration* "}"
-exprStmt       := expression ";"?
+exprStmt       := expression terminator?
+```
 
+`const` bindings cannot be assigned after initialization. `if` and `while` conditions must be `bool`; integers are not silently treated as booleans.
+
+## Expressions
+
+```text
 expression     := assignment
-assignment     := logicalOr ("=" assignment)?
+assignment     := assignTarget "=" assignment
+                | logicalOr
+
+assignTarget   := IDENT
+                | postfixTarget
+                | "*" unary
+
+postfixTarget  := primary (indexSuffix | memberSuffix)+
+
 logicalOr      := logicalAnd ("||" logicalAnd)*
 logicalAnd     := equality ("&&" equality)*
 equality       := comparison (("==" | "!=") comparison)*
 comparison     := term (("<" | "<=" | ">" | ">=") term)*
 term           := factor (("+" | "-") factor)*
 factor         := unary (("*" | "/" | "%") unary)*
-unary          := ("!" | "-" | "+" | "*" | "&" | "try") unary | cast
+unary          := ("!" | "-" | "+" | "*" | "&" | "try") unary
+                | cast
 cast           := postfix ("as" type)*
 postfix        := primary (callSuffix | indexSuffix | memberSuffix)*
 callSuffix     := "(" arguments? ")"
+arguments      := expression ("," expression)*
 indexSuffix    := "[" expression "]"
 memberSuffix   := "." IDENT
+
 primary        := INTEGER
                 | FLOAT
                 | STRING
@@ -58,23 +135,101 @@ primary        := INTEGER
                 | IDENT
                 | arrayLiteral
                 | "(" expression ")"
+
 arrayLiteral   := "[" (expression ("," expression)*)? "]"
 ```
 
-Stable integer names are `u8`, `u16`, `u32`, `u64`, `i8`, `i16`, `i32`, `i64`, `usize`, and `isize`. Existing `int`, `float`, `bool`, `string`, `null`, and `void` remain available.
+Assignments are valid only to names, fields, indexed elements, or dereferenced pointers. Arbitrary expressions are not assignable.
 
-Pointers are written `*T`. A volatile pointee access is written `*volatile T`. `&value` takes an address, `*pointer` dereferences, and indexing scales by the element size.
+## Integer conversion rule
 
-Fixed arrays use `[T; N]`; slices use `[]T`. Array literals infer their element type from their elements. `slice(array)` or `slice(pointer, length)` creates a pointer-and-length view, and `len(value)` accepts arrays and slices.
+Noqeri distinguishes **provably safe implicit conversion** from **explicit conversion**:
 
-`module name` gives a source file an organizational identity. `import "path.nqr"` resolves recursively relative to the importing file. The current bootstrap module model merges imported declarations into one compilation graph; namespacing can evolve later without changing file import syntax.
+- same-type assignment is allowed;
+- same-signedness widening is implicit, such as `u8 -> u32`;
+- unsigned-to-signed widening is implicit only when the signed destination is strictly wider, such as `u32 -> i64`;
+- narrowing is not implicit;
+- signed-to-unsigned conversion is not implicit;
+- an integer literal may initialize a fixed-width integer when its value is provably in range;
+- otherwise use `as` to make the conversion explicit.
 
-Generic functions use inferred register-value type parameters, for example `function identity<T>(value: T): T`. The bootstrap implementation deliberately limits generics to values that fit the current register-oriented ABI; generic aggregate specialization is not yet implied by this grammar.
+Examples:
 
-`throw code` and `try expression` provide allocation-free status propagation for integer-returning functions. A thrown non-negative code is encoded as a negative status; `try` returns immediately when it sees a negative status.
+```nqr
+let port: u16 = 8080       // valid: literal fits
+let small: u8 = 42
+let wide: u32 = small      // valid: safe widening
 
-Atomics, CPU intrinsics and inline assembly are ordinary calls rather than new grammar families: `atomic.load(ptr)`, `atomic.store(ptr, value)`, `atomic.exchange(...)`, `atomic.compareExchange(...)`, `atomic.fence()`, `intrinsic("x86.pause")`, and `asm("nop")`.
+let count: u64 = 300
+let byte: u8 = count       // error: narrowing
+let forced: u8 = count as u8
+```
 
-`record` uses declaration-order, naturally aligned field layout. `extern function` declares a symbol supplied by the surrounding program. `export function` emits the declared name as an externally visible native symbol.
+The explicit cast communicates that truncation or signedness reinterpretation is intentional.
 
-These are general language facilities for applications, libraries, embedded software, runtimes, concurrency, FFI, kernels and other performance-sensitive programs. They are not tied to an operating-system profile.
+## Arrays and slices
+
+Array literals infer their element type from their elements. `slice(array)` or `slice(pointer, length)` creates a slice, and `len(value)` accepts arrays and slices.
+
+```nqr
+let values: [int; 4] = [1, 2, 3, 4]
+let view: []int = slice(values)
+print(len(view))
+print(view[2])
+```
+
+## Modules and generics
+
+`module name` gives a source file an organizational identity. `import "path.nqr"` resolves recursively relative to the importing file. The current bootstrap merges imported declarations into one compilation graph; a stronger namespace model can evolve without changing file-import syntax.
+
+Generic functions use inferred register-value type parameters:
+
+```nqr
+function identity<T>(value: T): T {
+    return value
+}
+```
+
+The bootstrap currently limits generics to values supported by the register-oriented ABI; aggregate monomorphization is not yet implied by this grammar.
+
+## Error propagation
+
+`throw code` and `try expression` provide allocation-free status propagation for integer-returning functions.
+
+```nqr
+function openDevice(): isize {
+    throw 3
+}
+
+function start(): isize {
+    let status: isize = try openDevice()
+    return status
+}
+```
+
+A thrown non-negative code is encoded as a negative status. `try` returns from the current function immediately when it receives a negative status.
+
+## Systems built-ins
+
+Atomics, CPU intrinsics, slicing helpers and inline assembly are ordinary call forms rather than separate grammar families:
+
+```text
+len(value)
+slice(array)
+slice(pointer, length)
+
+atomic.load(pointer)
+atomic.store(pointer, value)
+atomic.exchange(pointer, value)
+atomic.compareExchange(pointer, expected, desired)
+atomic.fence()
+
+intrinsic("x86.pause")
+asm("nop")
+```
+
+Atomic operands must be bool, integer, or pointer values no wider than 8 bytes in the current backend.
+
+`record` uses declaration-order, naturally aligned field layout. `extern function` declares a symbol supplied by the embedding/linking environment. `export function` emits the declared name as an externally visible native symbol.
+
+These are general language facilities for applications, libraries, embedded software, runtimes, concurrency, FFI, kernels, and other performance-sensitive programs. They are not an operating-system-specific dialect.

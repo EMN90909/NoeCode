@@ -5,10 +5,10 @@ option(NOQERI_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSa
 option(NOQERI_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 # C++ is the bootstrap compiler/reference-host layer. Reusable language-facing
 # modules, object helpers, security policy and database algorithms live in .nqr.
-# Database/noqeridb.cpp is retained only as the bootstrap .nqd/.nqdb file-format
-# adapter until Noqeri has typed filesystem primitives sufficient to host it.
-set(NOQERI_FRONTEND_SOURCES Compiler/core.cpp Compiler/modules.cpp Compiler/workspace.cpp Compiler/type_checker.cpp Compiler/lifetime.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp Compiler/register_alloc.cpp Compiler/optimizer.cpp Parser/lexer.cpp Parser/parser.cpp Runtime/abi.cpp Runtime/interpreter.cpp Database/noqeridb.cpp)
-set(NOQERI_SOURCES ${NOQERI_FRONTEND_SOURCES} Compiler/native_backend.cpp Compiler/web_backend.cpp Compiler/linker.cpp Programs/noqeri.cpp Programs/formatter.cpp Programs/package.cpp Programs/lsp.cpp Programs/test_runner.cpp Tools/build/production.cpp Tools/security/audit.cpp)
+# The compatibility .nqd/.nqdb parser/file adapter and repository security audit
+# are kept under Compiler/bootstrap until Noqeri can host those environment edges.
+set(NOQERI_FRONTEND_SOURCES Compiler/core.cpp Compiler/modules.cpp Compiler/workspace.cpp Compiler/type_checker.cpp Compiler/lifetime.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp Compiler/register_alloc.cpp Compiler/optimizer.cpp Parser/lexer.cpp Parser/parser.cpp Runtime/abi.cpp Runtime/interpreter.cpp Compiler/bootstrap/noqeridb_host.cpp)
+set(NOQERI_SOURCES ${NOQERI_FRONTEND_SOURCES} Compiler/native_backend.cpp Compiler/web_backend.cpp Compiler/linker.cpp Programs/noqeri.cpp Programs/formatter.cpp Programs/package.cpp Programs/lsp.cpp Programs/test_runner.cpp Tools/build/production.cpp Compiler/bootstrap/security_audit_host.cpp)
 add_executable(noqeri ${NOQERI_SOURCES})
 target_include_directories(noqeri PRIVATE Include/noqeri Compiler/bootstrap)
 target_compile_features(noqeri PRIVATE cxx_std_17)
@@ -18,7 +18,7 @@ target_include_directories(noqeri_abi PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_S
 target_compile_features(noqeri_abi PUBLIC cxx_std_17)
 target_compile_definitions(noqeri_abi PRIVATE NOQERI_BOOTSTRAP=1)
 # The compatibility .nqd parser has deliberately private lexer/parser names.
-set_source_files_properties(Database/noqeridb.cpp PROPERTIES COMPILE_DEFINITIONS NOQERI_DATABASE_SOURCE=1)
+set_source_files_properties(Compiler/bootstrap/noqeridb_host.cpp PROPERTIES COMPILE_DEFINITIONS NOQERI_DATABASE_SOURCE=1)
 set_target_properties(noqeri_abi PROPERTIES OUTPUT_NAME noqeri-abi WINDOWS_EXPORT_ALL_SYMBOLS ON)
 function(noqeri_apply_warnings target)
  if(MSVC)

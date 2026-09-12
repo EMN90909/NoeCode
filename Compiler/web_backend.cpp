@@ -22,6 +22,17 @@ export const domHtml = (selector,value) => { const node=document.querySelector(s
 export const domAttr = (selector,name,value) => { const node=document.querySelector(selector); if(!node) return false; node.setAttribute(name,String(value)); return true; };
 export const domAddClass = (selector,name) => { const node=document.querySelector(selector); if(!node) return false; node.classList.add(name); return true; };
 export const domRemoveClass = (selector,name) => { const node=document.querySelector(selector); if(!node) return false; node.classList.remove(name); return true; };
+export const domToggleClass = (selector,name,force) => { const node=document.querySelector(selector); if(!node) return false; node.classList.toggle(name,Boolean(force)); return true; };
+export const domStyle = (selector,name,value) => { const node=document.querySelector(selector); if(!node) return false; node.style.setProperty(String(name),String(value)); return true; };
+export const domStyleAll = (selector,name,value) => { const nodes=document.querySelectorAll(selector); for(const node of nodes) node.style.setProperty(String(name),String(value)); return nodes.length; };
+export const domRectJson = (selector) => { const node=document.querySelector(selector); if(!node) return ''; const r=node.getBoundingClientRect(); return JSON.stringify({x:r.x,y:r.y,width:r.width,height:r.height,top:r.top,right:r.right,bottom:r.bottom,left:r.left}); };
+export const mediaReducedMotion = () => Boolean(globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+export const mediaFinePointer = () => Boolean(globalThis.matchMedia?.('(hover: hover) and (pointer: fine)').matches);
+export const viewportWidth = () => Number(globalThis.innerWidth ?? 0);
+export const viewportHeight = () => Number(globalThis.innerHeight ?? 0);
+export const scrollYPosition = () => Number(globalThis.scrollY ?? globalThis.pageYOffset ?? 0);
+export const motionNow = () => Number(globalThis.performance?.now?.() ?? Date.now());
+export const motionProfile = () => JSON.stringify({reducedMotion:mediaReducedMotion(),finePointer:mediaFinePointer(),viewportWidth:viewportWidth(),viewportHeight:viewportHeight(),scrollY:scrollYPosition()});
 let __nqFetchNext=1; const __nqFetch=new Map();
 export const fetchStart = (url) => { const id=__nqFetchNext++; const state={ready:false,ok:false,text:'',status:0}; __nqFetch.set(id,state); fetch(url).then(async r=>{state.ok=r.ok;state.status=r.status;state.text=await r.text();state.ready=true;}).catch(e=>{state.text=String(e);state.ready=true;}); return id; };
 export const fetchReady = (id) => __nqFetch.get(id)?.ready ?? false;

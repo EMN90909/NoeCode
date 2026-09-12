@@ -20,7 +20,7 @@ int runProductionDoctor(const std::filesystem::path&root){
         {"tests/arithmetic.nqr","test program"},{"tests/abi_services.nqr","ABI service test"},{"tests/systems_types.nqr","systems types test"},{"tests/general_capabilities.nqr","general capabilities test"},{"tests/module_math.nqr","module fixture"},{"tests/modules_imports.nqr","import graph test"}
     };
     int failures=0;
-    std::cout<<"noqeri production-track doctor\ncompiler="<<NOQERI_COMPILER_VERSION<<"\nlanguage="<<NOQERI_LANGUAGE_VERSION<<"\nedition="<<NOQERI_EDITION<<"\nabi="<<NOQERI_ABI_VERSION<<"\ndefault-target="<<NOQERI_DEFAULT_TARGET<<"\ntargets="<<NOQERI_SUPPORTED_TARGET<<"\n";
+    std::cout<<"noqeri production-track doctor\ncompiler="<<NOQERI_COMPILER_VERSION<<"\nlanguage="<<NOQERI_LANGUAGE_VERSION<<"\nedition="<<NOQERI_EDITION<<"\nabi="<<NOQERI_ABI_VERSION<<"\ndefault-target="<<NOQERI_DEFAULT_TARGET<<"\ntargets="<<NOQERI_SUPPORTED_TARGETS<<"\n";
     for(const auto&check:required){auto full=root/check.path;if(std::filesystem::exists(full))std::cout<<"ok   "<<check.label<<" ("<<check.path.string()<<")\n";else{++failures;std::cerr<<"fail "<<check.label<<" missing: "<<full.string()<<"\n";}}
     const std::vector<std::filesystem::path>forbidden={root/"project.noe",root/"noe.lock",root/"project.ric",root/"ric.lock",root/"Include/noe",root/"Include/ric",root/"Grammar/noe.grammar.md",root/"Grammar/ric.grammar.md"};
     for(const auto&path:forbidden)if(std::filesystem::exists(path)){++failures;std::cerr<<"fail legacy public language path present: "<<path.string()<<"\n";}

@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <map>
 #include <sstream>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -19,7 +20,7 @@ struct ManifestToken { ManifestTokenKind kind=ManifestTokenKind::Eof; std::strin
 
 class ManifestLexer {
 public:
-    explicit ManifestLexer(std::string_view input):input_(input){}
+    explicit ManifestLexer(std::string input):input_(std::move(input)){}
     std::vector<ManifestToken> lex(Diagnostics& diagnostics) {
         std::vector<ManifestToken> out;
         for(;;) {
@@ -33,7 +34,7 @@ public:
                     if(!std::isalnum(static_cast<unsigned char>(n))&&n!='_'&&n!='-'&&n!='.')break;
                     ++pos_;
                 }
-                out.push_back({ManifestTokenKind::Identifier,std::string(input_.substr(start,pos_-start)),start});
+                out.push_back({ManifestTokenKind::Identifier,input_.substr(start,pos_-start),start});
                 continue;
             }
             if(c=='"') {
@@ -73,7 +74,7 @@ private:
             break;
         }
     }
-    std::string_view input_;
+    std::string input_;
     std::size_t pos_=0;
 };
 

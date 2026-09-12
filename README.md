@@ -1,51 +1,108 @@
 <p align="center">
-  <img src="Brand/noqeri-logo.webp" alt="noqeri wolf code logo" width="560">
+  <img src="Brand/noqeri-logo.webp" alt="Noqeri wolf code logo" width="560">
 </p>
 
-<h1 align="center">noqeri</h1>
-<p align="center"><strong>A statically typed, native-oriented general-purpose programming language.</strong></p>
+<h1 align="center">Noqeri</h1>
+<p align="center"><strong>A compact statically typed language for applications, systems, portable web objects and embedded data.</strong></p>
 
 <p align="center">
-  <img alt="noqeri CI" src="https://github.com/EMN90909/Noqeri/actions/workflows/ci.yml/badge.svg">
-  <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-536dfe.svg">
+  <img alt="Noqeri CI" src="https://github.com/EMN90909/Noqeri/actions/workflows/ci.yml/badge.svg">
+  <img alt="GPL-3.0-only license" src="https://img.shields.io/badge/license-GPL--3.0--only-536dfe.svg">
   <img alt="source extension" src="https://img.shields.io/badge/source-.nqr-102654.svg">
-  <img alt="language" src="https://img.shields.io/badge/language-1.4-536dfe.svg">
+  <img alt="language" src="https://img.shields.io/badge/language-1.0-536dfe.svg">
 </p>
 
-**noqeri** is the language name. Source files use **`.nqr`**, project manifests use **`project.nqr`**, lock files use **`noqeri.lock`**, and the command-line compiler is **`noqeri`**.
+**Noqeri 1.0** is the current language/toolchain line. Source files use **`.nqr`**, project manifests use **`project.nqr`**, lock files use **`noqeri.lock`**, portable web objects use **`.nqo`**, NoqeriDB scripts use **`.nqd`**, and embedded database files use **`.nqdb`**.
 
-Noqeri keeps common programs compact while making low-level intent explicit when needed. Systems capabilities are ordinary general-purpose language features; there is no special kernel mode, OS dialect, Linux runtime assumption, or mandatory host ABI path.
+Noqeri keeps ordinary code familiar while making low-level intent visible when it is actually needed. Raw pointers, volatile memory, atomics, intrinsics and constrained inline assembly remain available for systems work; application code does not need a separate language or dialect.
 
 ```nqr
 module demo
 
-function identity<T>(value: T): T {
-    return value
+function max<T: Ord>(left: T, right: T): T {
+    if left > right { return left }
+    return right
 }
 
 let values: [int; 4] = [1, 2, 3, 4]
 let view: []int = slice(values)
-print(identity(view[2]))
+print(max(view[1], view[3]))
 ```
 
-## Implemented today
+## What is implemented today
 
-The C++17 bootstrap contains a lexer/parser/AST, static type checker, NIR, optimizer, reference interpreter, formatter, project tooling, tests, LSP foundation, diagnostics, a Noqeri-owned ABI v2, and a freestanding x86-64 native backend.
+The C++17 bootstrap compiler currently includes:
 
-The stable 1.4 surface includes:
+- lexer, parser and AST;
+- static type checking with explicit narrowing/signedness rules;
+- fixed-width integers, arrays, borrowed slices, records and raw pointers;
+- slice escape analysis for known local-array escapes;
+- constrained function generics such as `T: Ord`, `Numeric`, `Integer`, `Eq` and `Copy`;
+- concrete per-type generic function monomorphization with an instantiation cache;
+- typed NIR values, basic blocks and CFG successor information;
+- a linear-scan allocation planner; the x86-64 correctness backend still uses its established stack representation rather than claiming full allocator integration;
+- optimization passes, a reference interpreter and freestanding x86-64 assembly generation;
+- atomics, volatile memory, target intrinsics and deliberately constrained inline assembly;
+- modules/import graphs, formatter, diagnostics, project manifests, SHA-256 locks, audit tooling and an LSP foundation;
+- portable **`.nqo`** web-object generation;
+- the embedded **NoqeriDB** `.nqd` / `.nqdb` engine.
 
-- ordinary functions, values, control flow, arithmetic and calls;
-- `u8/u16/u32/u64`, `i8/i16/i32/i64`, `usize/isize`;
-- pointers, `&value`, dereference, pointer indexing, casts and volatile access;
-- deterministic `record` layout plus `extern` / `export` functions;
-- fixed arrays `[T; N]`, array literals and slices `[]T`;
-- `module` declarations and recursive relative `import "file.nqr"` graphs;
-- inferred register-value function generics;
-- allocation-free `try` / `throw` integer status propagation;
-- typed atomic load/store/exchange/compare-exchange/fence operations;
-- explicit CPU intrinsics and constrained single-instruction inline assembly.
+The CI matrix builds and tests the compiler on Linux, macOS and Windows, runs sanitizers, exercises freestanding native output and runs semantic regressions.
 
-The x86-64 backend emits freestanding assembly with `noqeri_entry(noqeri_abi*)`; it does not embed Linux syscalls, `_start`, ELF linker invocation, or an OS process model. Platform object formats, boot paths, application hosts and kernels remain integration layers outside the language.
+## Portable web objects (`.nqo`)
+
+`noqeri web` compiles checked Noqeri source into a portable ES-module-compatible `.nqo` artifact:
+
+```sh
+noqeri web src/api.nqr build/api.nqo
+```
+
+The current portable runtime exposes browser-facing JSON, URL, HTML escaping, routing, DOM, fetch, WebSocket and time helpers plus explicit host capabilities for HTTP/static serving, filesystem, environment, crypto and database access.
+
+The host boundary is intentional. Noqeri source decides application behavior while a browser or server host provides environment-specific capabilities. Raw pointers, inline assembly and native-only intrinsics are rejected by the portable web backend.
+
+`.nqo` is not a new JavaScript runtime or a claim that every Node/browser API is native Noqeri syntax. It is the current portable application target for checked Noqeri programs.
+
+## NoqeriDB (`.nqd` / `.nqdb`)
+
+NoqeriDB is a small embedded typed database included in the toolchain. It currently supports:
+
+- `int`, `real`, `bool` and `text` columns;
+- `required`, `unique` and `key` constraints;
+- `table`, `insert`, `select`, `update` and `delete` statements;
+- atomic whole-script persistence through a temporary-file commit;
+- reopening `.nqdb` files across separate CLI executions;
+- duplicate key/unique rejection.
+
+Example:
+
+```nqd
+table users {
+    id: int key,
+    name: text required,
+    active: bool required
+}
+
+insert users { id: 1, name: "Ada", active: true }
+update users set { name: "Ada Lovelace" } where id = 1
+select users where active = true
+```
+
+Run it with:
+
+```sh
+noqeri db schema.nqd app.nqdb
+```
+
+NoqeriDB is **not** currently presented as a SQLite replacement on performance, durability or concurrency. It does not yet have a WAL, production-grade concurrent transactions, a query planner or mature indexes. Those require implementation and benchmarks before such claims are justified.
+
+## Packages and registry
+
+The official registry is maintained separately at [EMN90909/noqeri-registry](https://github.com/EMN90909/noqeri-registry). The 1.0 catalog includes application-facing packages for core/std, JSON, HTTP contracts, routing, DOM, fetch, filesystem/environment, crypto contracts, DB access, time and WebSockets, plus provider contracts for PostgreSQL, SQLite interoperability, raw networking and TLS.
+
+Registry CI builds the current Noqeri compiler and type-checks every published 1.0 package entrypoint. Provider-contract packages are still labelled experimental where the underlying transport/provider is not implemented by Noqeri itself.
+
+Packages are distributed as deterministic `.nqpkg` archives with SHA-256 identities. The package ecosystem is growing; package names are not treated as proof of production maturity.
 
 ## Quick start
 
@@ -71,20 +128,10 @@ Core verification:
 
 ```sh
 ./scripts/verify_repository.sh
-./scripts/test_core.sh
+./scripts/test.sh
 ```
 
-Install with CMake through the provided wrappers:
-
-```sh
-./scripts/install.sh
-```
-
-The freestanding native release path is exercised with:
-
-```sh
-./scripts/release_check.sh
-```
+The semantic suite includes positive and negative type-safety cases, constrained generics, string escaping, `.nqo` generation, NoqeriDB CRUD/persistence/constraint checks, formatter preservation, package locking and native assembly validation.
 
 ## CLI
 
@@ -96,71 +143,57 @@ noqeri check [file.nqr]
 noqeri nir [file.nqr]
 noqeri run [file.nqr]
 noqeri build [file.nqr] [assembly]
-noqeri assemble <assembly> <object>
+noqeri web [file.nqr] [module.nqo]
+noqeri db <script.nqd> [data.nqdb]
+noqeri assemble <assembly> <object> [target]
+noqeri link <output> <object...>
+noqeri targets
 noqeri format <file.nqr>
 noqeri manifest [project.nqr]
 noqeri lock [project.nqr]
+noqeri audit [directory]
 noqeri test [directory]
 noqeri doctor [directory]
 noqeri release-check [directory]
 noqeri lsp
 ```
 
-`check`, `nir`, `run`, and `build` compile a file plus its recursively imported source graph. `lex` intentionally operates on one source file.
+`check`, `nir`, `run`, `build` and `web` compile a file plus its recursively imported source graph. `lex` intentionally operates on one source file.
+
+## Current limits
+
+Noqeri 1.0 should be read as the current project API line, not as a claim of ecosystem parity with long-established languages. Important limits include:
+
+- native machine-code/object writing is not yet implemented; the native backend emits x86-64 assembly and uses explicit assembler/linker adapters;
+- the current register allocator produces allocation plans but the established x86 emitter has not fully switched from its stack-backed virtual-register representation;
+- typed NIR/basic blocks exist, but canonical SSA with PHI insertion is not complete;
+- the LSP has project-aware diagnostics/overlays and formatting, while richer completion/rename/reference features remain incomplete;
+- PostgreSQL, TLS, raw networking and similar package surfaces are provider contracts until their underlying providers are completed;
+- NoqeriDB is intentionally small today and is not benchmarked as a replacement for SQLite/PostgreSQL.
+
+These limits are kept explicit so documentation tracks executable behavior instead of roadmap promises.
 
 ## Repository map
 
 | Area | Responsibility |
 |---|---|
 | `Grammar/` | implemented syntax contract |
-| `Include/noqeri/` | public compiler and ABI API |
+| `Include/noqeri/` | public compiler, database and ABI APIs |
 | `Parser/` | lexer/parser implementation |
-| `Compiler/` | type checking, NIR, optimization and native code generation |
+| `Compiler/` | checking, generics, NIR, optimization and target backends |
 | `Runtime/` | reference interpreter and ABI bridge |
-| `Objects/` | runtime value/object representation contracts |
-| `Modules/` | module/import ownership and future namespace evolution |
-| `Lib/` | standard-library `.nqr` source and library tests |
+| `Database/` | NoqeriDB `.nqd` parser and `.nqdb` storage engine |
 | `Programs/` | CLI, formatter, LSP, package and test tooling |
-| `Tools/` | build, fuzz, production and maintenance tooling |
+| `Tools/` | build, security/audit and maintenance tooling |
 | `tests/`, `Benchmarks/`, `examples/` | conformance, performance seeds and runnable programs |
-| `Doc/` | user-facing docs |
+| `Doc/` | user-facing language/toolchain documentation |
 | `InternalDocs/` | compiler/repository internals and testing policy |
-| `Platforms/`, `PC/`, `PCbuild/`, `Mac/`, `Android/` | optional platform-specific integration |
-| `Misc/` | release/project records |
-| `editors/` | VS Code, JetBrains/TextMate, Vim/Neovim and Sublime integration |
-| `site/` | public static project site |
-| `Brand/` | canonical noqeri logo and compact editor mark |
-
-## Project format
-
-```text
-myapp/
-├── project.nqr
-├── noqeri.lock
-├── src/
-│   ├── main.nqr
-│   └── math.nqr
-└── tests/
-    └── basic.nqr
-```
-
-Example import:
-
-```nqr
-module app.main
-import "math.nqr"
-
-print(twice(4))
-```
-
-Noqeri does not require TOML, Cargo, Rust, Python or LLVM to describe or compile a Noqeri project.
-
-## Documentation and status
-
-Start at [`Doc/README.md`](Doc/README.md), then see [`Doc/LANGUAGE_REFERENCE.md`](Doc/LANGUAGE_REFERENCE.md), [`Doc/ABI.md`](Doc/ABI.md), and [`Doc/FREESTANDING.md`](Doc/FREESTANDING.md).
-
-The language surface is **Noqeri 1.4 general systems**. The implemented subset is kept buildable and regression-tested across the bootstrap platforms; feature maturity and broader target work remain separate from the language contract.
+| `Platforms/`, `PC/`, `PCbuild/`, `Mac/`, `Android/` | platform integration work |
+| `editors/` | editor integrations |
+| `Brand/` | canonical Noqeri brand assets |
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE) and [`LEGAL.md`](LEGAL.md).
+Noqeri is distributed under **GNU GPL v3 only (GPL-3.0-only)**. See [`LICENSE`](LICENSE).
+
+Made by [**Noethric**](https://noethric.xyz).

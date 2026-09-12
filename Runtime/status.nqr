@@ -1,0 +1,20 @@
+module noqeri.runtime.status
+
+export function nqRuntimeIsError(status: isize): bool {
+    return status < 0
+}
+
+export function nqRuntimeErrorCode(status: isize): isize {
+    if status < 0 { return -status }
+    return 0
+}
+
+export function nqRuntimeThrowCode(code: isize): isize {
+    if code < 0 { return code }
+    if code == 0 { return -1 }
+    return -code
+}
+
+export function nqRuntimePropagate(status: isize): isize {
+    return status
+}

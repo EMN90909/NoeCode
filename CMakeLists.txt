@@ -10,6 +10,7 @@ set(NOQERI_FRONTEND_SOURCES
   Compiler/core.cpp
   Compiler/modules.cpp
   Compiler/type_checker.cpp
+  Compiler/lifetime.cpp
   Compiler/nir.cpp
   Compiler/optimizer.cpp
   Parser/lexer.cpp

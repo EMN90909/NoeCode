@@ -82,6 +82,18 @@ std::optional<RecordField> TypeChecker::resolveField(const Type&base,const std::
     auto r=records_.find(t.recordName);if(r==records_.end())return std::nullopt;for(const auto&f:r->second.fields)if(f.name==member)return f;return std::nullopt;
 }
 
+std::size_t TypeChecker::storageSize(const Type& type) const{
+    if(type.kind==TypeKind::Record){auto it=records_.find(type.recordName);return it==records_.end()?0:it->second.size;}
+    if(type.kind==TypeKind::Array)return type.element?storageSize(*type.element)*type.count:0;
+    return type.size();
+}
+
+std::size_t TypeChecker::storageAlignment(const Type& type) const{
+    if(type.kind==TypeKind::Record){auto it=records_.find(type.recordName);return it==records_.end()?1:it->second.alignment;}
+    if(type.kind==TypeKind::Array)return type.element?storageAlignment(*type.element):1;
+    return type.alignment();
+}
+
 bool TypeChecker::bindGeneric(const Type& pattern,const Type& actual,std::unordered_map<std::string,Type>& bindings) const{
     if(pattern.kind==TypeKind::Generic){auto it=bindings.find(pattern.genericName);if(it==bindings.end()){bindings[pattern.genericName]=actual;return true;}return canAssign(it->second,actual)&&canAssign(actual,it->second);}
     if(pattern.kind!=actual.kind){if(pattern.kind==TypeKind::Unknown||actual.kind==TypeKind::Unknown)return true;return false;}
@@ -107,7 +119,7 @@ bool TypeChecker::check(const Program&program){
     for(const auto&stmt:program.statements)if(auto r=std::dynamic_pointer_cast<RecordStmt>(stmt))records_[r->name]=RecordType{};
     for(const auto&stmt:program.statements)if(auto r=std::dynamic_pointer_cast<RecordStmt>(stmt)){
         std::size_t offset=0,maxAlign=1;auto&rt=records_[r->name];
-        for(auto&field:r->fields){Type ft=resolveType(field.typeName,field.span);std::size_t size=ft.size(),align=ft.alignment();if(ft.kind==TypeKind::Record){auto nested=records_.find(ft.recordName);if(nested!=records_.end()){size=nested->second.size;align=nested->second.alignment;}}if(size==0){diagnostics_.error("NOE-T3020",field.span,"record field '"+field.name+"' has incomplete or zero-sized type '"+field.typeName+"'","use a pointer for recursive/forward record references");size=1;}offset=(offset+align-1)/align*align;field.offset=offset;field.size=size;offset+=size;maxAlign=std::max(maxAlign,align);rt.fields.push_back(field);}rt.alignment=maxAlign;rt.size=(offset+maxAlign-1)/maxAlign*maxAlign;r->size=rt.size;r->alignment=rt.alignment;
+        for(auto&field:r->fields){Type ft=resolveType(field.typeName,field.span);std::size_t size=storageSize(ft),align=storageAlignment(ft);if(size==0){diagnostics_.error("NOE-T3020",field.span,"record field '"+field.name+"' has incomplete or zero-sized type '"+field.typeName+"'","use a pointer for recursive/forward record references");size=1;}offset=(offset+align-1)/align*align;field.offset=offset;field.size=size;offset+=size;maxAlign=std::max(maxAlign,align);rt.fields.push_back(field);}rt.alignment=maxAlign;rt.size=(offset+maxAlign-1)/maxAlign*maxAlign;r->size=rt.size;r->alignment=rt.alignment;
     }
 
     for(const auto&stmt:program.statements)if(auto fn=std::dynamic_pointer_cast<FunctionStmt>(stmt)){
@@ -144,23 +156,23 @@ Type TypeChecker::checkExpr(const ExprPtr&expr){
     if(auto e=std::dynamic_pointer_cast<ArrayExpr>(expr)){
         if(e->elements.empty()){diagnostics_.error("NOE-T3034",e->span,"cannot infer the element type of an empty array literal","add a typed non-empty initializer");return simple(TypeKind::Unknown);}
         Type element=checkExpr(e->elements.front());for(std::size_t i=1;i<e->elements.size();++i){Type t=checkExpr(e->elements[i]);if(!canAssignValue(element,t,e->elements[i]))diagnostics_.error("NOE-T3035",e->elements[i]->span,"array literal elements must have one compatible type");}
-        e->elementSize=std::max<std::size_t>(1,element.size());Type out;out.kind=TypeKind::Array;out.element=std::make_shared<Type>(element);out.count=e->elements.size();return out;
+        e->elementSize=std::max<std::size_t>(1,storageSize(element));Type out;out.kind=TypeKind::Array;out.element=std::make_shared<Type>(element);out.count=e->elements.size();return out;
     }
     if(auto e=std::dynamic_pointer_cast<NameExpr>(expr)){auto t=resolve(e->name);if(t)return*t;if(functions_.count(e->name)||e->name=="host"||e->name=="abi")return simple(TypeKind::Unknown);diagnostics_.error("NOE-T3002",e->span,"unknown symbol '"+e->name+"'");return simple(TypeKind::Unknown);}
     if(auto e=std::dynamic_pointer_cast<UnaryExpr>(expr)){
         Type t=checkExpr(e->operand);
         if(e->op==TokenKind::Try){if(!insideFunction_)diagnostics_.error("NOE-T3036",e->span,"try is only valid inside a function");if(!t.isInteger()&&t.kind!=TypeKind::Unknown)diagnostics_.error("NOE-T3037",e->span,"try expects an integer status value");if(!currentReturn_.isInteger()&&currentReturn_.kind!=TypeKind::Unknown)diagnostics_.error("NOE-T3038",e->span,"try propagation requires an integer-returning function");return t;}
         if(e->op==TokenKind::Ampersand){bool lvalue=std::dynamic_pointer_cast<NameExpr>(e->operand)||std::dynamic_pointer_cast<MemberExpr>(e->operand)||std::dynamic_pointer_cast<IndexExpr>(e->operand);if(auto u=std::dynamic_pointer_cast<UnaryExpr>(e->operand))lvalue=u->op==TokenKind::Star;if(!lvalue)diagnostics_.error("NOE-T3022",e->span,"address-of requires an addressable value");Type p;p.kind=TypeKind::Pointer;p.pointee=std::make_shared<Type>(t);return p;}
-        if(e->op==TokenKind::Star){if(t.kind!=TypeKind::Pointer||!t.pointee){diagnostics_.error("NOE-T3023",e->span,"dereference requires a pointer");return simple(TypeKind::Unknown);}e->memoryWidth=std::max<std::size_t>(1,t.pointee->size());e->volatileAccess=t.isVolatile;return*t.pointee;}
+        if(e->op==TokenKind::Star){if(t.kind!=TypeKind::Pointer||!t.pointee){diagnostics_.error("NOE-T3023",e->span,"dereference requires a pointer");return simple(TypeKind::Unknown);}e->memoryWidth=std::max<std::size_t>(1,storageSize(*t.pointee));e->volatileAccess=t.isVolatile;return*t.pointee;}
         if(e->op==TokenKind::Bang){if(t.kind!=TypeKind::Bool&&t.kind!=TypeKind::Unknown)diagnostics_.error("NOE-T3006",e->span,"operator ! requires bool");return simple(TypeKind::Bool);}
         if(!t.isNumeric()&&t.kind!=TypeKind::Unknown&&t.kind!=TypeKind::Generic)diagnostics_.error("NOE-T3006",e->span,"numeric unary operator requires a numeric type");return t;
     }
     if(auto e=std::dynamic_pointer_cast<MemberExpr>(expr)){Type b=checkExpr(e->object);auto f=resolveField(b,e->member);if(!f){diagnostics_.error("NOE-T3024",e->span,"type '"+b.name()+"' has no field '"+e->member+"'");return simple(TypeKind::Unknown);}e->offset=f->offset;e->fieldSize=f->size;if(b.kind==TypeKind::Pointer){e->volatileAccess=b.isVolatile;e->baseIsPointer=true;}return resolveType(f->typeName,e->span);}
     if(auto e=std::dynamic_pointer_cast<IndexExpr>(expr)){
         Type container=checkExpr(e->object);Type idx=checkExpr(e->index);if(!idx.isInteger()&&idx.kind!=TypeKind::Unknown)diagnostics_.error("NOE-T3025",e->index->span,"index must be an integer");
-        if(container.kind==TypeKind::Pointer&&container.pointee){e->elementSize=std::max<std::size_t>(1,container.pointee->size());e->volatileAccess=container.isVolatile;return*container.pointee;}
-        if(container.kind==TypeKind::Array&&container.element){e->elementSize=std::max<std::size_t>(1,container.element->size());return*container.element;}
-        if(container.kind==TypeKind::Slice&&container.element){e->elementSize=std::max<std::size_t>(1,container.element->size());e->baseIsSlice=true;return*container.element;}
+        if(container.kind==TypeKind::Pointer&&container.pointee){e->elementSize=std::max<std::size_t>(1,storageSize(*container.pointee));e->volatileAccess=container.isVolatile;return*container.pointee;}
+        if(container.kind==TypeKind::Array&&container.element){e->elementSize=std::max<std::size_t>(1,storageSize(*container.element));return*container.element;}
+        if(container.kind==TypeKind::Slice&&container.element){e->elementSize=std::max<std::size_t>(1,storageSize(*container.element));e->baseIsSlice=true;return*container.element;}
         diagnostics_.error("NOE-T3026",e->span,"indexing requires a pointer, array or slice");return simple(TypeKind::Unknown);
     }
     if(auto e=std::dynamic_pointer_cast<CastExpr>(expr)){Type from=checkExpr(e->value),to=resolveType(e->typeName,e->span);bool ok=(from.isNumeric()&&to.isNumeric())||(from.kind==TypeKind::Pointer&&to.kind==TypeKind::Pointer)||(from.kind==TypeKind::Pointer&&(to.kind==TypeKind::Usize||to.kind==TypeKind::Isize))||(to.kind==TypeKind::Pointer&&(from.kind==TypeKind::Usize||from.kind==TypeKind::Isize||from.kind==TypeKind::Int))||(from.kind==TypeKind::Null&&to.kind==TypeKind::Pointer);if(!ok&&from.kind!=TypeKind::Unknown&&to.kind!=TypeKind::Unknown)diagnostics_.error("NOE-T3027",e->span,"cannot cast "+from.name()+" to "+to.name());return to;}
@@ -175,13 +187,13 @@ Type TypeChecker::checkExpr(const ExprPtr&expr){
             if(e->args.size()!=1){diagnostics_.error("NOE-T3040",e->span,"len expects exactly one array or slice");return simple(TypeKind::Usize);}Type t=checkExpr(e->args[0]);if(t.kind==TypeKind::Array)e->builtinCount=t.count;else if(t.kind!=TypeKind::Slice)diagnostics_.error("NOE-T3041",e->args[0]->span,"len expects an array or slice");return simple(TypeKind::Usize);
         }
         if(name=="slice"){
-            if(e->args.size()==1){Type a=checkExpr(e->args[0]);if(a.kind!=TypeKind::Array||!a.element){diagnostics_.error("NOE-T3042",e->span,"slice(array) expects a fixed array");return simple(TypeKind::Unknown);}e->builtinCount=a.count;e->builtinWidth=a.element->size();Type s;s.kind=TypeKind::Slice;s.element=a.element;return s;}
-            if(e->args.size()==2){Type p=checkExpr(e->args[0]),n=checkExpr(e->args[1]);if(p.kind!=TypeKind::Pointer||!p.pointee){diagnostics_.error("NOE-T3043",e->args[0]->span,"slice(pointer, length) expects a pointer");return simple(TypeKind::Unknown);}if(!n.isInteger()&&n.kind!=TypeKind::Unknown)diagnostics_.error("NOE-T3044",e->args[1]->span,"slice length must be an integer");e->builtinWidth=p.pointee->size();Type s;s.kind=TypeKind::Slice;s.element=p.pointee;return s;}
+            if(e->args.size()==1){Type a=checkExpr(e->args[0]);if(a.kind!=TypeKind::Array||!a.element){diagnostics_.error("NOE-T3042",e->span,"slice(array) expects a fixed array");return simple(TypeKind::Unknown);}e->builtinCount=a.count;e->builtinWidth=storageSize(*a.element);Type s;s.kind=TypeKind::Slice;s.element=a.element;return s;}
+            if(e->args.size()==2){Type p=checkExpr(e->args[0]),n=checkExpr(e->args[1]);if(p.kind!=TypeKind::Pointer||!p.pointee){diagnostics_.error("NOE-T3043",e->args[0]->span,"slice(pointer, length) expects a pointer");return simple(TypeKind::Unknown);}if(!n.isInteger()&&n.kind!=TypeKind::Unknown)diagnostics_.error("NOE-T3044",e->args[1]->span,"slice length must be an integer");e->builtinWidth=storageSize(*p.pointee);Type s;s.kind=TypeKind::Slice;s.element=p.pointee;return s;}
             diagnostics_.error("NOE-T3045",e->span,"slice expects either an array or pointer plus length");return simple(TypeKind::Unknown);
         }
         if(name=="atomic.load"||name=="atomicLoad"||name=="atomic.store"||name=="atomicStore"||name=="atomic.exchange"||name=="atomicExchange"||name=="atomic.compareExchange"||name=="atomicCompareExchange"){
             std::size_t expected=(name.find("compare")!=std::string::npos||name.find("Compare")!=std::string::npos)?3:((name.find("store")!=std::string::npos||name.find("Store")!=std::string::npos||name.find("exchange")!=std::string::npos||name.find("Exchange")!=std::string::npos)?2:1);
-            if(e->args.size()!=expected){diagnostics_.error("NOE-T3046",e->span,"wrong argument count for atomic operation");return simple(TypeKind::Unknown);}Type p=checkExpr(e->args[0]);if(p.kind!=TypeKind::Pointer||!p.pointee){diagnostics_.error("NOE-T3047",e->args[0]->span,"atomic operation requires a pointer");return simple(TypeKind::Unknown);}Type value=*p.pointee;if((!value.isInteger()&&value.kind!=TypeKind::Pointer&&value.kind!=TypeKind::Bool)||value.size()>8){diagnostics_.error("NOE-T3048",e->args[0]->span,"atomic values must be integer, bool or pointer sized at most 8 bytes");}e->builtinWidth=std::max<std::size_t>(1,value.size());for(std::size_t i=1;i<e->args.size();++i){Type a=checkExpr(e->args[i]);if(!canAssignValue(value,a,e->args[i]))diagnostics_.error("NOE-T3049",e->args[i]->span,"atomic value type mismatch");}if(name.find("store")!=std::string::npos||name.find("Store")!=std::string::npos)return simple(TypeKind::Void);return value;
+            if(e->args.size()!=expected){diagnostics_.error("NOE-T3046",e->span,"wrong argument count for atomic operation");return simple(TypeKind::Unknown);}Type p=checkExpr(e->args[0]);if(p.kind!=TypeKind::Pointer||!p.pointee){diagnostics_.error("NOE-T3047",e->args[0]->span,"atomic operation requires a pointer");return simple(TypeKind::Unknown);}Type value=*p.pointee;auto valueSize=storageSize(value);if((!value.isInteger()&&value.kind!=TypeKind::Pointer&&value.kind!=TypeKind::Bool)||valueSize>8){diagnostics_.error("NOE-T3048",e->args[0]->span,"atomic values must be integer, bool or pointer sized at most 8 bytes");}e->builtinWidth=std::max<std::size_t>(1,valueSize);for(std::size_t i=1;i<e->args.size();++i){Type a=checkExpr(e->args[i]);if(!canAssignValue(value,a,e->args[i]))diagnostics_.error("NOE-T3049",e->args[i]->span,"atomic value type mismatch");}if(name.find("store")!=std::string::npos||name.find("Store")!=std::string::npos)return simple(TypeKind::Void);return value;
         }
         if(name=="atomic.fence"||name=="atomicFence"){if(!e->args.empty())diagnostics_.error("NOE-T3050",e->span,"atomic fence takes no arguments");return simple(TypeKind::Void);}
         if(name=="asm"){

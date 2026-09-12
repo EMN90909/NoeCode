@@ -1,0 +1,51 @@
+module noqeri.parser.ascii
+
+export function nqLexIsSpace(value: u8): bool {
+    return value == 32 as u8 || value == 9 as u8 || value == 10 as u8 || value == 13 as u8
+}
+
+export function nqLexIsDigit(value: u8): bool {
+    return value >= 48 as u8 && value <= 57 as u8
+}
+
+export function nqLexIsUpper(value: u8): bool {
+    return value >= 65 as u8 && value <= 90 as u8
+}
+
+export function nqLexIsLower(value: u8): bool {
+    return value >= 97 as u8 && value <= 122 as u8
+}
+
+export function nqLexIsIdentifierStart(value: u8): bool {
+    return nqLexIsUpper(value) || nqLexIsLower(value) || value == 95 as u8
+}
+
+export function nqLexIsIdentifierContinue(value: u8): bool {
+    return nqLexIsIdentifierStart(value) || nqLexIsDigit(value)
+}
+
+export function nqLexSkipWhitespace(source: []u8, start: usize): usize {
+    let index: usize = start
+    while index < len(source) && nqLexIsSpace(source[index]) {
+        index = index + 1
+    }
+    return index
+}
+
+export function nqLexScanIdentifier(source: []u8, start: usize): usize {
+    if start >= len(source) { return start }
+    if !nqLexIsIdentifierStart(source[start]) { return start }
+    let index: usize = start + 1
+    while index < len(source) && nqLexIsIdentifierContinue(source[index]) {
+        index = index + 1
+    }
+    return index
+}
+
+export function nqLexScanDigits(source: []u8, start: usize): usize {
+    let index: usize = start
+    while index < len(source) && nqLexIsDigit(source[index]) {
+        index = index + 1
+    }
+    return index
+}

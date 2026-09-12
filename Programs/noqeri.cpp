@@ -1,16 +1,75 @@
 #include "noe.hpp"
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
+#include <string>
+#include <vector>
 using namespace noe;
-static void usage(){std::cout<<"noqeri compiler "<<NOQERI_COMPILER_VERSION<<"\nusage: noqeri <command> [path]\n\n"<<"  new <name> [dir]          create a noqeri project\n"<<"  lex <file>                 print lexer tokens\n"<<"  check [file]               parse and type-check source/import graph\n"<<"  nir [file]                 lower and optimize source/import graph to NIR\n"<<"  run [file]                 execute through the reference runtime\n"<<"  build [file] [assembly]    emit freestanding x86-64 assembly\n"<<"  assemble <asm> <object>    run configured target assembler adapter\n"<<"  format <file>              canonical-format source in place\n"<<"  manifest [file]            read project.nqr\n"<<"  lock [file]                generate deterministic noqeri.lock\n"<<"  test [dir]                 compile and run .nqr tests\n"<<"  doctor [dir]               verify repository health\n"<<"  release-check [dir]        alias for doctor after external tests\n"<<"  lsp                        run JSON-RPC language server\n";}
-struct SourceSelection{std::filesystem::path source;std::string projectName;};
-static std::optional<SourceSelection>selectSource(int argc,char**argv,Diagnostics&d){if(argc>=3)return SourceSelection{argv[2],std::filesystem::path(argv[2]).stem().string()};auto m=PackageManager{}.loadManifest("project.nqr",d);if(!m)return std::nullopt;return SourceSelection{m->entry,m->name};}
-int main(int argc,char**argv){if(argc<2){usage();return 0;}std::string cmd=argv[1];if(cmd=="--version"||cmd=="version"){std::cout<<"noqeri "<<NOQERI_COMPILER_VERSION<<"\nlanguage="<<NOQERI_LANGUAGE_VERSION<<"\ntarget="<<NOQERI_SUPPORTED_TARGET<<"\nabi="<<NOQERI_ABI_VERSION<<"\n";return 0;}if(cmd=="lsp")return LanguageServer{}.run();if(cmd=="doctor"||cmd=="release-check")return runProductionDoctor(argc>=3?argv[2]:".");try{
-if(cmd=="assemble"){if(argc<4){usage();return 1;}Diagnostics d;if(!LinkerDriver{}.link(argv[2],argv[3],d)){d.print(argv[2]);return 1;}std::cout<<"assembled target object: "<<argv[3]<<"\n";return 0;}
-if(cmd=="new"){if(argc<3){std::cerr<<"NQR-C0002: new requires a project name\n";return 1;}std::filesystem::path dir=argc>=4?argv[3]:argv[2];Diagnostics d;if(!PackageManager{}.createProject(dir,argv[2],d)){d.print(dir.string());return 1;}std::cout<<"created noqeri project "<<dir<<"\n";return 0;}
-if(cmd=="test")return TestRunner{}.runDirectory(argc>=3?argv[2]:"tests");
-if(cmd=="manifest"||cmd=="lock"){std::filesystem::path path=argc>=3?argv[2]:"project.nqr";Diagnostics d;auto p=PackageManager{}.loadManifest(path,d);if(!p){d.print(path.string());return 1;}if(cmd=="manifest"){std::cout<<"name="<<p->name<<"\nversion="<<p->version<<"\nentry="<<p->entry<<"\nprofile="<<p->profile<<"\ntarget="<<p->target<<"\ndependencies="<<p->dependencies.size()<<"\n";return 0;}auto lock=path.parent_path()/"noqeri.lock";if(!PackageManager{}.writeLock(*p,lock,d)){d.print(path.string());return 1;}std::cout<<"wrote "<<lock<<"\n";return 0;}
-if(cmd=="format"){if(argc<3){usage();return 1;}std::filesystem::path path=argv[2];auto source=readTextFile(path);Diagnostics d;auto text=Formatter{}.format(source,d);if(d.hasErrors()){d.print(path.string());return 1;}std::ofstream out(path,std::ios::trunc);out<<text;std::cout<<"formatted "<<path<<"\n";return 0;}
-Diagnostics selectionDiagnostics;auto selected=selectSource(argc,argv,selectionDiagnostics);if(!selected){selectionDiagnostics.print("project.nqr");return 1;}auto path=selected->source;if(cmd=="lex"){auto source=readTextFile(path);Diagnostics d;Lexer l(source,d);auto tokens=l.lex();if(d.hasErrors()){d.print(path.string());return 1;}for(auto&t:tokens)std::cout<<t.span.line<<':'<<t.span.column<<"  "<<tokenKindName(t.kind)<<"  "<<t.lexeme<<"\n";return 0;}auto c=compileFile(path);if(c.diagnostics.hasErrors()){c.diagnostics.print(path.string());return 1;}if(cmd=="check"){std::cout<<"check succeeded: "<<path<<"\n";return 0;}if(cmd=="nir"){std::cout<<printNir(c.nir);return 0;}if(cmd=="run")return Interpreter{}.run(c.nir);if(cmd=="build"){std::filesystem::path output=argc>=4?std::filesystem::path(argv[3]):std::filesystem::path("build")/(selected->projectName+".s");if(output.extension().empty())output+=".s";Diagnostics d;if(!NativeBackend{}.emitAssembly(c.nir,output,d)){d.print(path.string());return 1;}std::cout<<"emitted freestanding Noqeri x86-64 assembly: "<<output<<"\nentry=noqeri_entry(noqeri_abi*)\n";return 0;}usage();return 1;}catch(const std::exception&e){std::cerr<<"NQR-C0001: "<<e.what()<<"\n";return 1;}}
+
+namespace {
+void usage(){std::cout<<"noqeri compiler "<<NOQERI_COMPILER_VERSION<<"\nusage: noqeri <command> [options]\n\n"<<"  new <name> [dir]                 create a Noqeri project\n"<<"  lex <file>                        print lexer tokens\n"<<"  check [file] [-O...]              parse and type-check module graph\n"<<"  nir [file] [-O...]                lower module graph to NIR\n"<<"  run [file] [-O...]                execute through reference runtime\n"<<"  build [file] [assembly] [-O...]   emit target assembly\n"<<"  assemble <asm> <object> [target]  run assembler adapter without a shell\n"<<"  link <output> <object...>          run explicit linker adapter\n"<<"  targets                           list compiler target contracts\n"<<"  format <file>                     canonical-format source in place\n"<<"  manifest [file]                   read project.nqr\n"<<"  lock [file]                       generate content-addressed noqeri.lock\n"<<"  test [dir]                        compile and run .nqr tests\n"<<"  doctor [dir]                      verify repository health\n"<<"  release-check [dir]               repository production checks\n"<<"  lsp                               run JSON-RPC language server\n\noptimization: -O0 -O1 -O2 -O3 -Os -Oz\n";}
+
+std::optional<OptimizationLevel> parseOptimization(const std::string&arg){if(arg=="-O0")return OptimizationLevel::O0;if(arg=="-O1")return OptimizationLevel::O1;if(arg=="-O2")return OptimizationLevel::O2;if(arg=="-O3")return OptimizationLevel::O3;if(arg=="-Os")return OptimizationLevel::Os;if(arg=="-Oz")return OptimizationLevel::Oz;return std::nullopt;}
+CompileOptions optionsFromArgs(int argc,char**argv,const std::string&target){CompileOptions options;options.target=target.empty()?NOQERI_DEFAULT_TARGET:target;for(int i=2;i<argc;++i)if(auto level=parseOptimization(argv[i]))options.optimization=*level;return options;}
+struct SourceSelection{std::filesystem::path source;std::string projectName;std::string target=NOQERI_DEFAULT_TARGET;};
+std::optional<SourceSelection>selectSource(int argc,char**argv,Diagnostics&d){if(argc>=3&&argv[2][0]!='-')return SourceSelection{argv[2],std::filesystem::path(argv[2]).stem().string(),NOQERI_DEFAULT_TARGET};auto manifest=PackageManager{}.loadManifest("project.nqr",d);if(!manifest)return std::nullopt;return SourceSelection{manifest->entry,manifest->name,manifest->target};}
+}
+
+int main(int argc,char**argv){
+    if(argc<2){usage();return 0;}
+    const std::string cmd=argv[1];
+    if(cmd=="--version"||cmd=="version"){
+        std::cout<<"noqeri "<<NOQERI_COMPILER_VERSION<<"\nlanguage="<<NOQERI_LANGUAGE_VERSION<<"\nedition="<<NOQERI_EDITION<<"\nabi="<<NOQERI_ABI_VERSION<<"\ndefault-target="<<NOQERI_DEFAULT_TARGET<<"\npackage-format="<<NOQERI_PACKAGE_FORMAT<<"\nregistry-protocol="<<NOQERI_REGISTRY_PROTOCOL<<"\n";
+        return 0;
+    }
+    if(cmd=="targets"){
+        for(const auto&target:TargetRegistry::supported()){auto info=TargetRegistry::resolve(target);std::cout<<target<<" pointer="<<(info.pointerWidth*8)<<" stack-align="<<info.stackAlignment<<(info.triple.isFreestanding()?" freestanding":" hosted-adapter")<<"\n";}
+        return 0;
+    }
+    if(cmd=="lsp")return LanguageServer{}.run();
+    if(cmd=="doctor"||cmd=="release-check")return runProductionDoctor(argc>=3?argv[2]:".");
+    try{
+        if(cmd=="assemble"){
+            if(argc<4){usage();return 1;}
+            const auto target=TargetTriple::parse(argc>=5?argv[4]:NOQERI_DEFAULT_TARGET);Diagnostics d;
+            if(!AssemblerDriver{}.assemble(argv[2],argv[3],target,d)){d.print(argv[2]);return 1;}
+            std::cout<<"assembled target object: "<<argv[3]<<" target="<<target.str()<<"\n";return 0;
+        }
+        if(cmd=="link"){
+            if(argc<4){usage();return 1;}
+            std::vector<std::filesystem::path>objects;for(int i=3;i<argc;++i)objects.emplace_back(argv[i]);Diagnostics d;
+            if(!LinkerDriver{}.linkObjects(objects,argv[2],TargetTriple::parse(NOQERI_DEFAULT_TARGET),d)){d.print(argv[2]);return 1;}
+            std::cout<<"linked artifact: "<<argv[2]<<"\n";return 0;
+        }
+        if(cmd=="new"){
+            if(argc<3){std::cerr<<"NQR-C0002: new requires a project name\n";return 1;}
+            std::filesystem::path dir=argc>=4?argv[3]:argv[2];Diagnostics d;if(!PackageManager{}.createProject(dir,argv[2],d)){d.print(dir.string());return 1;}std::cout<<"created Noqeri project "<<dir<<"\n";return 0;
+        }
+        if(cmd=="test")return TestRunner{}.runDirectory(argc>=3?argv[2]:"tests");
+        if(cmd=="manifest"||cmd=="lock"){
+            std::filesystem::path path=argc>=3?argv[2]:"project.nqr";Diagnostics d;auto p=PackageManager{}.loadManifest(path,d);if(!p){d.print(path.string());return 1;}
+            if(cmd=="manifest"){
+                std::cout<<"name="<<p->name<<"\nversion="<<p->version<<"\nedition="<<p->edition<<"\nentry="<<p->entry<<"\nprofile="<<p->profile<<"\ntarget="<<p->target<<"\nregistry="<<p->registry<<"\ndependencies="<<p->dependencySpecs.size()<<"\n";return 0;
+            }
+            auto lock=path.parent_path()/"noqeri.lock";if(!PackageManager{}.writeLock(*p,lock,d)){d.print(path.string());return 1;}std::cout<<"wrote "<<lock<<"\n";return 0;
+        }
+        if(cmd=="format"){
+            if(argc<3){usage();return 1;}std::filesystem::path path=argv[2];auto source=readTextFile(path);Diagnostics d;auto text=Formatter{}.format(source,d);if(d.hasErrors()){d.print(path.string());return 1;}std::ofstream out(path,std::ios::trunc);out<<text;std::cout<<"formatted "<<path<<"\n";return 0;
+        }
+
+        Diagnostics selectionDiagnostics;auto selected=selectSource(argc,argv,selectionDiagnostics);if(!selected){selectionDiagnostics.print("project.nqr");return 1;}auto path=selected->source;
+        if(cmd=="lex"){
+            auto source=readTextFile(path);Diagnostics d;Lexer lexer(source,d);auto tokens=lexer.lex();if(d.hasErrors()){d.print(path.string());return 1;}for(const auto&t:tokens)std::cout<<t.span.line<<':'<<t.span.column<<"  "<<tokenKindName(t.kind)<<"  "<<t.lexeme<<"\n";return 0;
+        }
+        auto options=optionsFromArgs(argc,argv,selected->target);auto compilation=compileFile(path,options);if(compilation.diagnostics.hasErrors()){compilation.diagnostics.print(path.string());return 1;}
+        if(cmd=="check"){std::cout<<"check succeeded: "<<path<<" modules="<<(compilation.modules?compilation.modules->modules().size():1)<<" target="<<options.target<<"\n";return 0;}
+        if(cmd=="nir"){std::cout<<printNir(compilation.nir);return 0;}
+        if(cmd=="run")return Interpreter{}.run(compilation.nir);
+        if(cmd=="build"){
+            const auto target=TargetRegistry::resolve(options.target);if(target.triple.architecture!=Architecture::X86_64){std::cerr<<"NQR-K5120: native backend currently implements x86_64 lowering; target contract "<<options.target<<" is recognized but has no backend yet\n";return 1;}
+            std::filesystem::path output=argc>=4&&argv[3][0]!='-'?std::filesystem::path(argv[3]):std::filesystem::path("build")/(selected->projectName+".s");if(output.extension().empty())output+=".s";Diagnostics d;if(!NativeBackend{}.emitAssembly(compilation.nir,output,d)){d.print(path.string());return 1;}std::cout<<"emitted Noqeri x86-64 assembly: "<<output<<"\ntarget="<<options.target<<"\nentry=noqeri_entry(noqeri_abi*)\n";return 0;
+        }
+        usage();return 1;
+    }catch(const std::exception&e){std::cerr<<"NQR-C0001: "<<e.what()<<"\n";return 1;}
+}

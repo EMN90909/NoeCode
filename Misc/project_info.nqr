@@ -1,0 +1,6 @@
+module noqeri.misc.project_info
+
+export function nqProjectLanguageMajor(): int { return 1 }
+export function nqProjectAbiMajor(): int { return 2 }
+export function nqProjectIsBootstrapCompiler(): bool { return true }
+export function nqProjectPrefersNoqeriLibraries(): bool { return true }

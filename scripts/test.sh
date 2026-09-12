@@ -114,6 +114,20 @@ if [ "$valid_output" != '8080
   exit 1
 fi
 
+# String literals are decoded by the language frontend before interpretation/codegen.
+cat > build/string_escapes.nqr <<'EOF'
+print("{\"status\":\"ok\"}")
+print("line\nbreak")
+EOF
+string_output="$(./build/noqeri run build/string_escapes.nqr)"
+if [ "$string_output" != '{"status":"ok"}
+line
+break' ]; then
+  echo "string escape decoding regression" >&2
+  printf 'actual:\n%s\n' "$string_output" >&2
+  exit 1
+fi
+
 # Constrained generics must produce concrete per-type instances and preserve behavior.
 generic_output="$(./build/noqeri run tests/generics_constraints.nqr)"
 if [ "$generic_output" != '9
@@ -140,6 +154,15 @@ fi
 if command -v node >/dev/null 2>&1; then
   node --check build/web_module.mjs
 fi
+cat > build/web_json.nqr <<'EOF'
+export function payload(): string {
+    return "{\"status\":\"ok\"}"
+}
+EOF
+./build/noqeri web build/web_json.nqr build/web_json.mjs >/dev/null
+if command -v node >/dev/null 2>&1; then
+  node --input-type=module -e 'import("./build/web_json.mjs").then(m => { const v=JSON.parse(m.payload()); if(v.status!=="ok") process.exit(1) })'
+fi
 cat > build/invalid_web_native.nqr <<'EOF'
 export function bad(): void {
     asm("nop")
@@ -148,6 +171,44 @@ EOF
 ./build/noqeri check build/invalid_web_native.nqr >/dev/null
 if ./build/noqeri web build/invalid_web_native.nqr build/invalid_web_native.mjs >/dev/null 2>&1; then
   echo "web backend accepted native-only asm capability" >&2
+  exit 1
+fi
+
+# NoqeriDB must execute CRUD, enforce key uniqueness, and persist data between scripts.
+rm -f build/noqeridb-smoke.nqdb
+cat > build/noqeridb_smoke.nqd <<'EOF'
+table users {
+    id: int key,
+    name: text required,
+    active: bool required
+}
+delete users
+insert users { id: 1, name: "Ada", active: true }
+insert users { id: 2, name: "Linus", active: false }
+update users set { name: "Ada Lovelace" } where id = 1
+select users where active = true
+EOF
+db_output="$(./build/noqeri db build/noqeridb_smoke.nqd build/noqeridb-smoke.nqdb)"
+expected_db="$(printf 'id\tname\tactive\n1\tAda Lovelace\ttrue')"
+if [ "$db_output" != "$expected_db" ]; then
+  echo "NoqeriDB CRUD output regression" >&2
+  printf 'expected:\n%s\nactual:\n%s\n' "$expected_db" "$db_output" >&2
+  exit 1
+fi
+cat > build/noqeridb_readback.nqd <<'EOF'
+select users where id = 2
+EOF
+readback="$(./build/noqeri db build/noqeridb_readback.nqd build/noqeridb-smoke.nqdb)"
+expected_readback="$(printf 'id\tname\tactive\n2\tLinus\tfalse')"
+if [ "$readback" != "$expected_readback" ]; then
+  echo "NoqeriDB persistence regression" >&2
+  exit 1
+fi
+cat > build/noqeridb_duplicate.nqd <<'EOF'
+insert users { id: 2, name: "Duplicate", active: true }
+EOF
+if ./build/noqeri db build/noqeridb_duplicate.nqd build/noqeridb-smoke.nqdb >/dev/null 2>&1; then
+  echo "NoqeriDB accepted duplicate key" >&2
   exit 1
 fi
 
@@ -219,4 +280,4 @@ case "$(uname -s)-$(uname -m)" in
     ;;
 esac
 
-echo "semantic, type-safety, constrained-generics, web, lifetime, package, formatter, target, and native codegen tests passed"
+echo "semantic, type-safety, constrained-generics, string, web, NoqeriDB, lifetime, package, formatter, target, and native codegen tests passed"

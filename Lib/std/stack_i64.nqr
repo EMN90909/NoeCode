@@ -1,0 +1,21 @@
+module noqeri.std.stack_i64
+
+export function nqStackPushI64(values: *i64, count: usize, capacity: usize, value: i64): isize {
+    if count >= capacity { return -1 }
+    values[count] = value
+    return (count + 1) as isize
+}
+
+export function nqStackPeekI64(values: *i64, count: usize, fallback: i64): i64 {
+    if count == 0 { return fallback }
+    return values[count - 1]
+}
+
+export function nqStackPopCountI64(count: usize): usize {
+    if count == 0 { return 0 as usize }
+    return count - 1
+}
+
+export function nqStackClearI64(): usize {
+    return 0 as usize
+}

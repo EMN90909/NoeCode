@@ -1,14 +1,10 @@
 #!/usr/bin/env sh
 set -eu
 
-cat <<'NOQERI'
-███╗   ██╗ ██████╗  ██████╗ ███████╗██████╗ ██╗
-████╗  ██║██╔═══██╗██╔═══██╗██╔════╝██╔══██╗██║
-██╔██╗ ██║██║   ██║██║   ██║█████╗  ██████╔╝██║
-██║╚██╗██║██║   ██║██║▄▄ ██║██╔══╝  ██╔══██╗██║
-██║ ╚████║╚██████╔╝╚██████╔╝███████╗██║  ██║██║
-╚═╝  ╚═══╝ ╚═════╝  ╚══▀▀═╝ ╚══════╝╚═╝  ╚═╝╚═╝
-NOQERI
+REPO_ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+if [ -f "$REPO_ROOT/Brand/noqeri-banner.txt" ]; then
+  cat "$REPO_ROOT/Brand/noqeri-banner.txt"
+fi
 
 BUILD_DIR="${BUILD_DIR:-build}"
 BUILD_TYPE="${BUILD_TYPE:-Release}"
@@ -116,6 +112,7 @@ if [ -n "$remaining" ]; then
   exit 2
 fi
 
+cd "$REPO_ROOT"
 printf 'building Noqeri bootstrap (%s)\n' "$BUILD_TYPE"
 cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" --parallel
@@ -124,5 +121,5 @@ printf 'noqeri bootstrap built in %s\n' "$BUILD_DIR"
 if [ -x "$BUILD_DIR/noqeri" ]; then
   "$BUILD_DIR/noqeri" --version
 elif [ -x "$BUILD_DIR/$BUILD_TYPE/noqeri" ]; then
-  "$BUILD_DIR/$BUILD_TYPE/noqeri" --version
+  "$BUILD_DIR/$BuildType/noqeri" --version
 fi

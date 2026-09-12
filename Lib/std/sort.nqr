@@ -1,0 +1,49 @@
+module noqeri.std.sort
+
+export function nqInsertionSortI64(values: []i64): void {
+    let index: usize = 1 as usize
+    while index < len(values) {
+        let current: i64 = values[index]
+        let cursor: usize = index
+        while cursor > 0 && values[cursor - 1] > current {
+            values[cursor] = values[cursor - 1]
+            cursor = cursor - 1
+        }
+        values[cursor] = current
+        index = index + 1
+    }
+}
+
+export function nqInsertionSortDescendingI64(values: []i64): void {
+    let index: usize = 1 as usize
+    while index < len(values) {
+        let current: i64 = values[index]
+        let cursor: usize = index
+        while cursor > 0 && values[cursor - 1] < current {
+            values[cursor] = values[cursor - 1]
+            cursor = cursor - 1
+        }
+        values[cursor] = current
+        index = index + 1
+    }
+}
+
+export function nqIsSortedI64(values: []i64): bool {
+    if len(values) < 2 { return true }
+    let index: usize = 1 as usize
+    while index < len(values) {
+        if values[index - 1] > values[index] { return false }
+        index = index + 1
+    }
+    return true
+}
+
+export function nqIsSortedDescendingI64(values: []i64): bool {
+    if len(values) < 2 { return true }
+    let index: usize = 1 as usize
+    while index < len(values) {
+        if values[index - 1] < values[index] { return false }
+        index = index + 1
+    }
+    return true
+}

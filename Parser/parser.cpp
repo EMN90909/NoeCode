@@ -2,7 +2,30 @@
 #include <stdexcept>
 
 namespace noe {
-namespace { struct ParseError:std::runtime_error{using std::runtime_error::runtime_error;}; }
+namespace {
+struct ParseError:std::runtime_error{using std::runtime_error::runtime_error;};
+
+std::string decodeStringLiteral(const std::string& lexeme){
+    if(lexeme.size()<2)return {};
+    std::string out;
+    out.reserve(lexeme.size()-2);
+    for(std::size_t i=1;i+1<lexeme.size();++i){
+        char c=lexeme[i];
+        if(c!='\\'||i+2>=lexeme.size()){out+=c;continue;}
+        char escaped=lexeme[++i];
+        switch(escaped){
+            case '\\':out+='\\';break;
+            case '"':out+='"';break;
+            case 'n':out+='\n';break;
+            case 'r':out+='\r';break;
+            case 't':out+='\t';break;
+            case '0':out+='\0';break;
+            default:out+=escaped;break;
+        }
+    }
+    return out;
+}
+}
 
 Parser::Parser(std::vector<Token> tokens,Diagnostics& diagnostics):tokens_(std::move(tokens)),diagnostics_(diagnostics){}
 
@@ -66,8 +89,7 @@ StmtPtr Parser::moduleDeclaration(){
 
 StmtPtr Parser::importDeclaration(){
     const Token& path=consume(TokenKind::String,"expected quoted import path, for example import \"math.nqr\"");
-    auto s=path.lexeme;
-    auto i=std::make_shared<ImportStmt>();i->span=path.span;i->path=s.size()>=2?s.substr(1,s.size()-2):std::string{};
+    auto i=std::make_shared<ImportStmt>();i->span=path.span;i->path=decodeStringLiteral(path.lexeme);
     match({TokenKind::Semicolon});return i;
 }
 
@@ -170,7 +192,7 @@ ExprPtr Parser::primary(){
     if(match({TokenKind::Float})){auto x=std::make_shared<LiteralExpr>();x->span=previous().span;x->value=std::stod(previous().lexeme);return x;}
     if(match({TokenKind::True,TokenKind::False})){auto x=std::make_shared<LiteralExpr>();x->span=previous().span;x->value=previous().kind==TokenKind::True;return x;}
     if(match({TokenKind::Null})){auto x=std::make_shared<LiteralExpr>();x->span=previous().span;x->value=std::monostate{};return x;}
-    if(match({TokenKind::String})){auto x=std::make_shared<LiteralExpr>();x->span=previous().span;auto s=previous().lexeme;x->value=s.size()>=2?s.substr(1,s.size()-2):std::string{};return x;}
+    if(match({TokenKind::String})){auto x=std::make_shared<LiteralExpr>();x->span=previous().span;x->value=decodeStringLiteral(previous().lexeme);return x;}
     if(match({TokenKind::Identifier})){auto x=std::make_shared<NameExpr>();x->span=previous().span;x->name=previous().lexeme;return x;}
     if(match({TokenKind::LBracket})){
         auto a=std::make_shared<ArrayExpr>();a->span=previous().span;

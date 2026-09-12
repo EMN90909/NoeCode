@@ -12,5 +12,6 @@
 #include "generics.hpp"
 #include "web.hpp"
 #include "compiler.hpp"
+#include "workspace.hpp"
 #include "tools.hpp"
 namespace noqeri = noe;

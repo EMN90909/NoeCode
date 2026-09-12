@@ -1,0 +1,20 @@
+module noqeri.std.range
+
+export function nqRangeWithin(offset: usize, count: usize, capacity: usize): bool {
+    if offset > capacity { return false }
+    return count <= capacity - offset
+}
+
+export function nqRangeOverlap(aStart: usize, aCount: usize, bStart: usize, bCount: usize): bool {
+    if aCount == 0 || bCount == 0 { return false }
+    if aStart <= bStart {
+        return bStart - aStart < aCount
+    }
+    return aStart - bStart < bCount
+}
+
+export function nqRangeClampIndex(index: usize, count: usize): usize {
+    if count == 0 { return 0 as usize }
+    if index >= count { return count - 1 }
+    return index
+}

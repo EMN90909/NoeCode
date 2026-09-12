@@ -25,11 +25,13 @@ The repository no longer uses Markdown placeholders as substitutes for these imp
 
 The following C++ remains intentional bootstrap/host infrastructure rather than application library code:
 
-- `Parser/` and `Compiler/`: source frontend, checking, NIR, optimization and code generation.
+- `Parser/` and the main `Compiler/` sources: source frontend, checking, NIR, optimization and code generation.
 - `Runtime/`: the reference NIR interpreter and ABI bridge used to bootstrap and test Noqeri programs.
 - `Programs/`: CLI/LSP/formatter/package/test host adapters.
-- `Database/noqeridb.cpp`: compatibility adapter for the existing `.nqd` grammar and persistent `.nqdb` file format. Database algorithms are being moved into `Database/noqeridb.nqr`, but deleting this adapter today would remove working typed text/real/bool tables and persistence before equivalent typed filesystem capabilities exist in Noqeri.
-- `Tools/security/audit.cpp`: repository/package-lock scanner. Reusable security policy belongs in Noqeri; the scanner still needs host filesystem traversal.
+- `Compiler/bootstrap/noqeridb_host.cpp`: compatibility adapter for the existing `.nqd` grammar and persistent `.nqdb` file format. Database algorithms are being moved into `Database/noqeridb.nqr`, but deleting this adapter today would remove working typed text/real/bool tables and persistence before equivalent typed filesystem capabilities exist in Noqeri.
+- `Compiler/bootstrap/security_audit_host.cpp`: repository/package-lock scanner. Reusable security policy belongs in Noqeri; the scanner still needs host filesystem traversal.
+
+The `Database/` and `Tools/security/` implementation directories are therefore Noqeri-owned; their C++ environment bridges are isolated under `Compiler/bootstrap/`.
 
 That distinction is deliberate: **do not rewrite a working host boundary in Noqeri by replacing it with an unimplemented filesystem/network primitive.** Move logic inward as the language gains the capability to execute it, while keeping interoperability at a narrow bootstrap edge.
 

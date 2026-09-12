@@ -1,0 +1,8 @@
+record Pair {
+    first: u32;
+    second: u64;
+}
+
+function read_second(items: *Pair, index: usize): u64 {
+    return items[index].second
+}

@@ -1,14 +1,34 @@
 #!/usr/bin/env sh
 set -eu
 
+STARTED_AT=$(date +%s)
 REPO_ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
-if [ -f "$REPO_ROOT/Brand/noqeri-banner.txt" ]; then
-  cat "$REPO_ROOT/Brand/noqeri-banner.txt"
-fi
-
 BUILD_DIR="${BUILD_DIR:-build}"
 BUILD_TYPE="${BUILD_TYPE:-Release}"
 ASSUME_YES="${NOQERI_INSTALL_MISSING:-0}"
+
+show_banner() {
+  if [ -f "$REPO_ROOT/Brand/noqeri-banner.txt" ]; then
+    cat "$REPO_ROOT/Brand/noqeri-banner.txt"
+  fi
+}
+
+format_elapsed() {
+  seconds="$1"
+  hours=$((seconds / 3600))
+  minutes=$(((seconds % 3600) / 60))
+  secs=$((seconds % 60))
+  printf '%02d:%02d:%02d' "$hours" "$minutes" "$secs"
+}
+
+show_next_steps() {
+  compiler="$1"
+  printf '\nHow to use:\n'
+  printf '  %s --version\n' "$compiler"
+  printf '  %s run examples/hello.nqr\n' "$compiler"
+  printf '  %s check examples/hello.nqr\n' "$compiler"
+  printf '  ctest --test-dir %s -C %s --output-on-failure\n' "$BUILD_DIR" "$BUILD_TYPE"
+}
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -73,6 +93,7 @@ install_macos_prerequisites() {
   fi
 }
 
+show_banner
 missing="$(missing_items)"
 if [ -n "$missing" ]; then
   echo "Noqeri needs the following missing build prerequisite(s): $missing"
@@ -116,10 +137,25 @@ cd "$REPO_ROOT"
 printf 'building Noqeri bootstrap (%s)\n' "$BUILD_TYPE"
 cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" --parallel
-printf 'noqeri bootstrap built in %s\n' "$BUILD_DIR"
 
+compiler=""
 if [ -x "$BUILD_DIR/noqeri" ]; then
-  "$BUILD_DIR/noqeri" --version
+  compiler="$BUILD_DIR/noqeri"
 elif [ -x "$BUILD_DIR/$BUILD_TYPE/noqeri" ]; then
-  "$BUILD_DIR/$BUILD_TYPE/noqeri" --version
+  compiler="$BUILD_DIR/$BUILD_TYPE/noqeri"
 fi
+
+if [ -z "$compiler" ]; then
+  echo "build completed but noqeri was not found in $BUILD_DIR" >&2
+  exit 1
+fi
+
+elapsed=$(format_elapsed $(($(date +%s) - STARTED_AT)))
+printf '\n'
+show_banner
+printf 'Noqeri build worked.\n'
+printf 'Time taken: %s\n' "$elapsed"
+printf 'Compiler: %s\n\n' "$compiler"
+printf 'Version:\n'
+"$compiler" --version
+show_next_steps "$compiler"

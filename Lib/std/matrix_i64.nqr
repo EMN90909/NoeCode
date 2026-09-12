@@ -1,0 +1,29 @@
+module noqeri.std.matrix_i64
+
+export function nqMatrixIndex(row: usize, column: usize, columns: usize): usize {
+    return row * columns + column
+}
+
+export function nqMatrixInBounds(row: usize, column: usize, rows: usize, columns: usize): bool {
+    return row < rows && column < columns
+}
+
+export function nqMatrixGetI64(values: *i64, rows: usize, columns: usize, row: usize, column: usize): i64 {
+    if !nqMatrixInBounds(row, column, rows, columns) { return 0 as i64 }
+    return values[nqMatrixIndex(row, column, columns)]
+}
+
+export function nqMatrixSetI64(values: *i64, rows: usize, columns: usize, row: usize, column: usize, value: i64): isize {
+    if !nqMatrixInBounds(row, column, rows, columns) { return -1 }
+    values[nqMatrixIndex(row, column, columns)] = value
+    return 0
+}
+
+export function nqMatrixFillI64(values: *i64, rows: usize, columns: usize, value: i64): void {
+    let count: usize = rows * columns
+    let index: usize = 0 as usize
+    while index < count {
+        values[index] = value
+        index = index + 1
+    }
+}

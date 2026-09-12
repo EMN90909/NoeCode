@@ -1,0 +1,33 @@
+module noqeri.modules.native
+
+record NativeModuleDescriptor {
+    abiVersion: u32
+    apiVersion: u32
+}
+
+export function nativeModuleAbiVersion(): u32 {
+    return 2 as u32
+}
+
+export function nativeModuleApiVersion(): u32 {
+    return 1 as u32
+}
+
+export function nativeModuleCompatible(abiVersion: u32): bool {
+    return abiVersion == nativeModuleAbiVersion()
+}
+
+export function nativeModuleVersionCompatible(abiVersion: u32, apiVersion: u32): bool {
+    return abiVersion == nativeModuleAbiVersion() && apiVersion <= nativeModuleApiVersion()
+}
+
+export function nativeModuleStatusOk(status: isize): bool {
+    return status >= 0
+}
+
+export function nativeModuleNormalizeStatus(status: isize): isize {
+    if status < 0 {
+        return status
+    }
+    return 0
+}

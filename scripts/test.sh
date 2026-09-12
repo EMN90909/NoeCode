@@ -64,6 +64,14 @@ print(same(1, "one"))
 EOF
 reject_file build/invalid_generic.nqr "generic type disagreement"
 
+cat > build/invalid_generic_constraint.nqr <<'EOF'
+function twice<T: Numeric>(value: T): T {
+    return value + value
+}
+print(twice("unsafe"))
+EOF
+reject_file build/invalid_generic_constraint.nqr "string violates Numeric generic constraint"
+
 cat > build/invalid_narrowing.nqr <<'EOF'
 let wide: u64 = 300
 let byte: u8 = wide
@@ -81,8 +89,6 @@ let unsigned: u32 = signed
 EOF
 reject_file build/invalid_signedness.nqr "implicit signed to unsigned conversion"
 
-# A slice is borrowed. Returning a view into function-local fixed-array storage
-# would create a dangling descriptor and must be rejected statically.
 cat > build/invalid_slice_escape.nqr <<'EOF'
 function bad(): []u32 {
     let local: [u32; 2] = [1 as u32, 2 as u32]
@@ -105,6 +111,43 @@ valid_output="$(./build/noqeri run build/valid_integer_safety.nqr)"
 if [ "$valid_output" != '8080
 42' ]; then
   echo "safe integer conversion regression" >&2
+  exit 1
+fi
+
+# Constrained generics must produce concrete per-type instances and preserve behavior.
+generic_output="$(./build/noqeri run tests/generics_constraints.nqr)"
+if [ "$generic_output" != '9
+42' ]; then
+  echo "constrained generic semantics regression" >&2
+  exit 1
+fi
+./build/noqeri nir tests/generics_constraints.nqr > build/generics.nir
+grep -q 'function max__int' build/generics.nir
+grep -q 'function twice__int' build/generics.nir
+if grep -q 'function max<T>' build/generics.nir; then
+  echo "unspecialized generic leaked into final NIR" >&2
+  exit 1
+fi
+
+# Web output is produced from the checked/monomorphized program and must be static ES module code.
+./build/noqeri web tests/web_module.nqr build/web_module.mjs >/dev/null
+grep -q '^export function apiStatus' build/web_module.mjs
+grep -q '^export function greeting' build/web_module.mjs
+if grep -Eq '\beval\s*\(|new Function\s*\(' build/web_module.mjs; then
+  echo "web backend emitted dynamic code execution" >&2
+  exit 1
+fi
+if command -v node >/dev/null 2>&1; then
+  node --check build/web_module.mjs
+fi
+cat > build/invalid_web_native.nqr <<'EOF'
+export function bad(): void {
+    asm("nop")
+}
+EOF
+./build/noqeri check build/invalid_web_native.nqr >/dev/null
+if ./build/noqeri web build/invalid_web_native.nqr build/invalid_web_native.mjs >/dev/null 2>&1; then
+  echo "web backend accepted native-only asm capability" >&2
   exit 1
 fi
 
@@ -143,8 +186,6 @@ fi
 ./build/noqeri targets | grep -q '^aarch64-unknown-none '
 ./build/noqeri --version | grep -q '^edition=2026$'
 
-# Native codegen is currently implemented for the x86-64 target adapter. The
-# language/frontend itself remains environment-neutral.
 ./build/noqeri build examples/native_hello.nqr build/native_hello.s
 test -s build/native_hello.s
 grep -q '^\.global noqeri_entry$' build/native_hello.s
@@ -178,4 +219,4 @@ case "$(uname -s)-$(uname -m)" in
     ;;
 esac
 
-echo "semantic, type-safety, lifetime, package, formatter, target, and native codegen tests passed"
+echo "semantic, type-safety, constrained-generics, web, lifetime, package, formatter, target, and native codegen tests passed"

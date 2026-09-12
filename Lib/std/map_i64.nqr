@@ -1,0 +1,40 @@
+module noqeri.std.map_i64
+
+export function nqMapFindI64(keys: *i64, count: usize, key: i64): isize {
+    let index: usize = 0 as usize
+    while index < count {
+        if keys[index] == key { return index as isize }
+        index = index + 1
+    }
+    return -1
+}
+
+export function nqMapPutI64(keys: *i64, values: *i64, count: usize, capacity: usize, key: i64, value: i64): isize {
+    let found: isize = nqMapFindI64(keys, count, key)
+    if found >= 0 {
+        values[found as usize] = value
+        return count as isize
+    }
+    if count >= capacity { return -1 }
+    keys[count] = key
+    values[count] = value
+    return (count + 1) as isize
+}
+
+export function nqMapGetI64(keys: *i64, values: *i64, count: usize, key: i64, fallback: i64): i64 {
+    let found: isize = nqMapFindI64(keys, count, key)
+    if found < 0 { return fallback }
+    return values[found as usize]
+}
+
+export function nqMapDeleteI64(keys: *i64, values: *i64, count: usize, key: i64): isize {
+    let found: isize = nqMapFindI64(keys, count, key)
+    if found < 0 { return -1 }
+    let index: usize = found as usize
+    while index + 1 < count {
+        keys[index] = keys[index + 1]
+        values[index] = values[index + 1]
+        index = index + 1
+    }
+    return (count - 1) as isize
+}

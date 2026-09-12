@@ -1,0 +1,22 @@
+module noqeri.tools.fuzz
+
+export function nqFuzzNext(seed: i64): i64 {
+    let value: i64 = seed % (2147483647 as i64)
+    if value <= 0 { value = 1 as i64 }
+    return (value * (48271 as i64)) % (2147483647 as i64)
+}
+
+export function nqFuzzByte(seed: i64): u8 {
+    return (nqFuzzNext(seed) % (256 as i64)) as u8
+}
+
+export function nqFuzzFill(buffer: *u8, count: usize, seed: i64): i64 {
+    let state: i64 = seed
+    let index: usize = 0 as usize
+    while index < count {
+        state = nqFuzzNext(state)
+        buffer[index] = (state % (256 as i64)) as u8
+        index = index + 1
+    }
+    return state
+}

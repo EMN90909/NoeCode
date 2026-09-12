@@ -17,7 +17,7 @@ jobs:
   core:
     name: core-${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -31,10 +31,13 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/verify_repository.ps1
-      - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-      - name: Build
-        run: cmake --build build --config Release --parallel
+      - name: Build through prerequisite-aware script (Unix)
+        if: runner.os != 'Windows'
+        run: ./scripts/build.sh
+      - name: Build through prerequisite-aware script (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\scripts\build.ps1 -SkipInstall
       - name: CTest
         run: ctest --test-dir build -C Release --output-on-failure
       - name: noqeri doctor (Unix)
@@ -46,6 +49,33 @@ jobs:
         run: |
           $nq = if (Test-Path 'build/Release/noqeri.exe') { 'build/Release/noqeri.exe' } else { 'build/noqeri.exe' }
           & $nq doctor .
+
+  ecosystem:
+    name: libraries-registry-packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build current Noqeri compiler
+        run: ./scripts/build.sh
+      - name: Run complete local library smoke program
+        run: ./build/noqeri run examples/ecosystem_smoke.nqr
+      - name: Check out official Noqeri registry
+        uses: actions/checkout@v4
+        with:
+          repository: EMN90909/noqeri-registry
+          path: noqeri-registry
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Test registry service and package format
+        working-directory: noqeri-registry
+        run: |
+          go test ./...
+          go vet ./...
+      - name: Compile every published registry package with this compiler
+        working-directory: noqeri-registry
+        run: ./scripts/verify_packages.sh "$GITHUB_WORKSPACE/build/noqeri"
 
   freestanding-native:
     name: freestanding-native

@@ -3,13 +3,23 @@ project(noqeri VERSION 1.0.0 LANGUAGES CXX)
 include(GNUInstallDirs)
 option(NOQERI_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(NOQERI_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
-# C++ is the bootstrap compiler/reference-host layer. Reusable language-facing
-# modules, object helpers, security policy, runtime helpers and database algorithms
-# live in .nqr. The bootstrap remains until the Noqeri compiler can compile itself.
-# Environment edges that still need host filesystem/process access are isolated
-# under Compiler/bootstrap rather than implemented as C++ standard libraries.
-set(NOQERI_FRONTEND_SOURCES Compiler/core.cpp Compiler/modules.cpp Compiler/workspace.cpp Compiler/type_checker.cpp Compiler/lifetime.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp Compiler/register_alloc.cpp Compiler/optimizer.cpp Parser/lexer.cpp Parser/parser.cpp Runtime/abi.cpp Runtime/interpreter.cpp Compiler/bootstrap/noqeridb_host.cpp)
-set(NOQERI_SOURCES ${NOQERI_FRONTEND_SOURCES} Compiler/native_backend.cpp Compiler/web_backend.cpp Compiler/linker.cpp Programs/noqeri.cpp Programs/formatter.cpp Programs/package.cpp Programs/lsp.cpp Programs/test_runner.cpp Tools/build/production.cpp Compiler/bootstrap/security_audit_host.cpp)
+# C++ is restricted to the compiler/bootstrap and public embedding ABI layer.
+# Reusable language-facing modules, parser helpers, runtime helpers, platform
+# policy, security and data structures live in .nqr. Bootstrap C++ remains until
+# the Noqeri compiler can compile the corresponding compiler/toolchain pieces.
+set(NOQERI_FRONTEND_SOURCES
+ Compiler/core.cpp Compiler/modules.cpp Compiler/workspace.cpp Compiler/type_checker.cpp
+ Compiler/lifetime.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp
+ Compiler/register_alloc.cpp Compiler/optimizer.cpp
+ Compiler/bootstrap/lexer_host.cpp Compiler/bootstrap/parser_host.cpp
+ Compiler/bootstrap/abi_runtime_host.cpp Compiler/bootstrap/interpreter_host.cpp
+ Compiler/bootstrap/noqeridb_host.cpp)
+set(NOQERI_SOURCES ${NOQERI_FRONTEND_SOURCES}
+ Compiler/native_backend.cpp Compiler/web_backend.cpp Compiler/linker.cpp
+ Compiler/bootstrap/cli_host.cpp Compiler/bootstrap/formatter_host.cpp
+ Compiler/bootstrap/package_host.cpp Compiler/bootstrap/lsp_host.cpp
+ Compiler/bootstrap/test_runner_host.cpp Compiler/bootstrap/production_doctor_host.cpp
+ Compiler/bootstrap/security_audit_host.cpp)
 add_executable(noqeri ${NOQERI_SOURCES})
 target_include_directories(noqeri PRIVATE Include/noqeri Compiler/bootstrap)
 target_compile_features(noqeri PRIVATE cxx_std_17)
@@ -18,7 +28,6 @@ add_library(noqeri_abi SHARED ${NOQERI_FRONTEND_SOURCES})
 target_include_directories(noqeri_abi PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Include/noqeri> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/noqeri> PRIVATE Compiler/bootstrap)
 target_compile_features(noqeri_abi PUBLIC cxx_std_17)
 target_compile_definitions(noqeri_abi PRIVATE NOQERI_BOOTSTRAP=1)
-# The compatibility .nqd parser has deliberately private lexer/parser names.
 set_source_files_properties(Compiler/bootstrap/noqeridb_host.cpp PROPERTIES COMPILE_DEFINITIONS NOQERI_DATABASE_SOURCE=1)
 set_target_properties(noqeri_abi PROPERTIES OUTPUT_NAME noqeri-abi WINDOWS_EXPORT_ALL_SYMBOLS ON)
 function(noqeri_apply_warnings target)
@@ -65,5 +74,6 @@ install(DIRECTORY Modules/ DESTINATION ${CMAKE_INSTALL_DATADIR}/noqeri/Modules F
 install(DIRECTORY Objects/ DESTINATION ${CMAKE_INSTALL_DATADIR}/noqeri/Objects FILES_MATCHING PATTERN "*.nqr")
 install(DIRECTORY Database/ DESTINATION ${CMAKE_INSTALL_DATADIR}/noqeri/Database FILES_MATCHING PATTERN "*.nqr")
 install(DIRECTORY Runtime/ DESTINATION ${CMAKE_INSTALL_DATADIR}/noqeri/Runtime FILES_MATCHING PATTERN "*.nqr")
+install(DIRECTORY Parser/ DESTINATION ${CMAKE_INSTALL_DATADIR}/noqeri/Parser FILES_MATCHING PATTERN "*.nqr")
 install(DIRECTORY Platforms/ PC/ Mac/ Android/ DESTINATION ${CMAKE_INSTALL_DATADIR}/noqeri/platforms FILES_MATCHING PATTERN "*.nqr")
 install(FILES Brand/noqeri-logo.webp Brand/noqeri-mark.png DESTINATION ${CMAKE_INSTALL_DATADIR}/noqeri/brand)

@@ -1,0 +1,48 @@
+import "../Modules/native.nqr"
+import "../Objects/value.nqr"
+import "../Objects/text.nqr"
+import "../Database/noqeridb.nqr"
+import "../Tools/security/policy.nqr"
+import "../Lib/test/assert.nqr"
+
+function failIf(status: isize): void {
+    if status != 0 {
+        let invalid: *u8 = 0 as *u8
+        print(invalid[0])
+    }
+}
+
+failIf(nqAssertTrue(nativeModuleCompatible(2 as u32)))
+failIf(nqAssertTrue(nativeModuleVersionCompatible(2 as u32, 1 as u32)))
+failIf(nqAssertTrue(valueTagKnown(valueStringTag())))
+failIf(nqAssertFalse(valueTagsEqual(valueBoolTag(), valueIntTag())))
+
+let leftBytes: [u8; 3] = [1 as u8, 2 as u8, 3 as u8]
+let sameBytes: [u8; 3] = [1 as u8, 2 as u8, 3 as u8]
+let prefixBytes: [u8; 2] = [1 as u8, 2 as u8]
+let differentBytes: [u8; 3] = [1 as u8, 4 as u8, 3 as u8]
+let leftView: []u8 = slice(leftBytes)
+let sameView: []u8 = slice(sameBytes)
+let prefixView: []u8 = slice(prefixBytes)
+let differentView: []u8 = slice(differentBytes)
+failIf(nqAssertTrue(bytesEqual(leftView, sameView)))
+failIf(nqAssertTrue(bytesStartsWith(leftView, prefixView)))
+failIf(nqAssertTrue(bytesCompare(leftView, differentView) < 0))
+failIf(nqAssertTrue(securityRangeWithin(4 as usize, 3 as usize, 8 as usize)))
+failIf(nqAssertFalse(securityRangeWithin(7 as usize, 2 as usize, 8 as usize)))
+failIf(nqAssertTrue(securityBytesEqualFullScan(leftView, sameView)))
+failIf(nqAssertFalse(securityBytesEqualFullScan(leftView, differentView)))
+
+let keys: [i64; 4] = [0 as i64, 0 as i64, 0 as i64, 0 as i64]
+let values: [i64; 4] = [0 as i64, 0 as i64, 0 as i64, 0 as i64]
+let keysPtr: *i64 = &keys[0]
+let valuesPtr: *i64 = &values[0]
+failIf(nqAssertStatus(dbInsertInt(keysPtr, valuesPtr, 0 as usize, 4 as usize, 7 as i64, 70 as i64), 0))
+failIf(nqAssertStatus(dbInsertInt(keysPtr, valuesPtr, 1 as usize, 4 as usize, 8 as i64, 80 as i64), 1))
+failIf(nqAssertStatus(dbInsertInt(keysPtr, valuesPtr, 2 as usize, 4 as usize, 7 as i64, 700 as i64), -2))
+failIf(nqAssertTrue(dbContainsIntKey(keysPtr, 2 as usize, 8 as i64)))
+failIf(nqAssertStatus(dbUpdateInt(keysPtr, valuesPtr, 2 as usize, 7 as i64, 77 as i64), 0))
+failIf(nqAssertTrue(dbReadInt(valuesPtr, 2 as usize, 0 as usize) == 77 as i64))
+failIf(nqAssertStatus(dbDeleteInt(keysPtr, valuesPtr, 2 as usize, 7 as i64), 1))
+failIf(nqAssertTrue(keys[0] == 8 as i64))
+failIf(nqAssertTrue(values[0] == 80 as i64))

@@ -1,0 +1,58 @@
+module noqeri.database.core
+
+export function dbFindIntKey(keys: *i64, count: usize, key: i64): isize {
+    let index: usize = 0
+    while index < count {
+        if keys[index] == key {
+            return index as isize
+        }
+        index = index + 1
+    }
+    return -1
+}
+
+export function dbContainsIntKey(keys: *i64, count: usize, key: i64): bool {
+    return dbFindIntKey(keys, count, key) >= 0
+}
+
+export function dbInsertInt(keys: *i64, values: *i64, count: usize, capacity: usize, key: i64, value: i64): isize {
+    if count >= capacity {
+        return -1
+    }
+    if dbContainsIntKey(keys, count, key) {
+        return -2
+    }
+    keys[count] = key
+    values[count] = value
+    return count as isize
+}
+
+export function dbUpdateInt(keys: *i64, values: *i64, count: usize, key: i64, value: i64): isize {
+    let found: isize = dbFindIntKey(keys, count, key)
+    if found < 0 {
+        return -1
+    }
+    values[found as usize] = value
+    return 0
+}
+
+export function dbDeleteInt(keys: *i64, values: *i64, count: usize, key: i64): isize {
+    let found: isize = dbFindIntKey(keys, count, key)
+    if found < 0 {
+        return -1
+    }
+    let index: usize = found as usize
+    while index + 1 < count {
+        keys[index] = keys[index + 1]
+        values[index] = values[index + 1]
+        index = index + 1
+    }
+    return (count - 1) as isize
+}
+
+export function dbReadInt(values: *i64, count: usize, index: usize): i64 {
+    if index >= count {
+        return 0 as i64
+    }
+    return values[index]
+}

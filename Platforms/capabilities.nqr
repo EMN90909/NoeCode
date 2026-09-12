@@ -1,0 +1,29 @@
+module noqeri.platforms.capabilities
+
+export function nqPlatformPointerBits(): u32 {
+    return 64 as u32
+}
+
+export function nqPlatformAbiVersion(): u32 {
+    return 2 as u32
+}
+
+export function nqPlatformPortableWebSupported(): bool {
+    return true
+}
+
+export function nqPlatformNativeElfSupported(): bool {
+    return true
+}
+
+export function nqPlatformNativePeSupported(): bool {
+    return false
+}
+
+export function nqPlatformNativeMachOSupported(): bool {
+    return false
+}
+
+export function nqPlatformAndroidNativeSupported(): bool {
+    return false
+}

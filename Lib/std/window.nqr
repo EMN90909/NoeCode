@@ -1,0 +1,11 @@
+module noqeri.std.window
+
+export function nqWindowFits(start: usize, width: usize, count: usize): bool {
+    if start > count { return false }
+    return width <= count - start
+}
+
+export function nqWindowEnd(start: usize, width: usize, count: usize): usize {
+    if !nqWindowFits(start, width, count) { return count }
+    return start + width
+}

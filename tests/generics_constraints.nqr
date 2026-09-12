@@ -1,0 +1,11 @@
+function max<T: Ord>(left: T, right: T): T {
+    if left > right { return left }
+    return right
+}
+
+function twice<T: Numeric>(value: T): T {
+    return value + value
+}
+
+print(max(4, 9))
+print(twice(21))

@@ -1,0 +1,9 @@
+module test.web
+
+export function apiStatus(): string {
+    return "ok"
+}
+
+export function greeting(name: string): string {
+    return "hello " + name
+}

@@ -1,5 +1,4 @@
 #pragma once
-
 #include "version.hpp"
 #include "diagnostics.hpp"
 #include "types.hpp"
@@ -9,7 +8,8 @@
 #include "packages.hpp"
 #include "targets.hpp"
 #include "runtime.hpp"
+#include "generics.hpp"
+#include "web.hpp"
 #include "compiler.hpp"
 #include "tools.hpp"
-
 namespace noqeri = noe;

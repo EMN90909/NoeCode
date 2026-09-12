@@ -1,0 +1,33 @@
+module noqeri.std.checksum
+
+export function nqAdler32(value: []u8): u32 {
+    let a: u32 = 1 as u32
+    let b: u32 = 0 as u32
+    let index: usize = 0 as usize
+    while index < len(value) {
+        a = (a + value[index] as u32) % (65521 as u32)
+        b = (b + a) % (65521 as u32)
+        index = index + 1
+    }
+    return b * (65536 as u32) + a
+}
+
+export function nqByteSum(value: []u8): u64 {
+    let total: u64 = 0 as u64
+    let index: usize = 0 as usize
+    while index < len(value) {
+        total = total + value[index] as u64
+        index = index + 1
+    }
+    return total
+}
+
+export function nqWeightedByteSum(value: []u8): u64 {
+    let total: u64 = 0 as u64
+    let index: usize = 0 as usize
+    while index < len(value) {
+        total = total + (value[index] as u64) * ((index + 1) as u64)
+        index = index + 1
+    }
+    return total
+}

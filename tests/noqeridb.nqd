@@ -1,0 +1,12 @@
+database "noqeridb-test.nqdb"
+
+table users {
+    id: int key,
+    name: text required,
+    active: bool required
+}
+
+insert users { id: 1, name: "Ada", active: true }
+insert users { id: 2, name: "Grace", active: true }
+update users set { name: "Grace Hopper" } where id = 2
+select users where active = true

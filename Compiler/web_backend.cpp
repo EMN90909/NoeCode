@@ -6,8 +6,49 @@ namespace noe {
 namespace {
 std::string jsString(const std::string&s){std::string out="\"";for(char c:s){switch(c){case'\\':out+="\\\\";break;case'\"':out+="\\\"";break;case'\n':out+="\\n";break;case'\r':out+="\\r";break;case'\t':out+="\\t";break;default:out+=c;}}return out+'"';}
 std::string op(TokenKind k){switch(k){case TokenKind::Plus:return"+";case TokenKind::Minus:return"-";case TokenKind::Star:return"*";case TokenKind::Slash:return"/";case TokenKind::Percent:return"%";case TokenKind::Bang:return"!";case TokenKind::Equal:return"=";case TokenKind::EqualEqual:return"===";case TokenKind::BangEqual:return"!==";case TokenKind::Less:return"<";case TokenKind::LessEqual:return"<=";case TokenKind::Greater:return">";case TokenKind::GreaterEqual:return">=";case TokenKind::AndAnd:return"&&";case TokenKind::OrOr:return"||";default:return"?";}}
+const char* runtimePrelude(){return R"NQO(// Noqeri 1.0 portable web runtime. The .nqo file remains a normal ES module.
+const __nqHost = () => globalThis.NoqeriHost;
+const __nqNeedHost = (name) => { const h=__nqHost(); if(!h || typeof h[name] !== 'function') throw new Error(`Noqeri host capability '${name}' is unavailable`); return h[name].bind(h); };
+export const jsonEncode = (value) => JSON.stringify(value);
+export const jsonDecode = (text) => JSON.parse(text);
+export const jsonValid = (text) => { try { JSON.parse(text); return true; } catch { return false; } };
+export const urlEncode = (value) => encodeURIComponent(value);
+export const urlDecode = (value) => decodeURIComponent(value);
+export const htmlEscape = (value) => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+export const routePath = () => globalThis.location?.pathname ?? '/';
+export const routeGo = (path) => { if(!globalThis.location) throw new Error('routeGo requires a browser'); globalThis.history.pushState({},'',path); globalThis.dispatchEvent(new PopStateEvent('popstate')); };
+export const domText = (selector,value) => { const node=document.querySelector(selector); if(!node) return false; node.textContent=String(value); return true; };
+export const domHtml = (selector,value) => { const node=document.querySelector(selector); if(!node) return false; node.innerHTML=String(value); return true; };
+export const domAttr = (selector,name,value) => { const node=document.querySelector(selector); if(!node) return false; node.setAttribute(name,String(value)); return true; };
+export const domAddClass = (selector,name) => { const node=document.querySelector(selector); if(!node) return false; node.classList.add(name); return true; };
+export const domRemoveClass = (selector,name) => { const node=document.querySelector(selector); if(!node) return false; node.classList.remove(name); return true; };
+let __nqFetchNext=1; const __nqFetch=new Map();
+export const fetchStart = (url) => { const id=__nqFetchNext++; const state={ready:false,ok:false,text:'',status:0}; __nqFetch.set(id,state); fetch(url).then(async r=>{state.ok=r.ok;state.status=r.status;state.text=await r.text();state.ready=true;}).catch(e=>{state.text=String(e);state.ready=true;}); return id; };
+export const fetchReady = (id) => __nqFetch.get(id)?.ready ?? false;
+export const fetchOk = (id) => __nqFetch.get(id)?.ok ?? false;
+export const fetchStatus = (id) => __nqFetch.get(id)?.status ?? 0;
+export const fetchText = (id) => __nqFetch.get(id)?.text ?? '';
+let __nqWsNext=1; const __nqWs=new Map();
+export const websocketOpen = (url) => { const id=__nqWsNext++; const state={socket:new WebSocket(url),messages:[]}; state.socket.addEventListener('message',e=>state.messages.push(String(e.data))); __nqWs.set(id,state); return id; };
+export const websocketSend = (id,text) => { const s=__nqWs.get(id)?.socket; if(!s) return false; s.send(text); return true; };
+export const websocketMessage = (id) => __nqWs.get(id)?.messages.shift() ?? '';
+export const websocketClose = (id) => { const s=__nqWs.get(id)?.socket; if(!s) return false; s.close(); __nqWs.delete(id); return true; };
+export const httpRouteText = (method,path,status,body) => __nqNeedHost('httpRouteText')(method,path,status,body);
+export const httpStatic = (prefix,directory) => __nqNeedHost('httpStatic')(prefix,directory);
+export const httpListen = (port) => __nqNeedHost('httpListen')(port);
+export const fsReadText = (path) => __nqNeedHost('fsReadText')(path);
+export const fsWriteText = (path,text) => __nqNeedHost('fsWriteText')(path,text);
+export const fsExists = (path) => __nqNeedHost('fsExists')(path);
+export const envGet = (name) => __nqNeedHost('envGet')(name);
+export const timeNowMillis = () => Date.now();
+export const cryptoRandomHex = (bytes) => __nqNeedHost('cryptoRandomHex')(bytes);
+export const cryptoSha256 = (text) => __nqNeedHost('cryptoSha256')(text);
+export const dbOpen = (path) => __nqNeedHost('dbOpen')(path);
+export const dbExec = (handle,script) => __nqNeedHost('dbExec')(handle,script);
+
+)NQO";}
 class Emitter{
-public:Emitter(Diagnostics&d):d_(d){}std::string run(const Program&p){out_<<"// Generated by Noqeri web backend.\n'use strict';\n\n";for(const auto&s:p.statements)stmt(s,0);return out_.str();}
+public:Emitter(Diagnostics&d):d_(d){}std::string run(const Program&p){out_<<"// Generated by Noqeri "<<NOQERI_COMPILER_VERSION<<" (.nqo).\n'use strict';\n\n"<<runtimePrelude();for(const auto&s:p.statements)stmt(s,0);return out_.str();}
 private:
 std::string expr(const ExprPtr&e){if(!e)return"undefined";if(auto x=std::dynamic_pointer_cast<LiteralExpr>(e)){if(std::holds_alternative<std::monostate>(x->value))return"null";if(auto v=std::get_if<std::int64_t>(&x->value))return std::to_string(*v);if(auto v=std::get_if<double>(&x->value)){std::ostringstream o;o<<*v;return o.str();}if(auto v=std::get_if<bool>(&x->value))return*v?"true":"false";return jsString(std::get<std::string>(x->value));}if(auto x=std::dynamic_pointer_cast<NameExpr>(e))return x->name;if(auto x=std::dynamic_pointer_cast<UnaryExpr>(e)){if(x->op==TokenKind::Try||x->op==TokenKind::Ampersand||x->op==TokenKind::Star){d_.error("NQR-W7001",x->span,"web backend does not permit raw-memory/try unary operation in portable modules");return"undefined";}return"("+op(x->op)+expr(x->operand)+")";}if(auto x=std::dynamic_pointer_cast<BinaryExpr>(e))return"("+expr(x->left)+" "+op(x->op)+" "+expr(x->right)+")";if(auto x=std::dynamic_pointer_cast<CastExpr>(e))return expr(x->value);if(auto x=std::dynamic_pointer_cast<ArrayExpr>(e)){std::string r="[";for(std::size_t i=0;i<x->elements.size();++i){if(i)r+=", ";r+=expr(x->elements[i]);}return r+"]";}if(auto x=std::dynamic_pointer_cast<IndexExpr>(e))return expr(x->object)+"["+expr(x->index)+"]";if(auto x=std::dynamic_pointer_cast<MemberExpr>(e))return expr(x->object)+"."+x->member;if(auto x=std::dynamic_pointer_cast<CallExpr>(e)){std::string name;if(auto n=std::dynamic_pointer_cast<NameExpr>(x->callee))name=n->name;if(name=="asm"||name=="intrinsic"||name.rfind("atomic",0)==0||name=="host"||name=="abi"){d_.error("NQR-W7002",x->span,"web module uses native-only capability '"+name+"'");return"undefined";}if(name=="print")name="console.log";std::string r=name.empty()?expr(x->callee):name;r+='(';for(std::size_t i=0;i<x->args.size();++i){if(i)r+=", ";r+=expr(x->args[i]);}return r+")";}d_.error("NQR-W7003",e->span,"unsupported expression in web backend");return"undefined";}
 void indent(int n){for(int i=0;i<n;++i)out_<<"    ";}

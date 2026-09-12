@@ -1,0 +1,13 @@
+module examples.web_app
+
+extern function domText(selector: string, value: string): bool
+extern function routePath(): string
+extern function jsonValid(text: string): bool
+
+export function render(): bool {
+    let path: string = routePath()
+    if jsonValid("{\"ok\":true}") {
+        return domText("#app", "Noqeri 1.0 · " + path)
+    }
+    return false
+}

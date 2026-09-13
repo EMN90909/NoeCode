@@ -1,0 +1,148 @@
+module noqeri.compiler.selfhost.lower
+import "ast.nqr"
+import "nir.nqr"
+
+record NqLowerState {
+    instructionCount: usize
+    nextRegister: isize
+}
+
+export function nqLowerOk(): isize { return 0 }
+export function nqLowerUnsupported(): isize { return -600 }
+export function nqLowerCapacity(): isize { return -601 }
+export function nqLowerBadLiteral(): isize { return -602 }
+export function nqLowerBadAst(): isize { return -603 }
+
+export function nqLowerStateInit(out: *NqLowerState): void { out.instructionCount = 0 as usize out.nextRegister = 0 as isize }
+
+function nqLowerAllocRegister(state: *NqLowerState): isize {
+    let result: isize = state.nextRegister
+    state.nextRegister = result + 1 as isize
+    return result
+}
+
+function nqLowerEmit(instructions: []NqNirInstruction, state: *NqLowerState, opcode: int, dest: isize): isize {
+    if state.instructionCount >= len(instructions) { return nqLowerCapacity() }
+    let index: usize = state.instructionCount
+    nqNirInstructionInit(&instructions[index], opcode, dest)
+    state.instructionCount = index + 1 as usize
+    return index as isize
+}
+
+function nqLowerHexDigit(c: u8): int {
+    if c >= 48 as u8 && c <= 57 as u8 { return (c - 48 as u8) as int }
+    if c >= 65 as u8 && c <= 70 as u8 { return (c - 65 as u8) as int + 10 }
+    if c >= 97 as u8 && c <= 102 as u8 { return (c - 97 as u8) as int + 10 }
+    return -1
+}
+
+// Positive integer literals are accumulated with a pre-multiply overflow check.
+// Unary '-' is represented separately in the AST, which keeps parsing simple.
+export function nqLowerParseI64(source: []u8, start: usize, end: usize, out: *i64): bool {
+    if out == null || start >= end || end > len(source) { return false }
+    let base: i64 = 10 as i64
+    let index: usize = start
+    if end - start > 2 as usize && source[start] == 48 as u8 && (source[start + 1 as usize] == 120 as u8 || source[start + 1 as usize] == 88 as u8) { base = 16 as i64 index = start + 2 as usize }
+    if index >= end { return false }
+    let value: i64 = 0 as i64
+    while index < end {
+        let digit: int = nqLowerHexDigit(source[index])
+        if digit < 0 || digit as i64 >= base { return false }
+        if value > (9223372036854775807 as i64 - digit as i64) / base { return false }
+        value = value * base + digit as i64
+        index = index + 1 as usize
+    }
+    out[0] = value
+    return true
+}
+
+function nqLowerBinaryOpcode(encoded: u32): int {
+    if encoded == 43 as u32 { return nqNirAdd() }
+    if encoded == 45 as u32 { return nqNirSub() }
+    if encoded == 42 as u32 { return nqNirMul() }
+    if encoded == 47 as u32 { return nqNirDiv() }
+    if encoded == 37 as u32 { return nqNirMod() }
+    if encoded == 61 as u32 * 256 as u32 + 61 as u32 { return nqNirEq() }
+    if encoded == 33 as u32 * 256 as u32 + 61 as u32 { return nqNirNe() }
+    if encoded == 60 as u32 { return nqNirLt() }
+    if encoded == 60 as u32 * 256 as u32 + 61 as u32 { return nqNirLe() }
+    if encoded == 62 as u32 { return nqNirGt() }
+    if encoded == 62 as u32 * 256 as u32 + 61 as u32 { return nqNirGe() }
+    return -1
+}
+
+export function nqLowerExpression(source: []u8, nodes: []NqAstNode, nodeIndex: isize, instructions: []NqNirInstruction, state: *NqLowerState): isize {
+    if state == null || nodeIndex < 0 as isize || nodeIndex as usize >= len(nodes) { return nqLowerBadAst() }
+    let node: *NqAstNode = &nodes[nodeIndex as usize]
+    if !nqAstNodeValid(node, len(source)) { return nqLowerBadAst() }
+
+    if node.tag == nqAstInteger() {
+        let literal: i64 = 0 as i64
+        if !nqLowerParseI64(source, node.start, node.end, &literal) { return nqLowerBadLiteral() }
+        let reg: isize = nqLowerAllocRegister(state)
+        let emitted: isize = nqLowerEmit(instructions, state, nqNirConstI64(), reg)
+        if emitted < 0 as isize { return emitted }
+        instructions[emitted as usize].immediate = literal
+        instructions[emitted as usize].typeCode = nqAstTypeI64()
+        return reg
+    }
+
+    if node.tag == nqAstBool() {
+        let value: i64 = 0 as i64
+        if node.end - node.start == 4 as usize { value = 1 as i64 }
+        let reg: isize = nqLowerAllocRegister(state)
+        let emitted: isize = nqLowerEmit(instructions, state, nqNirConstI64(), reg)
+        if emitted < 0 as isize { return emitted }
+        instructions[emitted as usize].immediate = value
+        instructions[emitted as usize].typeCode = nqAstTypeBool()
+        return reg
+    }
+
+    if node.tag == nqAstBinary() {
+        let left: isize = nqLowerExpression(source, nodes, node.left, instructions, state)
+        if left < 0 as isize { return left }
+        let right: isize = nqLowerExpression(source, nodes, node.right, instructions, state)
+        if right < 0 as isize { return right }
+        let opcode: int = nqLowerBinaryOpcode(node.flags)
+        if opcode < 0 { return nqLowerUnsupported() }
+        let reg: isize = nqLowerAllocRegister(state)
+        let emitted: isize = nqLowerEmit(instructions, state, opcode, reg)
+        if emitted < 0 as isize { return emitted }
+        instructions[emitted as usize].left = left
+        instructions[emitted as usize].right = right
+        instructions[emitted as usize].typeCode = node.typeCode
+        return reg
+    }
+
+    if node.tag == nqAstUnary() {
+        let operand: isize = nqLowerExpression(source, nodes, node.left, instructions, state)
+        if operand < 0 as isize { return operand }
+        let opcode: int = -1
+        if node.flags == 45 as u32 { opcode = nqNirNeg() }
+        else if node.flags == 33 as u32 { opcode = nqNirNot() }
+        else if node.flags == 43 as u32 { return operand }
+        else if node.flags == 0x747279 as u32 { opcode = nqNirTry() }
+        else { return nqLowerUnsupported() }
+        let reg: isize = nqLowerAllocRegister(state)
+        let emitted: isize = nqLowerEmit(instructions, state, opcode, reg)
+        if emitted < 0 as isize { return emitted }
+        instructions[emitted as usize].left = operand
+        instructions[emitted as usize].typeCode = node.typeCode
+        return reg
+    }
+
+    if node.tag == nqAstCast() {
+        // Numeric/pointer cast semantics are checked before lowering. A move in
+        // typed NIR is sufficient until target-specific conversion selection.
+        let sourceValue: isize = nqLowerExpression(source, nodes, node.left, instructions, state)
+        if sourceValue < 0 as isize { return sourceValue }
+        let reg: isize = nqLowerAllocRegister(state)
+        let emitted: isize = nqLowerEmit(instructions, state, nqNirMove(), reg)
+        if emitted < 0 as isize { return emitted }
+        instructions[emitted as usize].left = sourceValue
+        instructions[emitted as usize].typeCode = node.typeCode
+        return reg
+    }
+
+    return nqLowerUnsupported()
+}

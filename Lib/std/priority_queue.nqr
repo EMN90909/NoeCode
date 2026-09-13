@@ -1,6 +1,264 @@
 module noqeri.std.priority_queue
 
+// Stable fixed-capacity priority queue. Higher numeric priority wins by default.
+// For equal priority, lower sequence number wins, preserving insertion order.
+record PriorityQueue<T> {
+    values: *T
+    priorities: *i64
+    sequences: *u64
+    length: usize
+    capacity: usize
+    next_sequence: u64
+    min_priority: bool
+}
+
+export function priority_queue_init<T>(queue: *PriorityQueue<T>, values: *T, priorities: *i64, sequences: *u64, capacity: usize, min_priority: bool): bool {
+    if queue == null { return false }
+    if capacity > 0 as usize && (values == null || priorities == null || sequences == null) { return false }
+    queue.values = values
+    queue.priorities = priorities
+    queue.sequences = sequences
+    queue.length = 0 as usize
+    queue.capacity = capacity
+    queue.next_sequence = 0 as u64
+    queue.min_priority = min_priority
+    return true
+}
+
+export function priority_queue_invariant<T>(queue: *PriorityQueue<T>): bool {
+    if queue == null || queue.length > queue.capacity { return false }
+    if queue.capacity > 0 as usize && (queue.values == null || queue.priorities == null || queue.sequences == null) { return false }
+    return true
+}
+
+export function priority_queue_length<T>(queue: *PriorityQueue<T>): usize { if queue == null { return 0 as usize } return queue.length }
+export function priority_queue_capacity<T>(queue: *PriorityQueue<T>): usize { if queue == null { return 0 as usize } return queue.capacity }
+export function priority_queue_empty<T>(queue: *PriorityQueue<T>): bool { return queue == null || queue.length == 0 as usize }
+export function priority_queue_full<T>(queue: *PriorityQueue<T>): bool { return queue != null && queue.length >= queue.capacity }
+export function priority_queue_remaining<T>(queue: *PriorityQueue<T>): usize { if queue == null || queue.length >= queue.capacity { return 0 as usize } return queue.capacity - queue.length }
+
+function priority_queue_parent(index: usize): usize { if index == 0 as usize { return 0 as usize } return (index - 1 as usize) / 2 as usize }
+function priority_queue_left(index: usize): usize { return index * 2 as usize + 1 as usize }
+function priority_queue_right(index: usize): usize { return index * 2 as usize + 2 as usize }
+
+function priority_queue_precedes<T>(queue: *PriorityQueue<T>, left: usize, right: usize): bool {
+    let lp: i64 = queue.priorities[left]
+    let rp: i64 = queue.priorities[right]
+    if lp == rp { return queue.sequences[left] < queue.sequences[right] }
+    if queue.min_priority { return lp < rp }
+    return lp > rp
+}
+
+function priority_queue_swap<T: Copy>(queue: *PriorityQueue<T>, left: usize, right: usize): bool {
+    if !priority_queue_invariant(queue) || left >= queue.length || right >= queue.length { return false }
+    if left == right { return true }
+    let value: T = queue.values[left]
+    queue.values[left] = queue.values[right]
+    queue.values[right] = value
+    let priority: i64 = queue.priorities[left]
+    queue.priorities[left] = queue.priorities[right]
+    queue.priorities[right] = priority
+    let sequence: u64 = queue.sequences[left]
+    queue.sequences[left] = queue.sequences[right]
+    queue.sequences[right] = sequence
+    return true
+}
+
+export function priority_queue_sift_up<T: Copy>(queue: *PriorityQueue<T>, start: usize): bool {
+    if !priority_queue_invariant(queue) || start >= queue.length { return false }
+    let index: usize = start
+    while index > 0 as usize {
+        let parent: usize = priority_queue_parent(index)
+        if !priority_queue_precedes(queue, index, parent) { return true }
+        if !priority_queue_swap(queue, index, parent) { return false }
+        index = parent
+    }
+    return true
+}
+
+export function priority_queue_sift_down<T: Copy>(queue: *PriorityQueue<T>, start: usize): bool {
+    if !priority_queue_invariant(queue) || start >= queue.length { return false }
+    let index: usize = start
+    while true {
+        let left: usize = priority_queue_left(index)
+        if left >= queue.length { return true }
+        let best: usize = left
+        let right: usize = priority_queue_right(index)
+        if right < queue.length && priority_queue_precedes(queue, right, left) { best = right }
+        if !priority_queue_precedes(queue, best, index) { return true }
+        if !priority_queue_swap(queue, index, best) { return false }
+        index = best
+    }
+    return true
+}
+
+export function priority_queue_push<T: Copy>(queue: *PriorityQueue<T>, value: T, priority: i64): bool {
+    if !priority_queue_invariant(queue) || priority_queue_full(queue) { return false }
+    let index: usize = queue.length
+    queue.values[index] = value
+    queue.priorities[index] = priority
+    queue.sequences[index] = queue.next_sequence
+    queue.next_sequence = queue.next_sequence + 1 as u64
+    queue.length = queue.length + 1 as usize
+    return priority_queue_sift_up(queue, index)
+}
+
+export function priority_queue_peek_ref<T>(queue: *PriorityQueue<T>): *T {
+    if !priority_queue_invariant(queue) || queue.length == 0 as usize { return null as *T }
+    return &queue.values[0 as usize]
+}
+
+export function priority_queue_peek_or<T: Copy>(queue: *PriorityQueue<T>, fallback: T): T {
+    let pointer: *T = priority_queue_peek_ref(queue)
+    if pointer == null { return fallback }
+    return *pointer
+}
+
+export function priority_queue_front_priority<T>(queue: *PriorityQueue<T>, fallback: i64): i64 {
+    if !priority_queue_invariant(queue) || queue.length == 0 as usize { return fallback }
+    return queue.priorities[0 as usize]
+}
+
+export function priority_queue_pop_or<T: Copy>(queue: *PriorityQueue<T>, fallback: T): T {
+    if !priority_queue_invariant(queue) || queue.length == 0 as usize { return fallback }
+    let value: T = queue.values[0 as usize]
+    queue.length = queue.length - 1 as usize
+    if queue.length > 0 as usize {
+        queue.values[0 as usize] = queue.values[queue.length]
+        queue.priorities[0 as usize] = queue.priorities[queue.length]
+        queue.sequences[0 as usize] = queue.sequences[queue.length]
+        priority_queue_sift_down(queue, 0 as usize)
+    }
+    return value
+}
+
+export function priority_queue_clear<T>(queue: *PriorityQueue<T>): bool {
+    if queue == null { return false }
+    queue.length = 0 as usize
+    queue.next_sequence = 0 as u64
+    return true
+}
+
+export function priority_queue_contains<T: Eq + Copy>(queue: *PriorityQueue<T>, value: T): bool {
+    if !priority_queue_invariant(queue) { return false }
+    let i: usize = 0 as usize
+    while i < queue.length {
+        if queue.values[i] == value { return true }
+        i = i + 1 as usize
+    }
+    return false
+}
+
+export function priority_queue_index_of<T: Eq + Copy>(queue: *PriorityQueue<T>, value: T): isize {
+    if !priority_queue_invariant(queue) { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < queue.length {
+        if queue.values[i] == value { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function priority_queue_remove_at<T: Copy>(queue: *PriorityQueue<T>, index: usize): bool {
+    if !priority_queue_invariant(queue) || index >= queue.length { return false }
+    queue.length = queue.length - 1 as usize
+    if index == queue.length { return true }
+    queue.values[index] = queue.values[queue.length]
+    queue.priorities[index] = queue.priorities[queue.length]
+    queue.sequences[index] = queue.sequences[queue.length]
+    if index > 0 as usize && priority_queue_precedes(queue, index, priority_queue_parent(index)) {
+        return priority_queue_sift_up(queue, index)
+    }
+    return priority_queue_sift_down(queue, index)
+}
+
+export function priority_queue_remove_value<T: Eq + Copy>(queue: *PriorityQueue<T>, value: T): bool {
+    let index: isize = priority_queue_index_of(queue, value)
+    if index < 0 as isize { return false }
+    return priority_queue_remove_at(queue, index as usize)
+}
+
+export function priority_queue_update_priority_at<T: Copy>(queue: *PriorityQueue<T>, index: usize, priority: i64): bool {
+    if !priority_queue_invariant(queue) || index >= queue.length { return false }
+    queue.priorities[index] = priority
+    if index > 0 as usize && priority_queue_precedes(queue, index, priority_queue_parent(index)) {
+        return priority_queue_sift_up(queue, index)
+    }
+    return priority_queue_sift_down(queue, index)
+}
+
+export function priority_queue_update_priority<T: Eq + Copy>(queue: *PriorityQueue<T>, value: T, priority: i64): bool {
+    let index: isize = priority_queue_index_of(queue, value)
+    if index < 0 as isize { return false }
+    return priority_queue_update_priority_at(queue, index as usize, priority)
+}
+
+export function priority_queue_count_priority<T>(queue: *PriorityQueue<T>, priority: i64): usize {
+    if !priority_queue_invariant(queue) { return 0 as usize }
+    let count: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < queue.length {
+        if queue.priorities[i] == priority { count = count + 1 as usize }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function priority_queue_best_priority<T>(queue: *PriorityQueue<T>, fallback: i64): i64 {
+    if !priority_queue_invariant(queue) || queue.length == 0 as usize { return fallback }
+    return queue.priorities[0 as usize]
+}
+
+export function priority_queue_worst_priority<T>(queue: *PriorityQueue<T>, fallback: i64): i64 {
+    if !priority_queue_invariant(queue) || queue.length == 0 as usize { return fallback }
+    let worst: i64 = queue.priorities[0 as usize]
+    let i: usize = 1 as usize
+    while i < queue.length {
+        if queue.min_priority {
+            if queue.priorities[i] > worst { worst = queue.priorities[i] }
+        } else {
+            if queue.priorities[i] < worst { worst = queue.priorities[i] }
+        }
+        i = i + 1 as usize
+    }
+    return worst
+}
+
+export function priority_queue_push_many<T: Copy>(queue: *PriorityQueue<T>, values: []T, priorities: []i64): usize {
+    if !priority_queue_invariant(queue) { return 0 as usize }
+    let limit: usize = len(values)
+    if len(priorities) < limit { limit = len(priorities) }
+    let written: usize = 0 as usize
+    while written < limit && !priority_queue_full(queue) {
+        if !priority_queue_push(queue, values[written], priorities[written]) { return written }
+        written = written + 1 as usize
+    }
+    return written
+}
+
+export function priority_queue_drain_to<T: Copy>(queue: *PriorityQueue<T>, out: []T, fallback: T): usize {
+    if !priority_queue_invariant(queue) || len(out) < queue.length { return 0 as usize }
+    let count: usize = queue.length
+    let i: usize = 0 as usize
+    while i < count {
+        out[i] = priority_queue_pop_or(queue, fallback)
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function priority_queue_is_valid<T: Copy>(queue: *PriorityQueue<T>): bool {
+    if !priority_queue_invariant(queue) { return false }
+    let i: usize = 1 as usize
+    while i < queue.length {
+        if priority_queue_precedes(queue, i, priority_queue_parent(i)) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+// Compatibility helpers retained for the former placeholder API.
 export function priority_queue_len<T>(items: []T): usize { return len(items) }
 export function priority_queue_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
-export function priority_queue_first<T>(items: []T): T { return items[0] }
-export function priority_queue_last<T>(items: []T): T { return items[len(items)-1] }
+export function priority_queue_first<T: Copy>(items: []T): T { return items[0 as usize] }
+export function priority_queue_last<T: Copy>(items: []T): T { return items[len(items)-1 as usize] }

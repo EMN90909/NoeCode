@@ -1,11 +1,46 @@
 module noqeri.std.thread
 
+unsafe extern function threadHostSpawn(entry: string, context: usize): isize
+unsafe extern function threadHostJoin(handle: usize, timeoutMillis: i64): isize
+unsafe extern function threadHostDetach(handle: usize): bool
+unsafe extern function threadHostYield(): void
+unsafe extern function threadHostState(handle: usize): int
+
 export function thread_new(): int { return 0 }
 export function thread_running(): int { return 1 }
 export function thread_blocked(): int { return 2 }
 export function thread_finished(): int { return 3 }
 export function thread_failed(): int { return 4 }
-export function thread_state_valid(state:int):bool{return state>=0&&state<=4}
-export function thread_terminal(state:int):bool{return state==thread_finished()||state==thread_failed()}
-export function thread_can_join(state:int):bool{return state==thread_running()||thread_terminal(state)}
+export function thread_detached(): int { return 5 }
+
+export function thread_state_valid(state:int):bool{return state>=0&&state<=5}
+export function thread_terminal(state:int):bool{return state==thread_finished()||state==thread_failed()||state==thread_detached()}
+export function thread_can_join(state:int):bool{return state==thread_running()||state==thread_blocked()||state==thread_finished()||state==thread_failed()}
 export function thread_default_spin_limit():usize{return 64 as usize}
+
+export function thread_spawn(entry:string, context:usize):isize {
+    if len(entry)==0 as usize{return -1 as isize}
+    unsafe{return threadHostSpawn(entry,context)}
+}
+
+export function thread_join(handle:usize):isize {
+    if handle==0 as usize{return -1 as isize}
+    unsafe{return threadHostJoin(handle,-1 as i64)}
+}
+
+export function thread_join_timeout(handle:usize, timeoutMillis:i64):isize {
+    if handle==0 as usize||timeoutMillis<0 as i64{return -1 as isize}
+    unsafe{return threadHostJoin(handle,timeoutMillis)}
+}
+
+export function thread_detach(handle:usize):bool {
+    if handle==0 as usize{return false}
+    unsafe{return threadHostDetach(handle)}
+}
+
+export function thread_state(handle:usize):int {
+    if handle==0 as usize{return thread_failed()}
+    unsafe{return threadHostState(handle)}
+}
+
+export function thread_yield():void { unsafe{threadHostYield()} }

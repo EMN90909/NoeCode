@@ -7,31 +7,45 @@ import "storage.nqr"
 
 export function dbEngineOpen(path: string, readOnly: bool, pageSize: usize): isize {
     if !dbPageSizeValid(pageSize) { return dbStatusInvalid() }
-    let handle: usize = dbHostOpen(path, readOnly)
-    if !dbStorageHandleValid(handle) { return dbStatusIo() }
-    return handle as isize
+    unsafe {
+        let handle: usize = dbHostOpen(path, readOnly)
+        if !dbStorageHandleValid(handle) { return dbStatusIo() }
+        return handle as isize
+    }
 }
 
 export function dbEngineBegin(handle: usize, readOnly: bool, timeoutMillis: i64): isize {
     if !dbStorageHandleValid(handle) || timeoutMillis < 0 as i64 { return dbStatusInvalid() }
     if readOnly { return dbStatusOk() }
-    if !dbHostLockExclusive(handle, timeoutMillis) { return dbStatusBusy() }
+    unsafe {
+        if !dbHostLockExclusive(handle, timeoutMillis) { return dbStatusBusy() }
+    }
     return dbStatusOk()
 }
 
 export function dbEngineCommit(handle: usize, readOnly: bool): isize {
     if !dbStorageHandleValid(handle) { return dbStatusInvalid() }
     if readOnly { return dbStatusOk() }
-    let wal: isize = dbHostCommitWal(handle)
-    if wal < 0 as isize { dbHostUnlock(handle); return dbStatusIo() }
-    let synced: isize = dbHostFsync(handle)
-    if synced < 0 as isize { dbHostUnlock(handle); return dbStatusIo() }
-    dbHostUnlock(handle)
+    unsafe {
+        let wal: isize = dbHostCommitWal(handle)
+        if wal < 0 as isize {
+            dbHostUnlock(handle)
+            return dbStatusIo()
+        }
+        let synced: isize = dbHostFsync(handle)
+        if synced < 0 as isize {
+            dbHostUnlock(handle)
+            return dbStatusIo()
+        }
+        dbHostUnlock(handle)
+    }
     return dbStatusOk()
 }
 
 export function dbEngineRollback(handle: usize, readOnly: bool): isize {
     if !dbStorageHandleValid(handle) { return dbStatusInvalid() }
-    if !readOnly { dbHostUnlock(handle) }
+    if !readOnly {
+        unsafe { dbHostUnlock(handle) }
+    }
     return dbStatusOk()
 }

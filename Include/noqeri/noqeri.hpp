@@ -11,7 +11,6 @@
 #include "database.hpp"
 #include "runtime.hpp"
 #include "compiler.hpp"
-#include "unsafe.hpp"
 #include "tools.hpp"
 
 namespace noqeri = noe;

@@ -3,6 +3,7 @@ import "status.nqr"
 import "limits.nqr"
 import "security.nqr"
 import "index.nqr"
+import "btree.nqr"
 import "transaction.nqr"
 import "wal.nqr"
 import "recovery.nqr"
@@ -13,12 +14,7 @@ import "storage.nqr"
 import "engine.nqr"
 
 export function dbFindIntKey(keys: *i64, count: usize, key: i64): isize {
-    let index: usize = 0 as usize
-    while index < count {
-        if keys[index] == key { return index as isize }
-        index = index + 1 as usize
-    }
-    return -1 as isize
+    return dbBtreeFind(keys,count,key)
 }
 
 export function dbContainsIntKey(keys: *i64, count: usize, key: i64): bool {
@@ -28,9 +24,16 @@ export function dbContainsIntKey(keys: *i64, count: usize, key: i64): bool {
 export function dbInsertInt(keys: *i64, values: *i64, count: usize, capacity: usize, key: i64, value: i64): isize {
     if count >= capacity { return dbStatusLimit() }
     if dbContainsIntKey(keys, count, key) { return dbStatusConflict() }
-    keys[count] = key
-    values[count] = value
-    return count as isize
+    let at:usize=dbBtreeLowerBound(keys,count,key)
+    let index:usize=count
+    while index>at{
+        keys[index]=keys[index-1 as usize]
+        values[index]=values[index-1 as usize]
+        index=index-1 as usize
+    }
+    keys[at]=key
+    values[at]=value
+    return at as isize
 }
 
 export function dbUpdateInt(keys: *i64, values: *i64, count: usize, key: i64, value: i64): isize {

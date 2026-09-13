@@ -1,0 +1,16 @@
+function side_effect_value(): int {
+    print("unexpected")
+    return 99
+}
+
+function main(): int {
+    let x: int = 4
+    let y: int = 7
+    if false && side_effect_value() > 0 {
+        return 10
+    }
+    if true || side_effect_value() > 0 {
+        print("ok")
+    }
+    return (x * y) - 28
+}

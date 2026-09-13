@@ -1,0 +1,18 @@
+import "../Lib/std/list.nqr"
+import "../Lib/std/map.nqr"
+import "../Lib/std/set.nqr"
+import "../Lib/std/queue.nqr"
+import "../Lib/std/stack.nqr"
+import "../Lib/std/pair.nqr"
+
+record User {
+    id: i64
+    active: bool
+}
+
+export function list_string_smoke(list: *List<string>): usize { return list_length(list) }
+export function map_user_smoke(map: *Map<string, User>): usize { return map_length(map) }
+export function set_int_smoke(set: *Set<int>): usize { return set_length(set) }
+export function queue_user_smoke(queue: *Queue<User>): usize { return queue_length(queue) }
+export function stack_user_smoke(stack: *Stack<User>): usize { return stack_length(stack) }
+export function pair_user_smoke(pair: *Pair<string, User>): string { return pair_first_ref(pair) }

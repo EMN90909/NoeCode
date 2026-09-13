@@ -1,0 +1,501 @@
+module noqeri.compiler.selfhost.semantic_program
+import "lexer.nqr"
+import "ast.nqr"
+import "types.nqr"
+import "type_ref.nqr"
+import "symbols.nqr"
+import "semantics.nqr"
+import "record_layout.nqr"
+import "generic_metadata.nqr"
+
+record NqFunctionInfo {
+    symbol: u64
+    nameStart: usize
+    nameEnd: usize
+    firstParameter: usize
+    parameterCount: usize
+    returnCode: int
+    returnSymbol: u64
+    returnElementCode: int
+    returnElementSymbol: u64
+    flags: u32
+    astIndex: isize
+}
+
+record NqFunctionParameterInfo {
+    functionSymbol: u64
+    index: usize
+    typeCode: int
+    typeSymbol: u64
+    elementTypeCode: int
+    elementTypeSymbol: u64
+    arrayLength: usize
+}
+
+record NqSemanticContext {
+    symbolCount: usize
+    functionCount: usize
+    parameterCount: usize
+    scopeDepth: usize
+    currentFunction: isize
+    currentReturnCode: int
+    currentReturnSymbol: u64
+    unsafeAllowed: bool
+}
+
+export function nqSemanticProgramCapacity(): isize { return -220 }
+export function nqSemanticBadFunction(): isize { return -221 }
+export function nqSemanticBadRecord(): isize { return -222 }
+export function nqSemanticBadCall(): isize { return -223 }
+export function nqSemanticBadMember(): isize { return -224 }
+
+function nqSemanticApplyRef(node: *NqAstNode, value: *NqTypeRef): void {
+    if node == null || value == null { return }
+    nqAstApplyType(node, value.code, value.nameSymbol, value.elementCode, value.elementSymbol, value.arrayLength)
+}
+
+function nqSemanticFunctionFind(functions: []NqFunctionInfo, count: usize, symbol: u64): isize {
+    let index: usize = 0 as usize
+    while index < count && index < len(functions) { if functions[index].symbol == symbol { return index as isize } index = index + 1 as usize }
+    return -1 as isize
+}
+
+function nqSemanticGenericNode(nodes: []NqAstNode, functionIndex: isize, symbol: u64): isize {
+    if functionIndex < 0 as isize { return nqAstNoNode() }
+    return nqGenericMetadataFind(nodes, functionIndex, symbol)
+}
+
+function nqSemanticNormalizeRef(nodes: []NqAstNode, functionIndex: isize, value: *NqTypeRef): void {
+    if value == null || functionIndex < 0 as isize { return }
+    if value.code == nqAstTypeRecord() && nqSemanticGenericNode(nodes, functionIndex, value.nameSymbol) >= 0 as isize { value.code = nqAstTypeGeneric() }
+    if value.elementCode == nqAstTypeRecord() && nqSemanticGenericNode(nodes, functionIndex, value.elementSymbol) >= 0 as isize { value.elementCode = nqAstTypeGeneric() }
+    if value.firstGenericCode == nqAstTypeRecord() && nqSemanticGenericNode(nodes, functionIndex, value.firstGenericSymbol) >= 0 as isize { value.firstGenericCode = nqAstTypeGeneric() }
+}
+
+function nqSemanticFunctionReturnRef(source: []u8, nodes: []NqAstNode, functionIndex: isize, out: *NqTypeRef): bool {
+    if out == null || functionIndex < 0 as isize || functionIndex as usize >= len(nodes) { return false }
+    let fn: *NqAstNode = &nodes[functionIndex as usize]
+    let token: NqToken
+    nqCompilerNextToken(source, fn.start, &token)
+    if token.kind != nqTokenIdentifier() { return false }
+    nqCompilerNextToken(source, token.end, &token)
+    if token.kind != nqTokenIdentifier() { return false }
+    let cursor: usize = token.end
+    nqCompilerNextToken(source, cursor, &token)
+    if token.kind == nqTokenOperator() && token.first == 60 as u8 {
+        let depth: int = 1
+        cursor = token.end
+        while depth > 0 {
+            nqCompilerNextToken(source, cursor, &token)
+            if token.kind == nqTokenEof() { return false }
+            if token.kind == nqTokenOperator() && token.first == 60 as u8 { depth = depth + 1 }
+            if token.kind == nqTokenOperator() && token.first == 62 as u8 { depth = depth - 1 }
+            cursor = token.end
+        }
+        nqCompilerNextToken(source, cursor, &token)
+    }
+    if token.kind != nqTokenPunctuation() || token.first != 40 as u8 { return false }
+    let parens: int = 1
+    cursor = token.end
+    while parens > 0 {
+        nqCompilerNextToken(source, cursor, &token)
+        if token.kind == nqTokenEof() { return false }
+        if token.kind == nqTokenPunctuation() && token.first == 40 as u8 { parens = parens + 1 }
+        if token.kind == nqTokenPunctuation() && token.first == 41 as u8 { parens = parens - 1 }
+        cursor = token.end
+    }
+    nqCompilerNextToken(source, cursor, &token)
+    if token.kind == nqTokenPunctuation() && token.first == 58 as u8 {
+        let typeStart: usize = nqCompilerSkipTrivia(source, token.end)
+        let end: usize = nqTypeRefParse(source, typeStart, out)
+        if end <= typeStart { return false }
+        nqSemanticNormalizeRef(nodes, functionIndex, out)
+        return true
+    }
+    out.code = nqAstTypeVoid()
+    out.nameSymbol = 0 as u64
+    out.elementCode = nqAstTypeUnknown()
+    out.elementSymbol = 0 as u64
+    out.arrayLength = 0 as usize
+    out.genericArgCount = 0 as usize
+    out.firstGenericCode = nqAstTypeUnknown()
+    out.firstGenericSymbol = 0 as u64
+    out.start = cursor
+    out.end = cursor
+    out.flags = 0 as u32
+    return true
+}
+
+export function nqSemanticBuildFunctions(source: []u8, nodes: []NqAstNode, first: isize, functions: []NqFunctionInfo, functionCount: *usize, parameters: []NqFunctionParameterInfo, parameterCount: *usize): isize {
+    if functionCount == null || parameterCount == null { return nqSemanticProgramCapacity() }
+    functionCount[0] = 0 as usize
+    parameterCount[0] = 0 as usize
+    let cursor: isize = first
+    while cursor >= 0 as isize {
+        if cursor as usize >= len(nodes) { return nqSemanticBadFunction() }
+        let fn: *NqAstNode = &nodes[cursor as usize]
+        if fn.tag == nqAstFunction() {
+            if fn.left < 0 as isize || functionCount[0] >= len(functions) { return nqSemanticProgramCapacity() }
+            let name: *NqAstNode = &nodes[fn.left as usize]
+            let symbol: u64 = nqTypeNameSymbol(source, name.start, name.end)
+            if nqSemanticFunctionFind(functions, functionCount[0], symbol) >= 0 as isize { return nqSemanticDuplicateName() }
+            let returnRef: NqTypeRef
+            if !nqSemanticFunctionReturnRef(source, nodes, cursor, &returnRef) { return nqSemanticBadFunction() }
+            let fi: usize = functionCount[0]
+            functions[fi].symbol = symbol
+            functions[fi].nameStart = name.start
+            functions[fi].nameEnd = name.end
+            functions[fi].firstParameter = parameterCount[0]
+            functions[fi].parameterCount = 0 as usize
+            functions[fi].returnCode = returnRef.code
+            functions[fi].returnSymbol = returnRef.nameSymbol
+            functions[fi].returnElementCode = returnRef.elementCode
+            functions[fi].returnElementSymbol = returnRef.elementSymbol
+            functions[fi].flags = fn.flags
+            functions[fi].astIndex = cursor
+            let paramNode: isize = fn.right
+            let paramIndex: usize = 0 as usize
+            while paramNode >= 0 as isize {
+                if parameterCount[0] >= len(parameters) || paramNode as usize >= len(nodes) { return nqSemanticProgramCapacity() }
+                let p: *NqAstNode = &nodes[paramNode as usize]
+                let ref: NqTypeRef
+                if p.extra >= 0 as isize {
+                    let end: usize = nqTypeRefParse(source, p.extra as usize, &ref)
+                    if end <= p.extra as usize { return nqSemanticBadFunction() }
+                    nqSemanticNormalizeRef(nodes, cursor, &ref)
+                } else {
+                    ref.code = nqAstTypeUnknown() ref.nameSymbol = 0 as u64 ref.elementCode = nqAstTypeUnknown() ref.elementSymbol = 0 as u64 ref.arrayLength = 0 as usize
+                }
+                let pi: usize = parameterCount[0]
+                parameters[pi].functionSymbol = symbol
+                parameters[pi].index = paramIndex
+                parameters[pi].typeCode = ref.code
+                parameters[pi].typeSymbol = ref.nameSymbol
+                parameters[pi].elementTypeCode = ref.elementCode
+                parameters[pi].elementTypeSymbol = ref.elementSymbol
+                parameters[pi].arrayLength = ref.arrayLength
+                parameterCount[0] = pi + 1 as usize
+                functions[fi].parameterCount = functions[fi].parameterCount + 1 as usize
+                paramIndex = paramIndex + 1 as usize
+                paramNode = p.next
+            }
+            functionCount[0] = fi + 1 as usize
+        }
+        cursor = fn.next
+    }
+    return nqSemanticOk()
+}
+
+function nqSemanticCopySymbolType(node: *NqAstNode, symbol: *NqSymbol): void {
+    if node == null || symbol == null { return }
+    nqAstApplyType(node, symbol.typeCode, symbol.typeSymbol, symbol.elementTypeCode, symbol.elementTypeSymbol, symbol.arrayLength)
+}
+
+function nqSemanticExpression(source: []u8, nodes: []NqAstNode, nodeIndex: isize, symbols: []NqSymbol, context: *NqSemanticContext, functions: []NqFunctionInfo, functionParameters: []NqFunctionParameterInfo, records: []NqRecordInfo, recordCount: usize, fields: []NqFieldInfo): isize {
+    if nodeIndex < 0 as isize || nodeIndex as usize >= len(nodes) { return nqSemanticTypeMismatch() }
+    let node: *NqAstNode = &nodes[nodeIndex as usize]
+    if node.tag == nqAstInteger() { node.typeCode = nqAstTypeInt() return nqSemanticOk() }
+    if node.tag == nqAstFloat() { node.typeCode = nqAstTypeFloat() return nqSemanticOk() }
+    if node.tag == nqAstString() { node.typeCode = nqAstTypeString() return nqSemanticOk() }
+    if node.tag == nqAstBool() { node.typeCode = nqAstTypeBool() return nqSemanticOk() }
+    if node.tag == nqAstNull() { node.typeCode = nqAstTypeNull() return nqSemanticOk() }
+    if node.tag == nqAstName() {
+        let found: isize = nqSymbolsLookup(source, symbols, context.symbolCount, node.start, node.end, context.scopeDepth)
+        if found >= 0 as isize { nqSemanticCopySymbolType(node, &symbols[found as usize]) return nqSemanticOk() }
+        let functionSymbol: u64 = nqTypeNameSymbol(source, node.start, node.end)
+        if nqSemanticFunctionFind(functions, context.functionCount, functionSymbol) >= 0 as isize { node.typeCode = nqAstTypeUnknown() return nqSemanticOk() }
+        return nqSemanticUnknownName()
+    }
+    if node.tag == nqAstArray() {
+        if node.extra <= 0 as isize || node.right < 0 as isize { return nqSemanticInvalidArrayElement() }
+        let element: isize = node.right
+        let expectedCode: int = nqAstTypeUnknown()
+        let expectedSymbol: u64 = 0 as u64
+        let count: usize = 0 as usize
+        while element >= 0 as isize && count < node.extra as usize {
+            let status: isize = nqSemanticExpression(source, nodes, element, symbols, context, functions, functionParameters, records, recordCount, fields)
+            if status < 0 as isize { return status }
+            if expectedCode == nqAstTypeUnknown() { expectedCode = nodes[element as usize].typeCode expectedSymbol = nodes[element as usize].typeSymbol }
+            else if !nqSemanticAssignable(nodes[element as usize].typeCode, expectedCode) { return nqSemanticInvalidArrayElement() }
+            element = nodes[element as usize].next
+            count = count + 1 as usize
+        }
+        node.typeCode = nqAstTypeArray()
+        node.elementTypeCode = expectedCode
+        node.elementTypeSymbol = expectedSymbol
+        node.arrayLength = count
+        return nqSemanticOk()
+    }
+    if node.tag == nqAstUnary() {
+        let status: isize = nqSemanticExpression(source, nodes, node.left, symbols, context, functions, functionParameters, records, recordCount, fields)
+        if status < 0 as isize { return status }
+        let operand: *NqAstNode = &nodes[node.left as usize]
+        if node.flags == 0x747279 as u32 {
+            if !nqCompilerTypeIsInteger(operand.typeCode) || !nqCompilerTypeIsInteger(context.currentReturnCode) { return nqSemanticInvalidReturn() }
+            nqAstApplyType(node, operand.typeCode, operand.typeSymbol, operand.elementTypeCode, operand.elementTypeSymbol, operand.arrayLength)
+            return nqSemanticOk()
+        }
+        if node.flags == 38 as u32 {
+            node.typeCode = nqAstTypePointer()
+            node.elementTypeCode = operand.typeCode
+            node.elementTypeSymbol = operand.typeSymbol
+            return nqSemanticOk()
+        }
+        if node.flags == 42 as u32 {
+            if operand.typeCode != nqAstTypePointer() { return nqSemanticInvalidPointer() }
+            node.typeCode = operand.elementTypeCode
+            node.typeSymbol = operand.elementTypeSymbol
+            return nqSemanticOk()
+        }
+        let result: int = nqSemanticUnaryResult(node.flags as int, operand.typeCode)
+        if result == nqAstTypeUnknown() { return nqSemanticInvalidUnary() }
+        node.typeCode = result
+        return nqSemanticOk()
+    }
+    if node.tag == nqAstBinary() {
+        let leftStatus: isize = nqSemanticExpression(source, nodes, node.left, symbols, context, functions, functionParameters, records, recordCount, fields)
+        if leftStatus < 0 as isize { return leftStatus }
+        let rightStatus: isize = nqSemanticExpression(source, nodes, node.right, symbols, context, functions, functionParameters, records, recordCount, fields)
+        if rightStatus < 0 as isize { return rightStatus }
+        let op: int = 0
+        if node.flags == 43 as u32 { op = nqSemanticOpAdd() }
+        else if node.flags == 45 as u32 { op = nqSemanticOpSub() }
+        else if node.flags == 42 as u32 { op = nqSemanticOpMul() }
+        else if node.flags == 47 as u32 { op = nqSemanticOpDiv() }
+        else if node.flags == 37 as u32 { op = nqSemanticOpMod() }
+        else if node.flags == 61 as u32 * 256 as u32 + 61 as u32 { op = nqSemanticOpEq() }
+        else if node.flags == 33 as u32 * 256 as u32 + 61 as u32 { op = nqSemanticOpNe() }
+        else if node.flags == 60 as u32 { op = nqSemanticOpLt() }
+        else if node.flags == 60 as u32 * 256 as u32 + 61 as u32 { op = nqSemanticOpLe() }
+        else if node.flags == 62 as u32 { op = nqSemanticOpGt() }
+        else if node.flags == 62 as u32 * 256 as u32 + 61 as u32 { op = nqSemanticOpGe() }
+        else if node.flags == 38 as u32 * 256 as u32 + 38 as u32 { op = nqSemanticOpAnd() }
+        else if node.flags == 124 as u32 * 256 as u32 + 124 as u32 { op = nqSemanticOpOr() }
+        let result: int = nqSemanticBinaryResult(op, nodes[node.left as usize].typeCode, nodes[node.right as usize].typeCode)
+        if result == nqAstTypeUnknown() { return nqSemanticInvalidBinary() }
+        node.typeCode = result
+        return nqSemanticOk()
+    }
+    if node.tag == nqAstAssign() {
+        let rightStatus: isize = nqSemanticExpression(source, nodes, node.right, symbols, context, functions, functionParameters, records, recordCount, fields)
+        if rightStatus < 0 as isize { return rightStatus }
+        let target: *NqAstNode = &nodes[node.left as usize]
+        if target.tag == nqAstName() {
+            let found: isize = nqSymbolsLookup(source, symbols, context.symbolCount, target.start, target.end, context.scopeDepth)
+            if found < 0 as isize { return nqSemanticUnknownName() }
+            if nqSymbolConst(&symbols[found as usize]) { return nqSemanticConstWrite() }
+            if !nqSemanticAssignable(nodes[node.right as usize].typeCode, symbols[found as usize].typeCode) { return nqSemanticTypeMismatch() }
+            nqSemanticCopySymbolType(node, &symbols[found as usize])
+            nqSemanticCopySymbolType(target, &symbols[found as usize])
+            return nqSemanticOk()
+        }
+        let targetStatus: isize = nqSemanticExpression(source, nodes, node.left, symbols, context, functions, functionParameters, records, recordCount, fields)
+        if targetStatus < 0 as isize { return targetStatus }
+        if !nqSemanticAssignable(nodes[node.right as usize].typeCode, target.typeCode) { return nqSemanticTypeMismatch() }
+        nqAstApplyType(node, target.typeCode, target.typeSymbol, target.elementTypeCode, target.elementTypeSymbol, target.arrayLength)
+        return nqSemanticOk()
+    }
+    if node.tag == nqAstCast() {
+        let status: isize = nqSemanticExpression(source, nodes, node.left, symbols, context, functions, functionParameters, records, recordCount, fields)
+        if status < 0 as isize { return status }
+        let target: NqTypeRef
+        let end: usize = nqTypeRefParse(source, node.extra as usize, &target)
+        if end <= node.extra as usize { return nqSemanticInvalidCast() }
+        nqSemanticNormalizeRef(nodes, context.currentFunction, &target)
+        let fromCode: int = nodes[node.left as usize].typeCode
+        if !nqSemanticExplicitCastValid(fromCode, target.code) { return nqSemanticInvalidCast() }
+        if nqSemanticCastRequiresUnsafe(fromCode, target.code) && !context.unsafeAllowed { return nqSemanticUnsafeRequired() }
+        nqSemanticApplyRef(node, &target)
+        return nqSemanticOk()
+    }
+    if node.tag == nqAstIndex() {
+        let baseStatus: isize = nqSemanticExpression(source, nodes, node.left, symbols, context, functions, functionParameters, records, recordCount, fields)
+        if baseStatus < 0 as isize { return baseStatus }
+        let indexStatus: isize = nqSemanticExpression(source, nodes, node.right, symbols, context, functions, functionParameters, records, recordCount, fields)
+        if indexStatus < 0 as isize { return indexStatus }
+        let base: *NqAstNode = &nodes[node.left as usize]
+        if !nqCompilerTypeIsInteger(nodes[node.right as usize].typeCode) { return nqSemanticInvalidIndex() }
+        if base.typeCode == nqAstTypePointer() && !context.unsafeAllowed { return nqSemanticUnsafeRequired() }
+        if !nqCompilerTypeIsIndexable(base.typeCode) && base.typeCode != nqAstTypePointer() { return nqSemanticInvalidIndex() }
+        if base.typeCode == nqAstTypeString() { node.typeCode = nqAstTypeU8() }
+        else { node.typeCode = base.elementTypeCode node.typeSymbol = base.elementTypeSymbol }
+        return nqSemanticOk()
+    }
+    if node.tag == nqAstMember() {
+        let baseStatus: isize = nqSemanticExpression(source, nodes, node.left, symbols, context, functions, functionParameters, records, recordCount, fields)
+        if baseStatus < 0 as isize { return baseStatus }
+        let base: *NqAstNode = &nodes[node.left as usize]
+        let recordSymbol: u64 = base.typeSymbol
+        if base.typeCode == nqAstTypePointer() { recordSymbol = base.elementTypeSymbol }
+        if recordSymbol == 0 as u64 || node.right < 0 as isize { return nqSemanticBadMember() }
+        let member: *NqAstNode = &nodes[node.right as usize]
+        let fieldSymbol: u64 = nqTypeNameSymbol(source, member.start, member.end)
+        let fieldIndex: isize = nqRecordFieldFind(records, recordCount, fields, recordSymbol, fieldSymbol)
+        if fieldIndex < 0 as isize { return nqSemanticBadMember() }
+        let field: *NqFieldInfo = &fields[fieldIndex as usize]
+        nqAstApplyType(node, field.typeCode, field.typeSymbol, field.elementTypeCode, field.elementTypeSymbol, field.arrayLength)
+        node.extra = field.offset as isize
+        return nqSemanticOk()
+    }
+    if node.tag == nqAstCall() {
+        let callee: *NqAstNode = &nodes[node.left as usize]
+        let functionSymbol: u64 = nqTypeNameSymbol(source, callee.start, callee.end)
+        let functionIndex: isize = nqSemanticFunctionFind(functions, context.functionCount, functionSymbol)
+        let argument: isize = node.right
+        let argumentIndex: usize = 0 as usize
+        while argument >= 0 as isize && argumentIndex < node.extra as usize {
+            let status: isize = nqSemanticExpression(source, nodes, argument, symbols, context, functions, functionParameters, records, recordCount, fields)
+            if status < 0 as isize { return status }
+            if functionIndex >= 0 as isize {
+                let fn: *NqFunctionInfo = &functions[functionIndex as usize]
+                if argumentIndex >= fn.parameterCount { return nqSemanticBadCall() }
+                let expected: *NqFunctionParameterInfo = &functionParameters[fn.firstParameter + argumentIndex]
+                if expected.typeCode != nqAstTypeGeneric() && expected.typeCode != nqAstTypeUnknown() && !nqSemanticAssignable(nodes[argument as usize].typeCode, expected.typeCode) { return nqSemanticTypeMismatch() }
+            }
+            argument = nodes[argument as usize].next
+            argumentIndex = argumentIndex + 1 as usize
+        }
+        if functionIndex >= 0 as isize {
+            let fn: *NqFunctionInfo = &functions[functionIndex as usize]
+            if argumentIndex != fn.parameterCount { return nqSemanticBadCall() }
+            node.typeCode = fn.returnCode
+            node.typeSymbol = fn.returnSymbol
+            node.elementTypeCode = fn.returnElementCode
+            node.elementTypeSymbol = fn.returnElementSymbol
+        } else { node.typeCode = nqAstTypeUnknown() }
+        return nqSemanticOk()
+    }
+    return nqSemanticTypeMismatch()
+}
+
+function nqSemanticStatement(source: []u8, nodes: []NqAstNode, nodeIndex: isize, symbols: []NqSymbol, context: *NqSemanticContext, functions: []NqFunctionInfo, functionParameters: []NqFunctionParameterInfo, records: []NqRecordInfo, recordCount: usize, fields: []NqFieldInfo): isize {
+    let node: *NqAstNode = &nodes[nodeIndex as usize]
+    if node.tag == nqAstBinding() {
+        let initStatus: isize = nqSemanticExpression(source, nodes, node.right, symbols, context, functions, functionParameters, records, recordCount, fields)
+        if initStatus < 0 as isize { return initStatus }
+        let value: *NqAstNode = &nodes[node.right as usize]
+        let declared: NqTypeRef
+        if node.extra >= 0 as isize {
+            let end: usize = nqTypeRefParse(source, node.extra as usize, &declared)
+            if end <= node.extra as usize { return nqSemanticTypeMismatch() }
+            nqSemanticNormalizeRef(nodes, context.currentFunction, &declared)
+            if !nqSemanticAssignable(value.typeCode, declared.code) { return nqSemanticTypeMismatch() }
+            nqSemanticApplyRef(node, &declared)
+        } else { nqAstApplyType(node, value.typeCode, value.typeSymbol, value.elementTypeCode, value.elementTypeSymbol, value.arrayLength) }
+        let name: *NqAstNode = &nodes[node.left as usize]
+        let flags: u32 = 0 as u32
+        if (node.flags / nqAstFlagConst()) % 2 as u32 == 1 as u32 { flags = nqSymbolFlagConst() }
+        let defined: isize = nqSymbolsDefineTyped(source, symbols, &context.symbolCount, name.start, name.end, node.typeCode, node.typeSymbol, node.elementTypeCode, node.elementTypeSymbol, node.arrayLength, context.scopeDepth, flags)
+        if defined == nqSymbolDuplicate() { return nqSemanticDuplicateName() }
+        if defined < 0 as isize { return nqSemanticProgramCapacity() }
+        nqSemanticCopySymbolType(name, &symbols[defined as usize])
+        return nqSemanticOk()
+    }
+    if node.tag == nqAstExpressionStatement() { return nqSemanticExpression(source, nodes, node.left, symbols, context, functions, functionParameters, records, recordCount, fields) }
+    if node.tag == nqAstReturn() {
+        let actual: int = nqAstTypeVoid()
+        if node.left >= 0 as isize {
+            let status: isize = nqSemanticExpression(source, nodes, node.left, symbols, context, functions, functionParameters, records, recordCount, fields)
+            if status < 0 as isize { return status }
+            actual = nodes[node.left as usize].typeCode
+        }
+        if !nqSemanticReturnValid(actual, context.currentReturnCode) { return nqSemanticInvalidReturn() }
+        return nqSemanticOk()
+    }
+    if node.tag == nqAstThrow() {
+        let status: isize = nqSemanticExpression(source, nodes, node.left, symbols, context, functions, functionParameters, records, recordCount, fields)
+        if status < 0 as isize { return status }
+        if !nqCompilerTypeIsInteger(nodes[node.left as usize].typeCode) || !nqCompilerTypeIsInteger(context.currentReturnCode) { return nqSemanticInvalidReturn() }
+        return nqSemanticOk()
+    }
+    if node.tag == nqAstIf() || node.tag == nqAstWhile() {
+        let status: isize = nqSemanticExpression(source, nodes, node.left, symbols, context, functions, functionParameters, records, recordCount, fields)
+        if status < 0 as isize { return status }
+        if !nqSemanticConditionTypeValid(nodes[node.left as usize].typeCode) { return nqSemanticInvalidCondition() }
+        let bodyStatus: isize = nqSemanticStatement(source, nodes, node.right, symbols, context, functions, functionParameters, records, recordCount, fields)
+        if bodyStatus < 0 as isize { return bodyStatus }
+        if node.tag == nqAstIf() && node.extra >= 0 as isize { return nqSemanticStatement(source, nodes, node.extra, symbols, context, functions, functionParameters, records, recordCount, fields) }
+        return nqSemanticOk()
+    }
+    if node.tag == nqAstBlock() {
+        context.scopeDepth = context.scopeDepth + 1 as usize
+        let cursor: isize = node.left
+        while cursor >= 0 as isize {
+            let status: isize = nqSemanticStatement(source, nodes, cursor, symbols, context, functions, functionParameters, records, recordCount, fields)
+            if status < 0 as isize { return status }
+            cursor = nodes[cursor as usize].next
+        }
+        nqSymbolsPopScope(symbols, &context.symbolCount, context.scopeDepth)
+        context.scopeDepth = context.scopeDepth - 1 as usize
+        return nqSemanticOk()
+    }
+    return nqSemanticOk()
+}
+
+export function nqSemanticAnalyzeProgram(source: []u8, nodes: []NqAstNode, nodeCount: *usize, first: isize, unsafeAllowed: bool): isize {
+    if nodeCount == null { return nqSemanticProgramCapacity() }
+    let genericStatus: isize = nqGenericMetadataAttach(source, nodes, nodeCount, first)
+    if genericStatus < 0 as isize { return genericStatus }
+    let records: [NqRecordInfo; 256]
+    let fields: [NqFieldInfo; 2048]
+    let recordCount: usize = 0 as usize
+    let fieldCount: usize = 0 as usize
+    let layoutStatus: isize = nqRecordBuild(source, nodes, first, slice(records), &recordCount, slice(fields), &fieldCount, 8 as usize)
+    if layoutStatus < 0 as isize { return nqSemanticBadRecord() }
+    let functions: [NqFunctionInfo; 1024]
+    let parameters: [NqFunctionParameterInfo; 4096]
+    let functionCount: usize = 0 as usize
+    let parameterCount: usize = 0 as usize
+    let functionStatus: isize = nqSemanticBuildFunctions(source, nodes, first, slice(functions), &functionCount, slice(parameters), &parameterCount)
+    if functionStatus < 0 as isize { return functionStatus }
+    let symbols: [NqSymbol; 8192]
+    let context: NqSemanticContext
+    context.symbolCount = 0 as usize
+    context.functionCount = functionCount
+    context.parameterCount = parameterCount
+    context.scopeDepth = 0 as usize
+    context.currentFunction = nqAstNoNode()
+    context.currentReturnCode = nqAstTypeVoid()
+    context.currentReturnSymbol = 0 as u64
+    context.unsafeAllowed = unsafeAllowed
+    let cursor: isize = first
+    while cursor >= 0 as isize {
+        let node: *NqAstNode = &nodes[cursor as usize]
+        if node.tag == nqAstFunction() && (node.flags / nqAstFlagExtern()) % 2 as u32 == 0 as u32 {
+            let fnSymbol: u64 = nqTypeNameSymbol(source, nodes[node.left as usize].start, nodes[node.left as usize].end)
+            let infoIndex: isize = nqSemanticFunctionFind(slice(functions), functionCount, fnSymbol)
+            if infoIndex < 0 as isize { return nqSemanticBadFunction() }
+            let info: *NqFunctionInfo = &functions[infoIndex as usize]
+            context.currentFunction = cursor
+            context.currentReturnCode = info.returnCode
+            context.currentReturnSymbol = info.returnSymbol
+            context.scopeDepth = 1 as usize
+            let parameterNode: isize = node.right
+            let parameterIndex: usize = 0 as usize
+            while parameterNode >= 0 as isize {
+                let param: *NqAstNode = &nodes[parameterNode as usize]
+                let name: *NqAstNode = &nodes[param.left as usize]
+                let pinfo: *NqFunctionParameterInfo = &parameters[info.firstParameter + parameterIndex]
+                let defined: isize = nqSymbolsDefineTyped(source, slice(symbols), &context.symbolCount, name.start, name.end, pinfo.typeCode, pinfo.typeSymbol, pinfo.elementTypeCode, pinfo.elementTypeSymbol, pinfo.arrayLength, context.scopeDepth, nqSymbolFlagParameter())
+                if defined < 0 as isize { return nqSemanticDuplicateName() }
+                nqSemanticCopySymbolType(param, &symbols[defined as usize])
+                nqSemanticCopySymbolType(name, &symbols[defined as usize])
+                parameterNode = param.next
+                parameterIndex = parameterIndex + 1 as usize
+            }
+            if node.extra >= 0 as isize {
+                let status: isize = nqSemanticStatement(source, nodes, node.extra, slice(symbols), &context, slice(functions), slice(parameters), slice(records), recordCount, slice(fields))
+                if status < 0 as isize { return status }
+            }
+            nqSymbolsPopScope(slice(symbols), &context.symbolCount, 1 as usize)
+            context.currentFunction = nqAstNoNode()
+            context.currentReturnCode = nqAstTypeVoid()
+            context.scopeDepth = 0 as usize
+        } else if node.tag == nqAstBinding() || nqAstIsStatement(node.tag) {
+            let status: isize = nqSemanticStatement(source, nodes, cursor, slice(symbols), &context, slice(functions), slice(parameters), slice(records), recordCount, slice(fields))
+            if status < 0 as isize { return status }
+        }
+        cursor = node.next
+    }
+    return nqSemanticOk()
+}

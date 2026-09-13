@@ -1,0 +1,13 @@
+record Task {
+    id: int,
+    done: bool
+}
+
+function outstanding(task: Task): bool {
+    return !task.done
+}
+
+function main(): int {
+    print("database CRUD fixture: run data/tasks.nqd through noqeri db")
+    return 0
+}

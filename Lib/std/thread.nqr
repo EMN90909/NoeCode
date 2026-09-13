@@ -1,11 +1,58 @@
 module noqeri.std.thread
 
+extern function threadSpawn(entry: usize, context: usize): isize
+extern function threadJoin(handle: usize): isize
+extern function threadDetach(handle: usize): isize
+extern function threadYield(): void
+extern function threadSleepMillis(milliseconds: i64): isize
+extern function threadCurrentId(): u64
+
+record Thread {
+    handle: usize
+    state: int
+}
+
 export function thread_new(): int { return 0 }
 export function thread_running(): int { return 1 }
 export function thread_blocked(): int { return 2 }
 export function thread_finished(): int { return 3 }
 export function thread_failed(): int { return 4 }
-export function thread_state_valid(state:int):bool{return state>=0&&state<=4}
-export function thread_terminal(state:int):bool{return state==thread_finished()||state==thread_failed()}
-export function thread_can_join(state:int):bool{return state==thread_running()||thread_terminal(state)}
-export function thread_default_spin_limit():usize{return 64 as usize}
+export function thread_state_valid(state: int): bool { return state >= 0 && state <= 4 }
+export function thread_terminal(state: int): bool { return state == thread_finished() || state == thread_failed() }
+export function thread_can_join(state: int): bool { return state == thread_running() || thread_terminal(state) }
+export function thread_default_spin_limit(): usize { return 64 as usize }
+export function thread_handle_valid(handle: isize): bool { return handle >= 0 as isize }
+
+export function thread_init(thread: *Thread): void { thread.handle = 0 as usize thread.state = thread_new() }
+
+// The entry/context form is intentionally low level and allocation-free. Safer
+// typed task APIs live in std/task and should be preferred by application code.
+export function thread_spawn(thread: *Thread, entry: usize, context: usize): isize {
+    if thread == null || entry == 0 as usize { return -2 as isize }
+    if thread.state == thread_running() { return -3 as isize }
+    let handle: isize = threadSpawn(entry, context)
+    if handle < 0 as isize { thread.state = thread_failed() return handle }
+    thread.handle = handle as usize
+    thread.state = thread_running()
+    return handle
+}
+
+export function thread_join(thread: *Thread): isize {
+    if thread == null || !thread_can_join(thread.state) { return -2 as isize }
+    if thread.state == thread_finished() { return 0 as isize }
+    let status: isize = threadJoin(thread.handle)
+    if status < 0 as isize { thread.state = thread_failed() return status }
+    thread.state = thread_finished()
+    return status
+}
+
+export function thread_detach(thread: *Thread): isize {
+    if thread == null || thread.state != thread_running() { return -2 as isize }
+    let status: isize = threadDetach(thread.handle)
+    if status >= 0 as isize { thread.state = thread_finished() }
+    return status
+}
+
+export function thread_yield(): void { threadYield() }
+export function thread_sleep_millis(milliseconds: i64): isize { if milliseconds < 0 as i64 { return -2 as isize } return threadSleepMillis(milliseconds) }
+export function thread_current_id(): u64 { return threadCurrentId() }

@@ -1,0 +1,38 @@
+module noqeri.database.index
+
+export function dbIndexFind(keys: *i64, count: usize, key: i64): isize {
+    let low: usize = 0 as usize
+    let high: usize = count
+    while low < high {
+        let middle: usize = low + (high - low) / 2 as usize
+        let value: i64 = keys[middle]
+        if value < key { low = middle + 1 as usize } else { high = middle }
+    }
+    if low < count && keys[low] == key { return low as isize }
+    return -1 as isize
+}
+
+export function dbIndexLowerBound(keys: *i64, count: usize, key: i64): usize {
+    let low: usize = 0 as usize
+    let high: usize = count
+    while low < high {
+        let middle: usize = low + (high - low) / 2 as usize
+        if keys[middle] < key { low = middle + 1 as usize } else { high = middle }
+    }
+    return low
+}
+
+export function dbIndexInsertSorted(keys: *i64, rows: *usize, count: usize, capacity: usize, key: i64, row: usize): isize {
+    if count >= capacity { return -1 as isize }
+    let at: usize = dbIndexLowerBound(keys, count, key)
+    if at < count && keys[at] == key { return -2 as isize }
+    let index: usize = count
+    while index > at {
+        keys[index] = keys[index - 1 as usize]
+        rows[index] = rows[index - 1 as usize]
+        index = index - 1 as usize
+    }
+    keys[at] = key
+    rows[at] = row
+    return at as isize
+}

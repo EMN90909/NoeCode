@@ -1,0 +1,17 @@
+module noqeri.database.storage
+
+extern function dbHostOpen(path: string, readOnly: bool): usize
+extern function dbHostClose(handle: usize): bool
+extern function dbHostLockExclusive(handle: usize, timeoutMillis: i64): bool
+extern function dbHostUnlock(handle: usize): bool
+extern function dbHostReadPage(handle: usize, pageId: u64, target: *u8, capacity: usize): isize
+extern function dbHostWriteWal(handle: usize, pageId: u64, source: *u8, count: usize, checksum: u32): isize
+extern function dbHostCommitWal(handle: usize): isize
+extern function dbHostCheckpoint(handle: usize): isize
+extern function dbHostFsync(handle: usize): isize
+extern function dbHostRandom(target: *u8, count: usize): isize
+extern function dbHostEncryptPage(key: *u8, keyCount: usize, nonce: *u8, nonceCount: usize, plain: *u8, plainCount: usize, out: *u8, outCapacity: usize): isize
+extern function dbHostDecryptPage(key: *u8, keyCount: usize, nonce: *u8, nonceCount: usize, cipher: *u8, cipherCount: usize, out: *u8, outCapacity: usize): isize
+
+export function dbStorageHandleValid(handle: usize): bool { return handle != 0 as usize }
+export function dbStorageWriteSizeValid(count: usize): bool { return count > 0 as usize && count <= 65536 as usize }

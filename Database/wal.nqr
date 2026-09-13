@@ -1,0 +1,22 @@
+module noqeri.database.wal
+
+export function dbWalChecksum(bytes: []u8): u32 {
+    let a: u32 = 1 as u32
+    let b: u32 = 0 as u32
+    let index: usize = 0 as usize
+    while index < len(bytes) {
+        a = (a + bytes[index] as u32) % (65521 as u32)
+        b = (b + a) % (65521 as u32)
+        index = index + 1
+    }
+    return b * (65536 as u32) + a
+}
+
+export function dbWalFrameValid(pageId: u64, payload: []u8, expected: u32): bool {
+    if pageId == 0 as u64 || len(payload) == 0 as usize { return false }
+    return dbWalChecksum(payload) == expected
+}
+
+export function dbWalCanCheckpoint(activeWriters: usize, committedFrames: usize): bool {
+    return activeWriters == 0 as usize && committedFrames > 0 as usize
+}

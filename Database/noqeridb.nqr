@@ -1,27 +1,33 @@
 module noqeri.database.core
+import "status.nqr"
+import "limits.nqr"
+import "security.nqr"
+import "index.nqr"
+import "transaction.nqr"
+import "wal.nqr"
+import "recovery.nqr"
+import "migration.nqr"
+import "query.nqr"
+import "planner.nqr"
+import "storage.nqr"
+import "engine.nqr"
 
 export function dbFindIntKey(keys: *i64, count: usize, key: i64): isize {
-    let index: usize = 0
+    let index: usize = 0 as usize
     while index < count {
-        if keys[index] == key {
-            return index as isize
-        }
-        index = index + 1
+        if keys[index] == key { return index as isize }
+        index = index + 1 as usize
     }
-    return -1
+    return -1 as isize
 }
 
 export function dbContainsIntKey(keys: *i64, count: usize, key: i64): bool {
-    return dbFindIntKey(keys, count, key) >= 0
+    return dbFindIntKey(keys, count, key) >= 0 as isize
 }
 
 export function dbInsertInt(keys: *i64, values: *i64, count: usize, capacity: usize, key: i64, value: i64): isize {
-    if count >= capacity {
-        return -1
-    }
-    if dbContainsIntKey(keys, count, key) {
-        return -2
-    }
+    if count >= capacity { return dbStatusLimit() }
+    if dbContainsIntKey(keys, count, key) { return dbStatusConflict() }
     keys[count] = key
     values[count] = value
     return count as isize
@@ -29,30 +35,24 @@ export function dbInsertInt(keys: *i64, values: *i64, count: usize, capacity: us
 
 export function dbUpdateInt(keys: *i64, values: *i64, count: usize, key: i64, value: i64): isize {
     let found: isize = dbFindIntKey(keys, count, key)
-    if found < 0 {
-        return -1
-    }
+    if found < 0 as isize { return dbStatusNotFound() }
     values[found as usize] = value
-    return 0
+    return dbStatusOk()
 }
 
 export function dbDeleteInt(keys: *i64, values: *i64, count: usize, key: i64): isize {
     let found: isize = dbFindIntKey(keys, count, key)
-    if found < 0 {
-        return -1
-    }
+    if found < 0 as isize { return dbStatusNotFound() }
     let index: usize = found as usize
-    while index + 1 < count {
-        keys[index] = keys[index + 1]
-        values[index] = values[index + 1]
-        index = index + 1
+    while index + 1 as usize < count {
+        keys[index] = keys[index + 1 as usize]
+        values[index] = values[index + 1 as usize]
+        index = index + 1 as usize
     }
-    return (count - 1) as isize
+    return (count - 1 as usize) as isize
 }
 
 export function dbReadInt(values: *i64, count: usize, index: usize): i64 {
-    if index >= count {
-        return 0 as i64
-    }
+    if index >= count { return 0 as i64 }
     return values[index]
 }

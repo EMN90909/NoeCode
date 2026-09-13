@@ -1,0 +1,9 @@
+module noqeri.database.migration
+
+export function dbSchemaVersionValid(version: u32): bool { return version > 0 as u32 }
+export function dbMigrationNeeded(current: u32, target: u32): bool { return target > current }
+export function dbMigrationAllowed(current: u32, target: u32): bool {
+    if !dbSchemaVersionValid(current) || !dbSchemaVersionValid(target) { return false }
+    return target == current || target == current + 1 as u32
+}
+export function dbMigrationRejectDowngrade(current: u32, target: u32): bool { return target < current }

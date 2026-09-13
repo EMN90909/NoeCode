@@ -1,0 +1,18 @@
+module noqeri.database.limits
+
+export function dbDefaultPageSize(): usize { return 4096 as usize }
+export function dbMaxPageSize(): usize { return 65536 as usize }
+export function dbMaxColumns(): usize { return 256 as usize }
+export function dbMaxIndexes(): usize { return 128 as usize }
+export function dbMaxParameters(): usize { return 1024 as usize }
+export function dbMaxRowBytes(): usize { return 1048576 as usize }
+export function dbMaxWalBytes(): usize { return 268435456 as usize }
+
+export function dbPageSizeValid(size: usize): bool {
+    if size < 1024 as usize || size > dbMaxPageSize() { return false }
+    return size % 512 as usize == 0 as usize
+}
+
+export function dbRowSizeValid(size: usize): bool { return size <= dbMaxRowBytes() }
+export function dbParameterCountValid(count: usize): bool { return count <= dbMaxParameters() }
+export function dbWalSizeValid(size: usize): bool { return size <= dbMaxWalBytes() }

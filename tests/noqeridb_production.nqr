@@ -1,0 +1,31 @@
+import "../Database/index.nqr"
+import "../Database/security.nqr"
+import "../Database/query.nqr"
+import "../Database/planner.nqr"
+import "../Database/recovery.nqr"
+import "../Database/transaction.nqr"
+
+function require(ok: bool): void {
+    if !ok {
+        let invalid: *u8 = 0 as *u8
+        print(invalid[0])
+    }
+}
+
+let keys: [i64; 5] = [1 as i64, 4 as i64, 9 as i64, 15 as i64, 31 as i64]
+let rows: [usize; 6] = [0 as usize, 1 as usize, 2 as usize, 3 as usize, 4 as usize, 0 as usize]
+require(dbIndexFind(&keys[0], 5 as usize, 9 as i64) == 2 as isize)
+require(dbIndexFind(&keys[0], 5 as usize, 8 as i64) < 0 as isize)
+
+let secretA: [u8; 4] = [1 as u8, 2 as u8, 3 as u8, 4 as u8]
+let secretB: [u8; 4] = [1 as u8, 2 as u8, 3 as u8, 4 as u8]
+require(dbSecureEqual(slice(secretA), slice(secretB)))
+require(dbBackoffMillis(9 as usize) <= 5000 as i64)
+
+let query: [u8; 30] = [115 as u8,101 as u8,108 as u8,101 as u8,99 as u8,116 as u8,32 as u8,42 as u8,32 as u8,102 as u8,114 as u8,111 as u8,109 as u8,32 as u8,117 as u8,115 as u8,101 as u8,114 as u8,115 as u8,32 as u8,119 as u8,104 as u8,101 as u8,114 as u8,101 as u8,32 as u8,105 as u8,100 as u8,61 as u8,63 as u8]
+require(dbPreparedQueryValid(slice(query), 1 as usize))
+require(dbChoosePlan(true, true, true, 1000 as usize) == dbPlanUniqueLookup())
+require(dbRecoveryAction(true, true, true, true) == dbRecoveryReplayWal())
+require(dbTxTransition(dbTxIdle(), 1) == dbTxActive())
+
+print("NOQERI DB production policy smoke: OK")

@@ -1,0 +1,15 @@
+module noqeri.database.status
+
+export function dbStatusOk(): isize { return 0 as isize }
+export function dbStatusInvalid(): isize { return -1 as isize }
+export function dbStatusNotFound(): isize { return -2 as isize }
+export function dbStatusConflict(): isize { return -3 as isize }
+export function dbStatusCorrupt(): isize { return -4 as isize }
+export function dbStatusBusy(): isize { return -5 as isize }
+export function dbStatusDenied(): isize { return -6 as isize }
+export function dbStatusLimit(): isize { return -7 as isize }
+export function dbStatusIo(): isize { return -8 as isize }
+export function dbStatusAuth(): isize { return -9 as isize }
+
+export function dbStatusIsOk(status: isize): bool { return status == 0 as isize }
+export function dbStatusIsError(status: isize): bool { return status < 0 as isize }

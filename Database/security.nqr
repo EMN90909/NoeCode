@@ -1,0 +1,51 @@
+module noqeri.database.security
+
+export function dbSecureEqual(left: []u8, right: []u8): bool {
+    if len(left) != len(right) { return false }
+    let mismatch: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(left) {
+        if left[index] != right[index] { mismatch = mismatch + 1 }
+        index = index + 1
+    }
+    return mismatch == 0 as usize
+}
+
+export function dbEncryptionKeyLengthValid(length: usize): bool { return length == 32 as usize }
+export function dbNonceLengthValid(length: usize): bool { return length == 12 as usize }
+export function dbAuthTagLengthValid(length: usize): bool { return length == 16 as usize }
+
+export function dbIdentifierByteValid(value: u8): bool {
+    return (value >= 65 as u8 && value <= 90 as u8) ||
+           (value >= 97 as u8 && value <= 122 as u8) ||
+           (value >= 48 as u8 && value <= 57 as u8) ||
+           value == 95 as u8
+}
+
+export function dbIdentifierValid(value: []u8): bool {
+    if len(value) == 0 as usize || len(value) > 63 as usize { return false }
+    let first: u8 = value[0]
+    if first >= 48 as u8 && first <= 57 as u8 { return false }
+    let index: usize = 0 as usize
+    while index < len(value) {
+        if !dbIdentifierByteValid(value[index]) { return false }
+        index = index + 1
+    }
+    return true
+}
+
+export function dbBackoffMillis(failures: usize): i64 {
+    if failures == 0 as usize { return 0 as i64 }
+    let delay: i64 = 50 as i64
+    let count: usize = 1 as usize
+    while count < failures && delay < 5000 as i64 {
+        delay = delay * 2 as i64
+        count = count + 1
+    }
+    if delay > 5000 as i64 { return 5000 as i64 }
+    return delay
+}
+
+export function dbRoleCanRead(role: int): bool { return role >= 1 }
+export function dbRoleCanWrite(role: int): bool { return role >= 2 }
+export function dbRoleCanAdmin(role: int): bool { return role >= 3 }

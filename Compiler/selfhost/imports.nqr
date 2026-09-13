@@ -1,0 +1,38 @@
+module noqeri.compiler.selfhost.imports
+
+export function nqPackagePartByte(value: u8): bool {
+    return (value >= 65 as u8 && value <= 90 as u8) ||
+           (value >= 97 as u8 && value <= 122 as u8) ||
+           (value >= 48 as u8 && value <= 57 as u8) ||
+           value == 45 as u8 || value == 95 as u8
+}
+
+export function nqPackageCoordinateValid(value: []u8): bool {
+    if len(value) < 3 as usize || len(value) > 128 as usize { return false }
+    let slashCount: usize = 0 as usize
+    let segmentLength: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(value) {
+        let byte: u8 = value[index]
+        if byte == 47 as u8 {
+            if segmentLength == 0 as usize { return false }
+            slashCount = slashCount + 1 as usize
+            segmentLength = 0 as usize
+        } else {
+            if !nqPackagePartByte(byte) { return false }
+            segmentLength = segmentLength + 1 as usize
+        }
+        index = index + 1 as usize
+    }
+    return slashCount == 1 as usize && segmentLength > 0 as usize
+}
+
+export function nqPackageImportPrefixValid(source: []u8, start: usize): bool {
+    if start + 14 as usize > len(source) { return false }
+    return source[start] == 105 as u8 &&
+           source[start + 1 as usize] == 109 as u8 &&
+           source[start + 2 as usize] == 112 as u8 &&
+           source[start + 3 as usize] == 111 as u8 &&
+           source[start + 4 as usize] == 114 as u8 &&
+           source[start + 5 as usize] == 116 as u8
+}

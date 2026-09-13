@@ -1,0 +1,15 @@
+import "../Compiler/selfhost/imports.nqr"
+import "../Compiler/selfhost/package_policy.nqr"
+
+function require(ok: bool): void {
+    if !ok {
+        let invalid: *u8 = 0 as *u8
+        print(invalid[0])
+    }
+}
+
+let coordinate: [u8; 15] = [110 as u8,111 as u8,113 as u8,101 as u8,114 as u8,105 as u8,47 as u8,115 as u8,117 as u8,112 as u8,97 as u8,98 as u8,97 as u8,115 as u8,101 as u8]
+require(nqPackageCoordinateValid(slice(coordinate)))
+require(nqPackageArchiveLimitsValid(10 as usize, 4096 as usize))
+require(!nqPackageArchiveLimitsValid(1000 as usize, 4096 as usize))
+print("NOQERI package import policy smoke: OK")

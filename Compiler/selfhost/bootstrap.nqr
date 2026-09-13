@@ -1,0 +1,15 @@
+module noqeri.compiler.bootstrap
+import "driver.nqr"
+import "types.nqr"
+import "imports.nqr"
+import "package_policy.nqr"
+
+export function stage1VersionMajor(): int { return nqCompilerVersionMajor() }
+export function stage1VersionMinor(): int { return nqCompilerVersionMinor() }
+export function stage1VersionPatch(): int { return nqCompilerVersionPatch() }
+export function stage1CheckSource(source: []u8): isize { return nqCompilerCheckSource(source) }
+export function stage1TokenCount(source: []u8): usize { return nqCompilerSourceTokenCount(source) }
+export function stage1Fingerprint(source: []u8): u32 { return nqCompilerSourceFingerprint(source) }
+export function stage1CanImplicitWiden(fromCode: int, toCode: int): bool { return nqCompilerCanImplicitWiden(fromCode, toCode) }
+export function stage1PackageCoordinateValid(value: []u8): bool { return nqPackageCoordinateValid(value) }
+export function stage1PackageArchiveLimitsValid(files: usize, bytes: usize): bool { return nqPackageArchiveLimitsValid(files, bytes) }

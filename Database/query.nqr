@@ -1,0 +1,31 @@
+module noqeri.database.query
+
+export function dbCountParameters(sql: []u8): usize {
+    let count: usize = 0 as usize
+    let index: usize = 0 as usize
+    let single: bool = false
+    let double: bool = false
+    while index < len(sql) {
+        let value: u8 = sql[index]
+        if value == 39 as u8 && !double { single = !single }
+        else if value == 34 as u8 && !single { double = !double }
+        else if value == 63 as u8 && !single && !double { count = count + 1 as usize }
+        index = index + 1 as usize
+    }
+    return count
+}
+
+export function dbSqlContainsNul(sql: []u8): bool {
+    let index: usize = 0 as usize
+    while index < len(sql) {
+        if sql[index] == 0 as u8 { return true }
+        index = index + 1 as usize
+    }
+    return false
+}
+
+export function dbPreparedQueryValid(sql: []u8, parameterCount: usize): bool {
+    if len(sql) == 0 as usize || len(sql) > 1048576 as usize { return false }
+    if parameterCount > 1024 as usize || dbSqlContainsNul(sql) { return false }
+    return dbCountParameters(sql) == parameterCount
+}

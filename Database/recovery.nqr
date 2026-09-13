@@ -1,0 +1,17 @@
+module noqeri.database.recovery
+
+export function dbRecoveryNone(): int { return 0 }
+export function dbRecoveryReplayWal(): int { return 1 }
+export function dbRecoveryDiscardWal(): int { return 2 }
+export function dbRecoveryFail(): int { return 3 }
+
+export function dbRecoveryAction(mainValid: bool, walPresent: bool, walCommitted: bool, walValid: bool): int {
+    if !mainValid {
+        if walPresent && walCommitted && walValid { return dbRecoveryReplayWal() }
+        return dbRecoveryFail()
+    }
+    if !walPresent { return dbRecoveryNone() }
+    if !walValid { return dbRecoveryDiscardWal() }
+    if walCommitted { return dbRecoveryReplayWal() }
+    return dbRecoveryDiscardWal()
+}

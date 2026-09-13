@@ -1,0 +1,21 @@
+module noqeri.database.transaction
+
+export function dbTxIdle(): int { return 0 }
+export function dbTxActive(): int { return 1 }
+export function dbTxCommitted(): int { return 2 }
+export function dbTxRolledBack(): int { return 3 }
+
+export function dbIsolationReadCommitted(): int { return 1 }
+export function dbIsolationSerializable(): int { return 2 }
+
+export function dbTxCanBegin(state: int): bool { return state == dbTxIdle() }
+export function dbTxCanWrite(state: int, readOnly: bool): bool { return state == dbTxActive() && !readOnly }
+export function dbTxCanCommit(state: int): bool { return state == dbTxActive() }
+export function dbTxCanRollback(state: int): bool { return state == dbTxActive() }
+
+export function dbTxTransition(state: int, action: int): int {
+    if action == 1 && dbTxCanBegin(state) { return dbTxActive() }
+    if action == 2 && dbTxCanCommit(state) { return dbTxCommitted() }
+    if action == 3 && dbTxCanRollback(state) { return dbTxRolledBack() }
+    return -1
+}

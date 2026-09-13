@@ -1,0 +1,18 @@
+module noqeri.compiler.selfhost.package_policy
+
+export function nqPackageMaxFiles(): usize { return 256 as usize }
+export function nqPackageMaxBytes(): usize { return 8388608 as usize }
+export function nqPackageMaxDepth(): usize { return 32 as usize }
+
+export function nqPackageArchiveLimitsValid(files: usize, bytes: usize): bool {
+    return files > 0 as usize && files <= nqPackageMaxFiles() &&
+           bytes > 0 as usize && bytes <= nqPackageMaxBytes()
+}
+
+export function nqPackageDependencyDepthValid(depth: usize): bool {
+    return depth <= nqPackageMaxDepth()
+}
+
+export function nqPackagePathByteForbidden(value: u8): bool {
+    return value == 0 as u8 || value == 92 as u8
+}

@@ -1,0 +1,22 @@
+module noqeri.database.planner
+
+export function dbPlanScan(): int { return 1 }
+export function dbPlanIndexSeek(): int { return 2 }
+export function dbPlanUniqueLookup(): int { return 3 }
+
+export function dbChoosePlan(hasIndex: bool, uniqueIndex: bool, equalityPredicate: bool, rowCount: usize): int {
+    if equalityPredicate && uniqueIndex { return dbPlanUniqueLookup() }
+    if equalityPredicate && hasIndex && rowCount >= 16 as usize { return dbPlanIndexSeek() }
+    return dbPlanScan()
+}
+
+export function dbEstimatedCost(plan: int, rowCount: usize): usize {
+    if plan == dbPlanUniqueLookup() { return 1 as usize }
+    if plan == dbPlanIndexSeek() {
+        let cost: usize = 1 as usize
+        let size: usize = rowCount
+        while size > 1 as usize { size = size / 2 as usize; cost = cost + 1 as usize }
+        return cost
+    }
+    return rowCount
+}

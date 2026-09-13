@@ -1,8 +1,56 @@
 module noqeri.std.atomic
 
 export function atomic_load_u64(value: *u64): u64 { return atomic.load(value) }
-export function atomic_store_u64(value: *u64, next: u64): void { atomic.store(value,next) }
-export function atomic_exchange_u64(value: *u64, next: u64): u64 { return atomic.exchange(value,next) }
-export function atomic_compare_exchange_u64(value: *u64, expected: u64, next: u64): u64 { return atomic.compareExchange(value,expected,next) }
-export function atomic_increment_u64(value: *u64): u64 { let current:u64=atomic.load(value) let next:u64=current+1 as u64 atomic.store(value,next) return next }
+export function atomic_store_u64(value: *u64, next: u64): void { atomic.store(value, next) }
+export function atomic_exchange_u64(value: *u64, next: u64): u64 { return atomic.exchange(value, next) }
+export function atomic_compare_exchange_u64(value: *u64, expected: u64, next: u64): u64 { return atomic.compareExchange(value, expected, next) }
+
+export function atomic_add_u64(value: *u64, amount: u64): u64 {
+    let current: u64 = atomic.load(value)
+    while true {
+        let next: u64 = current + amount
+        let observed: u64 = atomic.compareExchange(value, current, next)
+        if observed == current { return next }
+        current = observed
+    }
+    return current
+}
+
+export function atomic_sub_u64(value: *u64, amount: u64): u64 {
+    let current: u64 = atomic.load(value)
+    while true {
+        let next: u64 = current - amount
+        let observed: u64 = atomic.compareExchange(value, current, next)
+        if observed == current { return next }
+        current = observed
+    }
+    return current
+}
+
+export function atomic_increment_u64(value: *u64): u64 { return atomic_add_u64(value, 1 as u64) }
+export function atomic_decrement_u64(value: *u64): u64 { return atomic_sub_u64(value, 1 as u64) }
+
+export function atomic_update_max_u64(value: *u64, candidate: u64): u64 {
+    let current: u64 = atomic.load(value)
+    while candidate > current {
+        let observed: u64 = atomic.compareExchange(value, current, candidate)
+        if observed == current { return candidate }
+        current = observed
+    }
+    return current
+}
+
+export function atomic_update_min_u64(value: *u64, candidate: u64): u64 {
+    let current: u64 = atomic.load(value)
+    while candidate < current {
+        let observed: u64 = atomic.compareExchange(value, current, candidate)
+        if observed == current { return candidate }
+        current = observed
+    }
+    return current
+}
+
+export function atomic_flag_try_set(value: *u64): bool { return atomic.compareExchange(value, 0 as u64, 1 as u64) == 0 as u64 }
+export function atomic_flag_clear(value: *u64): void { atomic.store(value, 0 as u64) }
+export function atomic_flag_is_set(value: *u64): bool { return atomic.load(value) != 0 as u64 }
 export function atomic_fence_all(): void { atomic.fence() }

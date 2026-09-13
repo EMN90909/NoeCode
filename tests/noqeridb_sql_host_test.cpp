@@ -13,15 +13,24 @@ int main(){
     {
         std::ofstream out(script);
         out<<"CREATE TABLE users (id INT PRIMARY KEY, name TEXT NOT NULL, active BOOL NOT NULL);\n"
+           <<"CREATE TABLE orders (id INT PRIMARY KEY, user_id INT NOT NULL, amount INT NOT NULL);\n"
            <<"INSERT INTO users (id,name,active) VALUES (2,'Linus',true);\n"
            <<"INSERT INTO users (id,name,active) VALUES (1,'Ada',true);\n"
+           <<"INSERT INTO orders (id,user_id,amount) VALUES (10,1,40);\n"
+           <<"INSERT INTO orders (id,user_id,amount) VALUES (11,1,60);\n"
+           <<"INSERT INTO orders (id,user_id,amount) VALUES (12,2,25);\n"
            <<"UPDATE users SET name='Ada Lovelace' WHERE id=1;\n"
-           <<"SELECT id,name FROM users WHERE active=true ORDER BY id ASC;\n";
+           <<"SELECT id,name FROM users WHERE active=true ORDER BY id ASC;\n"
+           <<"SELECT users.name AS person, COUNT(*) AS order_count, SUM(orders.amount) AS total FROM users JOIN orders ON users.id=orders.user_id GROUP BY users.name ORDER BY total DESC;\n"
+           <<"SELECT MIN(orders.amount) AS minimum, MAX(orders.amount) AS maximum FROM orders;\n";
     }
     Diagnostics d;std::ostringstream output;
     if(!NoqeriDatabase{}.executeSql(script,database,output,d)){d.print(script.string());std::filesystem::remove_all(root);return 1;}
     const auto text=output.str();
     if(text.find("id\tname") == std::string::npos || text.find("1\tAda Lovelace") == std::string::npos || text.find("2\tLinus") == std::string::npos){std::cerr<<text;std::filesystem::remove_all(root);return 2;}
+    if(text.find("person\torder_count\ttotal") == std::string::npos || text.find("Ada Lovelace\t2\t100") == std::string::npos || text.find("Linus\t1\t25") == std::string::npos){std::cerr<<text;std::filesystem::remove_all(root);return 6;}
+    if(text.find("minimum\tmaximum") == std::string::npos || text.find("25\t60") == std::string::npos){std::cerr<<text;std::filesystem::remove_all(root);return 7;}
+
     // A failing second script must not partially alter the durable database.
     const auto bad=root/"bad.sql";{std::ofstream out(bad);out<<"UPDATE users SET name='Broken' WHERE id=1; INSERT INTO missing (id) VALUES (3);\n";}
     Diagnostics badD;std::ostringstream ignored;if(NoqeriDatabase{}.executeSql(bad,database,ignored,badD)){std::filesystem::remove_all(root);return 3;}

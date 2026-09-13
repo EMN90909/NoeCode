@@ -1,0 +1,62 @@
+module noqeri.compiler.selfhost.security
+import "nir.nqr"
+import "targets.nqr"
+
+record NqSecurityPolicy {
+    allowUnsafe: bool
+    allowInlineAsm: bool
+    checkedArithmetic: bool
+    boundsChecks: bool
+    maxSourceBytes: usize
+    maxInstructions: usize
+    maxObjectBytes: usize
+}
+
+export function nqSecurityOk(): isize { return 0 }
+export function nqSecurityLimitExceeded(): isize { return -700 }
+export function nqSecurityUnsafeDenied(): isize { return -701 }
+export function nqSecurityInvalidRange(): isize { return -702 }
+export function nqSecurityInvalidTarget(): isize { return -703 }
+
+export function nqSecurityProductionPolicy(out: *NqSecurityPolicy): void {
+    out.allowUnsafe = false
+    out.allowInlineAsm = false
+    out.checkedArithmetic = true
+    out.boundsChecks = true
+    out.maxSourceBytes = 64 as usize * 1024 as usize * 1024 as usize
+    out.maxInstructions = 16000000 as usize
+    out.maxObjectBytes = 1024 as usize * 1024 as usize * 1024 as usize
+}
+
+export function nqSecurityRangeValid(offset: usize, count: usize, total: usize): bool {
+    if offset > total { return false }
+    return count <= total - offset
+}
+
+export function nqSecurityAllocationValid(count: usize, elementBytes: usize, maximum: usize): bool {
+    if elementBytes == 0 as usize { return count == 0 as usize }
+    if count > maximum / elementBytes { return false }
+    return count * elementBytes <= maximum
+}
+
+export function nqSecuritySourceAllowed(policy: *NqSecurityPolicy, sourceBytes: usize): bool { return policy != null && sourceBytes <= policy.maxSourceBytes }
+export function nqSecurityObjectAllowed(policy: *NqSecurityPolicy, objectBytes: usize): bool { return policy != null && objectBytes <= policy.maxObjectBytes }
+export function nqSecurityInstructionCountAllowed(policy: *NqSecurityPolicy, count: usize): bool { return policy != null && count <= policy.maxInstructions }
+
+export function nqSecurityInstructionAllowed(policy: *NqSecurityPolicy, instruction: *NqNirInstruction): bool {
+    if policy == null || instruction == null || !nqNirInstructionValid(instruction) { return false }
+    if instruction.opcode == nqNirAsm() { return policy.allowUnsafe && policy.allowInlineAsm }
+    if (instruction.flags / nqNirFlagUnsafe()) % 2 as u32 == 1 as u32 { return policy.allowUnsafe }
+    return true
+}
+
+export function nqSecurityProgramCheck(policy: *NqSecurityPolicy, target: int, instructions: []NqNirInstruction): isize {
+    if policy == null || !nqTargetValid(target) { return nqSecurityInvalidTarget() }
+    if !nqSecurityInstructionCountAllowed(policy, len(instructions)) { return nqSecurityLimitExceeded() }
+    let index: usize = 0 as usize
+    while index < len(instructions) {
+        if !nqSecurityInstructionAllowed(policy, &instructions[index]) { return nqSecurityUnsafeDenied() }
+        index = index + 1 as usize
+    }
+    return nqSecurityOk()
+}

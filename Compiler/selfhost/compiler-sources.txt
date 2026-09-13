@@ -6,6 +6,7 @@ Compiler/selfhost/coff_writer.nqr
 Compiler/selfhost/driver.nqr
 Compiler/selfhost/elf_writer.nqr
 Compiler/selfhost/formatter.nqr
+Compiler/selfhost/generic_metadata.nqr
 Compiler/selfhost/generics.nqr
 Compiler/selfhost/imports.nqr
 Compiler/selfhost/lexer.nqr
@@ -25,6 +26,7 @@ Compiler/selfhost/parser_stmt.nqr
 Compiler/selfhost/pipeline.nqr
 Compiler/selfhost/profiles.nqr
 Compiler/selfhost/race.nqr
+Compiler/selfhost/record_layout.nqr
 Compiler/selfhost/security.nqr
 Compiler/selfhost/semantic_program.nqr
 Compiler/selfhost/semantics.nqr
@@ -32,4 +34,5 @@ Compiler/selfhost/stage2.nqr
 Compiler/selfhost/symbols.nqr
 Compiler/selfhost/syntax.nqr
 Compiler/selfhost/targets.nqr
+Compiler/selfhost/type_ref.nqr
 Compiler/selfhost/types.nqr

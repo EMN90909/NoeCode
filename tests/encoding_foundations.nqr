@@ -1,0 +1,117 @@
+import "../Lib/std/endian.nqr"
+import "../Lib/std/varint.nqr"
+import "../Lib/std/encoding.nqr"
+
+function test_endian(): int {
+    let bytes: [u8; 16] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    if !endian_write_u16_be(slice(bytes), 0 as usize, 4660 as u16) { return 1 }
+    if bytes[0 as usize] != 18 as u8 || bytes[1 as usize] != 52 as u8 { return 2 }
+    let u16value: u16 = 0 as u16
+    if !endian_read_u16_be(slice(bytes), 0 as usize, &u16value) || u16value != 4660 as u16 { return 3 }
+
+    if !endian_write_u32_le(slice(bytes), 2 as usize, 305419896 as u32) { return 4 }
+    if bytes[2 as usize] != 120 as u8 || bytes[3 as usize] != 86 as u8 || bytes[4 as usize] != 52 as u8 || bytes[5 as usize] != 18 as u8 { return 5 }
+    let u32value: u32 = 0 as u32
+    if !endian_read_u32_le(slice(bytes), 2 as usize, &u32value) || u32value != 305419896 as u32 { return 6 }
+    if endian_swap_u32(305419896 as u32) != 2018915346 as u32 { return 7 }
+
+    let cursorBytes: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let cursor: *EndianCursor = (&cursorBytes[0 as usize]) as *EndianCursor
+    if !endian_cursor_init(cursor, 0 as usize, false) { return 8 }
+    if !endian_cursor_write_u16(cursor, slice(bytes), 258 as u16) { return 9 }
+    if !endian_cursor_write_u32(cursor, slice(bytes), 16909060 as u32) { return 10 }
+    if endian_cursor_offset(cursor) != 6 as usize { return 11 }
+    endian_cursor_reset(cursor, 0 as usize)
+    let a: u16 = 0 as u16
+    let b: u32 = 0 as u32
+    if !endian_cursor_read_u16(cursor, slice(bytes), &a) || a != 258 as u16 { return 12 }
+    if !endian_cursor_read_u32(cursor, slice(bytes), &b) || b != 16909060 as u32 { return 13 }
+    if endian_cursor_offset(cursor) != 6 as usize || !endian_cursor_ok(cursor) { return 14 }
+    return 0
+}
+
+function test_varint(): int {
+    let output: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    if varint_encode_u64(slice(output), 300 as u64) != 2 as usize { return 1 }
+    if output[0 as usize] != 172 as u8 || output[1 as usize] != 2 as u8 { return 2 }
+
+    let resultBytes: [u8; 48] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let result: *VarintResult = (&resultBytes[0 as usize]) as *VarintResult
+    if !varint_decode_u64(slice(output), result) || result.value != 300 as u64 || result.bytes != 2 as usize { return 3 }
+    if !varint_is_canonical_u64(slice(output), 0 as usize) { return 4 }
+    if varint_u64_size(127 as u64) != 1 as usize || varint_u64_size(128 as u64) != 2 as usize { return 5 }
+
+    let incomplete: [u8; 1] = [128 as u8]
+    if varint_decode_u64(slice(incomplete), result) { return 6 }
+    if !result.incomplete || result.overflow { return 7 }
+
+    let overflow: [u8; 10] = [255 as u8,255 as u8,255 as u8,255 as u8,255 as u8,255 as u8,255 as u8,255 as u8,255 as u8,2 as u8]
+    if varint_decode_u64(slice(overflow), result) { return 8 }
+    if !result.overflow || result.incomplete { return 9 }
+
+    if varint_zigzag_encode_i64(-1 as i64) != 1 as u64 || varint_zigzag_encode_i64(1 as i64) != 2 as u64 || varint_zigzag_encode_i64(-2 as i64) != 3 as u64 { return 10 }
+    if varint_zigzag_decode_i64(3 as u64) != -2 as i64 { return 11 }
+
+    let cursorBytes: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let cursor: *VarintCursor = (&cursorBytes[0 as usize]) as *VarintCursor
+    varint_cursor_init(cursor, 0 as usize)
+    if !varint_cursor_write_u64(cursor, slice(output), 1 as u64) || !varint_cursor_write_u64(cursor, slice(output), 300 as u64) || !varint_cursor_write_i64(cursor, slice(output), -7 as i64) { return 12 }
+    let encodedBytes: usize = cursor.offset
+    varint_cursor_reset(cursor, 0 as usize)
+    let one: u64 = 0 as u64
+    let threeHundred: u64 = 0 as u64
+    let negative: i64 = 0 as i64
+    if !varint_cursor_read_u64(cursor, slice(output), &one) || one != 1 as u64 { return 13 }
+    if !varint_cursor_read_u64(cursor, slice(output), &threeHundred) || threeHundred != 300 as u64 { return 14 }
+    if !varint_cursor_read_i64(cursor, slice(output), &negative) || negative != -7 as i64 { return 15 }
+    if cursor.offset != encodedBytes { return 16 }
+    return 0
+}
+
+function test_encoding(): int {
+    let hello: [u8; 5] = [72 as u8,101 as u8,108 as u8,108 as u8,111 as u8]
+    if !encoding_ascii_valid(slice(hello)) || !encoding_utf8_valid(slice(hello)) { return 1 }
+
+    let detectionBytes: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let detection: *EncodingDetection = (&detectionBytes[0 as usize]) as *EncodingDetection
+    if !encoding_detect(slice(hello), detection) || detection.kind != encoding_ascii() || !detection.valid || !detection.ascii_only { return 2 }
+
+    let euro: [u8; 3] = [226 as u8,130 as u8,172 as u8]
+    let codepoint: u32 = 0 as u32
+    let width: usize = 0 as usize
+    if !encoding_utf8_decode_at(slice(euro), 0 as usize, &codepoint, &width) || codepoint != 8364 as u32 || width != 3 as usize { return 3 }
+
+    let latin1: [u8; 2] = [65 as u8,233 as u8]
+    let utf8out: [u8; 8] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let transcodeBytes: [u8; 48] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let transcode: *TranscodeResult = (&transcodeBytes[0 as usize]) as *TranscodeResult
+    if !encoding_latin1_to_utf8(slice(latin1), slice(utf8out), transcode) { return 4 }
+    if transcode.written != 3 as usize || utf8out[0 as usize] != 65 as u8 || utf8out[1 as usize] != 195 as u8 || utf8out[2 as usize] != 169 as u8 { return 5 }
+
+    let latinBack: [u8; 4] = [0 as u8,0 as u8,0 as u8,0 as u8]
+    if !encoding_utf8_to_latin1(slice(utf8out), slice(latinBack), transcode) { return 6 }
+    if transcode.written != 3 as usize { return 7 }
+
+    let utf16le: [u8; 8] = [255 as u8,254 as u8,65 as u8,0 as u8,61 as u8,216 as u8,0 as u8,222 as u8]
+    if !encoding_detect(slice(utf16le), detection) || detection.kind != encoding_utf16_le() || detection.bom_bytes != 2 as usize || !detection.valid { return 8 }
+    let utf8emoji: [u8; 8] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    if !encoding_utf16_to_utf8(slice(utf16le), true, true, slice(utf8emoji), transcode) { return 9 }
+    if transcode.written != 5 as usize { return 10 }
+    if utf8emoji[0 as usize] != 65 as u8 || utf8emoji[1 as usize] != 240 as u8 || utf8emoji[2 as usize] != 159 as u8 || utf8emoji[3 as usize] != 152 as u8 || utf8emoji[4 as usize] != 128 as u8 { return 11 }
+
+    let utf16roundtrip: [u8; 8] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    if !encoding_utf8_to_utf16(slice(utf8emoji), true, slice(utf16roundtrip), transcode) { return 12 }
+    if transcode.written != 6 as usize { return 13 }
+    if utf16roundtrip[0 as usize] != 65 as u8 || utf16roundtrip[1 as usize] != 0 as u8 || utf16roundtrip[2 as usize] != 61 as u8 || utf16roundtrip[3 as usize] != 216 as u8 || utf16roundtrip[4 as usize] != 0 as u8 || utf16roundtrip[5 as usize] != 222 as u8 { return 14 }
+    return 0
+}
+
+function main(): int {
+    let result: int = test_endian()
+    if result != 0 { return 10 + result }
+    result = test_varint()
+    if result != 0 { return 40 + result }
+    result = test_encoding()
+    if result != 0 { return 70 + result }
+    return 0
+}

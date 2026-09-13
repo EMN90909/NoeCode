@@ -1,13 +1,38 @@
 module noqeri.std.result
 
-// Result<T> is an application-facing result record. Noqeri requires initialized
-// locals, so callers pass storage to result_init_* rather than relying on an
-// implicit uninitialized record constructor.
+// Low-level status codes remain the ABI representation. Application code can
+// wrap them in initialized records without exceptions, unwinding or allocation.
+record Error {
+    code: isize
+    domain: string
+    message: string
+}
+
 record Result<T> {
     value: T
     error: isize
     ok: bool
 }
+
+record Outcome<T> {
+    value: T
+    error: Error
+    ok: bool
+}
+
+export function error_init(out: *Error, code: isize, domain: string, message: string): void {
+    out.code = code
+    out.domain = domain
+    out.message = message
+}
+
+export function error_clear(out: *Error): void {
+    out.code = 0 as isize
+    out.domain = ""
+    out.message = ""
+}
+
+export function error_is_set(error: *Error): bool { return error.code != 0 as isize }
 
 export function result_init_ok<T>(out: *Result<T>, value: T): void {
     out.value = value
@@ -31,8 +56,29 @@ export function result_init_from_status<T>(out: *Result<T>, value: T, fallback: 
     result_init_ok(out, value)
 }
 
-// Low-level compatibility helpers remain for freestanding/ABI code.
+export function outcome_init_ok<T>(out: *Outcome<T>, value: T): void {
+    out.value = value
+    error_clear(&out.error)
+    out.ok = true
+}
+
+export function outcome_init_error<T>(out: *Outcome<T>, fallback: T, code: isize, domain: string, message: string): void {
+    out.value = fallback
+    error_init(&out.error, code, domain, message)
+    out.ok = false
+}
+
+export function outcome_is_ok<T>(outcome: *Outcome<T>): bool { return outcome.ok }
+export function outcome_is_error<T>(outcome: *Outcome<T>): bool { return !outcome.ok }
+export function outcome_value_or<T>(outcome: *Outcome<T>, fallback: T): T { if outcome.ok { return outcome.value } return fallback }
+export function outcome_error_code<T>(outcome: *Outcome<T>): isize { if outcome.ok { return 0 as isize } return outcome.error.code }
+export function outcome_error_domain<T>(outcome: *Outcome<T>): string { if outcome.ok { return "" } return outcome.error.domain }
+export function outcome_error_message<T>(outcome: *Outcome<T>): string { if outcome.ok { return "" } return outcome.error.message }
+
+// ABI/status helpers. `throw` encodes a positive code as -(code+1), so decoding
+// must reverse that transform instead of merely negating the status.
 export function result_status_ok(status: isize): bool { return status >= 0 as isize }
 export function result_status_error(status: isize): bool { return status < 0 as isize }
-export function result_error_code(status: isize): isize { if status < 0 as isize { return -status } return 0 as isize }
+export function result_error_code(status: isize): isize { if status < 0 as isize { return -status - 1 as isize } return 0 as isize }
+export function result_encode_error(code: isize): isize { if code < 0 as isize { return code } return -code - 1 as isize }
 export function result_attempt_allowed(attempt: usize, max_attempts: usize): bool { return attempt < max_attempts }

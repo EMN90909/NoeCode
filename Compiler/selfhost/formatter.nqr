@@ -1,0 +1,10 @@
+module noqeri.compiler.selfhost.formatter
+import "lexer.nqr"
+export function nqFormatIndentWidth(): usize { return 4 as usize }
+export function nqFormatLineLimit(): usize { return 100 as usize }
+export function nqFormatNeedsSpaceBefore(value: u8): bool { return value == 123 as u8 }
+export function nqFormatNeedsSpaceAfter(value: u8): bool { return value == 44 as u8 }
+export function nqFormatIsStatementBoundary(value: u8): bool { return value == 59 as u8 || value == 123 as u8 || value == 125 as u8 }
+export function nqFormatIndentAfter(value: u8): bool { return value == 123 as u8 }
+export function nqFormatDedentBefore(value: u8): bool { return value == 125 as u8 }
+export function nqFormatSourceStructurallyValid(source: []u8): bool { return nqCompilerTokenCount(source) > 0 as usize }

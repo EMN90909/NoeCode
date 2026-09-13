@@ -1,0 +1,16 @@
+module noqeri.compiler.selfhost.coff_writer
+import "targets.nqr"
+import "object_formats.nqr"
+export function nqCoffSectionNameBytes(): usize { return 8 as usize }
+export function nqCoffFileHeaderBytes(): usize { return 20 as usize }
+export function nqCoffSectionHeaderBytes(): usize { return 40 as usize }
+export function nqCoffSymbolBytes(): usize { return 18 as usize }
+export function nqCoffRelocBytes(): usize { return 10 as usize }
+export function nqCoffSectionCountValid(count: usize): bool { return count > 0 as usize && count <= 96 as usize }
+export function nqCoffSymbolCountValid(count: usize): bool { return count <= 10000000 as usize }
+export function nqCoffRelocTypeRel32(target: int): u16 { if target == nqTargetWindowsX64() { return 0x0004 as u16 } if target == nqTargetWindowsArm64() { return 0x0003 as u16 } return 0 as u16 }
+export function nqCoffRelocTypeAddr64(target: int): u16 { if target == nqTargetWindowsX64() { return 0x0001 as u16 } if target == nqTargetWindowsArm64() { return 0x000e as u16 } return 0 as u16 }
+export function nqCoffMachine(target: int): u16 { if target == nqTargetWindowsArm64() { return nqCoffMachineArm64() } if target == nqTargetWindowsX64() { return nqCoffMachineX64() } return 0 as u16 }
+export function nqCoffTargetValid(target: int): bool { return target == nqTargetWindowsX64() || target == nqTargetWindowsArm64() }
+export function nqCoffImageAlignment(): usize { return 4096 as usize }
+export function nqCoffFileAlignment(): usize { return 512 as usize }

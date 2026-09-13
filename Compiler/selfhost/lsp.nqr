@@ -1,0 +1,9 @@
+module noqeri.compiler.selfhost.lsp
+export function nqLspSeverityError(): int { return 1 }
+export function nqLspSeverityWarning(): int { return 2 }
+export function nqLspSeverityInfo(): int { return 3 }
+export function nqLspSeverityHint(): int { return 4 }
+export function nqLspSeverityValid(value: int): bool { return value >= 1 && value <= 4 }
+export function nqLspPositionValid(line: usize, character: usize): bool { return line < 10000000 as usize && character < 1000000 as usize }
+export function nqLspRangeValid(startLine: usize, startCharacter: usize, endLine: usize, endCharacter: usize): bool { if !nqLspPositionValid(startLine, startCharacter) || !nqLspPositionValid(endLine, endCharacter) { return false } if endLine < startLine { return false } if endLine == startLine && endCharacter < startCharacter { return false } return true }
+export function nqLspDiagnosticCodeFromStatus(status: isize): int { if status >= 0 as isize { return 0 } return (-status) as int }

@@ -1,0 +1,10 @@
+module noqeri.compiler.selfhost.linker
+import "targets.nqr"
+export function nqLinkExecutable(): int { return 1 }
+export function nqLinkStaticLibrary(): int { return 2 }
+export function nqLinkSharedLibrary(): int { return 3 }
+export function nqLinkObjectOnly(): int { return 4 }
+export function nqLinkKindValid(kind: int): bool { return kind >= nqLinkExecutable() && kind <= nqLinkObjectOnly() }
+export function nqLinkTargetValid(target: int, kind: int): bool { if !nqTargetValid(target) || !nqLinkKindValid(kind) { return false } if kind == nqLinkSharedLibrary() { return nqTargetSupportsShared(target) } if kind == nqLinkStaticLibrary() { return nqTargetSupportsStatic(target) } return true }
+export function nqLinkNeedsImportLibrary(target: int, kind: int): bool { return nqTargetObjectFormat(target) == nqObjectCoff() && kind == nqLinkSharedLibrary() }
+export function nqLinkPositionIndependent(kind: int): bool { return kind == nqLinkSharedLibrary() }

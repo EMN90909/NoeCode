@@ -1,6 +1,18 @@
 module noqeri.std.test
 
+record TestSummary { passed: usize failed: usize skipped: usize assertions: usize }
+
+export function test_summary_reset(summary: *TestSummary): void { summary.passed = 0 as usize summary.failed = 0 as usize summary.skipped = 0 as usize summary.assertions = 0 as usize }
+export function test_record_case(summary: *TestSummary, passed: bool): void { if passed { summary.passed = summary.passed + 1 as usize } else { summary.failed = summary.failed + 1 as usize } }
+export function test_record_skip(summary: *TestSummary): void { summary.skipped = summary.skipped + 1 as usize }
+export function test_record_assertion(summary: *TestSummary, passed: bool): bool { summary.assertions = summary.assertions + 1 as usize if !passed { summary.failed = summary.failed + 1 as usize return false } return true }
+export function test_total_cases(summary: *TestSummary): usize { return summary.passed + summary.failed + summary.skipped }
+export function test_success(summary: *TestSummary): bool { return summary.failed == 0 as usize }
 export function test_ratio_per_mille(part: usize, total: usize): usize { if total == 0 as usize { return 0 as usize } return (part * 1000 as usize) / total }
+export function test_pass_rate_per_mille(summary: *TestSummary): usize { return test_ratio_per_mille(summary.passed, summary.passed + summary.failed) }
 export function test_passed(passed: usize, failed: usize): bool { return failed == 0 as usize && passed > 0 as usize }
 export function test_delta(start: i64, end: i64): i64 { return end - start }
 export function test_clamp_sample(value: usize, max: usize): usize { if value > max { return max } return value }
+export function test_expect_i64(actual: i64, expected: i64): bool { return actual == expected }
+export function test_expect_u64(actual: u64, expected: u64): bool { return actual == expected }
+export function test_expect_bool(actual: bool, expected: bool): bool { return actual == expected }

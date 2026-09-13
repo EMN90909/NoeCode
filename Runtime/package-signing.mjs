@@ -9,7 +9,7 @@ function canonicalRecord(record) {
 }
 
 export function packageKeyId(publicKey) {
-  const key = createPublicKey(publicKey)
+  const key = publicKey?.type === 'public' ? publicKey : createPublicKey(publicKey)
   const der = key.export({ type: 'spki', format: 'der' })
   return `ed25519:${createHash('sha256').update(der).digest('hex')}`
 }

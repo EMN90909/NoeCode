@@ -1,8 +1,59 @@
 module noqeri.std.sync
 
+record SpinLock {
+    state: u64
+}
+
+record Once {
+    state: u64
+}
+
+record Semaphore {
+    permits: u64
+}
+
 export function sync_unlocked(): u64 { return 0 as u64 }
 export function sync_locked(): u64 { return 1 as u64 }
-export function sync_try_lock(state: *u64): bool { let old:u64=atomic.compareExchange(state,0 as u64,1 as u64) return old==0 as u64 }
-export function sync_unlock(state: *u64): void { atomic.store(state,0 as u64) }
-export function sync_is_locked(state: *u64): bool { return atomic.load(state)!=0 as u64 }
-export function sync_spin_pause(): void { intrinsic("x86.pause") }
+
+export function sync_spin_init(lock: *SpinLock): void { atomic.store(&lock.state, sync_unlocked()) }
+export function sync_spin_try_lock(lock: *SpinLock): bool { let old: u64 = atomic.compareExchange(&lock.state, sync_unlocked(), sync_locked()) return old == sync_unlocked() }
+export function sync_spin_unlock(lock: *SpinLock): void { atomic.store(&lock.state, sync_unlocked()) }
+export function sync_spin_is_locked(lock: *SpinLock): bool { return atomic.load(&lock.state) != sync_unlocked() }
+
+export function sync_spin_lock_for(lock: *SpinLock, attempts: usize): bool {
+    let attempt: usize = 0 as usize
+    while attempt < attempts {
+        if sync_spin_try_lock(lock) { return true }
+        atomic.fence()
+        attempt = attempt + 1 as usize
+    }
+    return false
+}
+
+// Compatibility API for callers that store a raw atomic state word.
+export function sync_try_lock(state: *u64): bool { let old: u64 = atomic.compareExchange(state, 0 as u64, 1 as u64) return old == 0 as u64 }
+export function sync_unlock(state: *u64): void { atomic.store(state, 0 as u64) }
+export function sync_is_locked(state: *u64): bool { return atomic.load(state) != 0 as u64 }
+export function sync_spin_pause(): void { atomic.fence() }
+
+// Once state: 0 = unclaimed, 1 = running, 2 = complete.
+export function sync_once_init(once: *Once): void { atomic.store(&once.state, 0 as u64) }
+export function sync_once_try_begin(once: *Once): bool { return atomic.compareExchange(&once.state, 0 as u64, 1 as u64) == 0 as u64 }
+export function sync_once_complete(once: *Once): void { atomic.store(&once.state, 2 as u64) }
+export function sync_once_done(once: *Once): bool { return atomic.load(&once.state) == 2 as u64 }
+
+export function sync_semaphore_init(semaphore: *Semaphore, permits: u64): void { atomic.store(&semaphore.permits, permits) }
+export function sync_semaphore_available(semaphore: *Semaphore): u64 { return atomic.load(&semaphore.permits) }
+export function sync_semaphore_try_acquire(semaphore: *Semaphore): bool {
+    let current: u64 = atomic.load(&semaphore.permits)
+    while current > 0 as u64 {
+        let observed: u64 = atomic.compareExchange(&semaphore.permits, current, current - 1 as u64)
+        if observed == current { return true }
+        current = observed
+    }
+    return false
+}
+export function sync_semaphore_release(semaphore: *Semaphore): void {
+    let current: u64 = atomic.load(&semaphore.permits)
+    while atomic.compareExchange(&semaphore.permits, current, current + 1 as u64) != current { current = atomic.load(&semaphore.permits) }
+}

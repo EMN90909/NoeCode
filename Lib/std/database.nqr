@@ -1,11 +1,23 @@
 module noqeri.std.database
 
+record DatabasePage { index: usize size: usize offset: usize }
+record DatabaseRetry { attempts: usize maximum: usize base_delay_ms: u64 max_delay_ms: u64 }
+
 export function database_tx_idle(): int { return 0 }
 export function database_tx_active(): int { return 1 }
 export function database_tx_committed(): int { return 2 }
 export function database_tx_rolled_back(): int { return 3 }
-export function database_tx_state_valid(state: int): bool { return state >= 0 && state <= 3 }
+export function database_tx_failed(): int { return 4 }
+export function database_tx_state_valid(state: int): bool { return state >= 0 && state <= 4 }
+export function database_can_begin(state: int): bool { return state == database_tx_idle() || state == database_tx_committed() || state == database_tx_rolled_back() }
 export function database_can_commit(state: int): bool { return state == database_tx_active() }
-export function database_can_rollback(state: int): bool { return state == database_tx_active() }
+export function database_can_rollback(state: int): bool { return state == database_tx_active() || state == database_tx_failed() }
 export function database_page_offset(page: usize, page_size: usize): usize { return page * page_size }
 export function database_limit_valid(limit: usize, maximum: usize): bool { return limit > 0 as usize && limit <= maximum }
+export function database_page_init(out: *DatabasePage, index: usize, size: usize): bool { if size == 0 as usize { return false } out.index = index out.size = size out.offset = index * size return true }
+export function database_page_next(page: *DatabasePage): void { page.index = page.index + 1 as usize page.offset = page.offset + page.size }
+export function database_page_previous(page: *DatabasePage): bool { if page.index == 0 as usize { return false } page.index = page.index - 1 as usize page.offset = page.offset - page.size return true }
+export function database_retry_init(out: *DatabaseRetry, maximum: usize, base_delay_ms: u64, max_delay_ms: u64): void { out.attempts = 0 as usize out.maximum = maximum out.base_delay_ms = base_delay_ms out.max_delay_ms = max_delay_ms }
+export function database_retry_allowed(retry: *DatabaseRetry): bool { return retry.attempts < retry.maximum }
+export function database_retry_delay_ms(retry: *DatabaseRetry): u64 { let delay: u64 = retry.base_delay_ms let i: usize = 0 as usize while i < retry.attempts { if delay >= retry.max_delay_ms { return retry.max_delay_ms } delay = delay * 2 as u64 if delay > retry.max_delay_ms { return retry.max_delay_ms } i = i + 1 as usize } return delay }
+export function database_retry_advance(retry: *DatabaseRetry): bool { if !database_retry_allowed(retry) { return false } retry.attempts = retry.attempts + 1 as usize return true }

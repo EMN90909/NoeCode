@@ -93,15 +93,8 @@ function main(): int {
     let xmlName: [u8; 7] = [110 as u8,113 as u8,101 as u8,114 as u8,105 as u8,95 as u8,49 as u8]
     if !xml_name_valid(slice(xmlName)) { return 37 }
 
-    let address: Ipv4Address
-    address.a = 8 as u8
-    address.b = 8 as u8
-    address.c = 8 as u8
-    address.d = 8 as u8
-    if !net_ipv4_is_public(&address) { return 38 }
-    address.a = 192 as u8
-    address.b = 168 as u8
-    if net_ipv4_is_public(&address) { return 39 }
+    if net_is_private_ipv4(8 as u8, 8 as u8) || !net_is_private_ipv4(192 as u8, 168 as u8) { return 38 }
+    if !net_is_loopback_ipv4(127 as u8) || !net_is_link_local_ipv4(169 as u8, 254 as u8) { return 39 }
     if !aes_key_length_valid(32 as usize) || aes_key_length_valid(20 as usize) { return 40 }
     if !rsa_key_size_valid(3072 as usize) || rsa_key_size_valid(1024 as usize) { return 41 }
     if !ed25519_signature_length_valid(64 as usize) { return 42 }

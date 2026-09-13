@@ -1,0 +1,32 @@
+extern function guiHostOpen(title: string, width: int, height: int): usize
+extern function guiHostPoll(window: usize): bool
+extern function guiHostDrawText(window: usize, x: int, y: int, text: string): bool
+extern function guiHostClose(window: usize): bool
+
+function open_window(title: string, width: int, height: int): usize {
+    unsafe { return guiHostOpen(title, width, height) }
+}
+
+function draw(window: usize, text: string): bool {
+    unsafe { return guiHostDrawText(window, 24, 32, text) }
+}
+
+function poll(window: usize): bool {
+    unsafe { return guiHostPoll(window) }
+}
+
+function close(window: usize): bool {
+    unsafe { return guiHostClose(window) }
+}
+
+function main(): int {
+    let window: usize = open_window("Noqeri GUI corpus", 640, 360)
+    if window == 0 as usize { return 1 }
+    let frames: int = 0
+    while frames < 120 && poll(window) {
+        draw(window, "Noqeri keeps host-specific GUI details behind one boundary")
+        frames = frames + 1
+    }
+    close(window)
+    return 0
+}

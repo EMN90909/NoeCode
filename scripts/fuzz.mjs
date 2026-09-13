@@ -63,6 +63,12 @@ function run(args,cwd){
   if(result.signal) throw new Error(`crash ${result.signal}: ${args.join(' ')}\n${result.stderr||''}`)
   return result
 }
+function runHook(command,file,label){
+  const r=spawnSync(command,[file],{timeout,encoding:'utf8'})
+  if(r.error?.code==='ETIMEDOUT')throw new Error(`${label} parser hang`)
+  if(r.signal)throw new Error(`${label} parser crash ${r.signal}`)
+  return r
+}
 function controlledParse(fn,input){try{fn(input)}catch(error){if(!(error instanceof Error))throw error}}
 
 const root=await mkdtemp(join(tmpdir(),'noqeri-fuzz-'))
@@ -85,19 +91,19 @@ try{
 
     const sql=mutate(pick(sqlSeeds)), sqlPath=join(root,`case-${i}.sql`)
     await writeFile(sqlPath,sql);controlledParse(parseSqlStatement,sql);executed++
-    if(process.env.NOQERI_SQL_FUZZ_CMD){const r=spawnSync(process.env.NOQERI_SQL_FUZZ_CMD,[sqlPath],{timeout,encoding:'utf8'});if(r.signal)throw new Error(`SQL parser crash ${r.signal}`);executed++}
+    if(process.env.NOQERI_SQL_FUZZ_CMD){runHook(process.env.NOQERI_SQL_FUZZ_CMD,sqlPath,'SQL');executed++}
 
     const net=mutate(pick(networkSeeds)), netPath=join(root,`case-${i}.net`)
     await writeFile(netPath,net)
     controlledParse(net.startsWith('HTTP/')?parseHttpResponse:parseHttpRequest,net);executed++
-    if(process.env.NOQERI_NETWORK_FUZZ_CMD){const r=spawnSync(process.env.NOQERI_NETWORK_FUZZ_CMD,[netPath],{timeout,encoding:'utf8'});if(r.signal)throw new Error(`network parser crash ${r.signal}`);executed++}
+    if(process.env.NOQERI_NETWORK_FUZZ_CMD){runHook(process.env.NOQERI_NETWORK_FUZZ_CMD,netPath,'network');executed++}
 
-    // Object bytes are never sent directly to a system linker. A hardened
-    // ObjectInspector target may be supplied here; LinkerDriver itself also
-    // inspects objects before invoking a configured platform linker.
+    // Every object case goes through Noqeri's bounded ObjectInspector. Rejection
+    // is expected for malformed bytes; crashes, signals and hangs are failures.
     const objectPath=join(root,`case-${i}.o`)
     await writeFile(objectPath,Buffer.from(mutate('\x7fELF000000000000'),'binary'))
-    if(process.env.NOQERI_OBJECT_FUZZ_CMD){const r=spawnSync(process.env.NOQERI_OBJECT_FUZZ_CMD,[objectPath],{timeout,encoding:'utf8'});if(r.signal)throw new Error(`object loader crash ${r.signal}`);executed++}
+    run(['inspect-object',objectPath],root);executed++
+    if(process.env.NOQERI_OBJECT_FUZZ_CMD){runHook(process.env.NOQERI_OBJECT_FUZZ_CMD,objectPath,'object');executed++}
   }
   console.log(`fuzz: PASS cases=${cases} invocations=${executed} seed=${originalSeed}`)
 } finally { await rm(root,{recursive:true,force:true}) }

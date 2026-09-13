@@ -1,5 +1,100 @@
 module noqeri.std.regex
 
-export function regex_is_meta(c:u8):bool{return c==46 as u8||c==94 as u8||c==36 as u8||c==42 as u8||c==43 as u8||c==63 as u8||c==40 as u8||c==41 as u8||c==91 as u8||c==93 as u8||c==123 as u8||c==125 as u8||c==124 as u8||c==92 as u8}
-export function regex_is_quantifier(c:u8):bool{return c==42 as u8||c==43 as u8||c==63 as u8}
-export function regex_escape_extra(c:u8):usize{if regex_is_meta(c){return 1 as usize}return 0 as usize}
+// Small, allocation-free regular expression engine for byte-oriented text.
+// Supported syntax: ^ $ . * + ? and backslash escaping. Character classes and
+// alternation are deliberately left for a later parser-backed engine.
+export function regex_is_meta(c: u8): bool { return c == 46 as u8 || c == 94 as u8 || c == 36 as u8 || c == 42 as u8 || c == 43 as u8 || c == 63 as u8 || c == 40 as u8 || c == 41 as u8 || c == 91 as u8 || c == 93 as u8 || c == 123 as u8 || c == 125 as u8 || c == 124 as u8 || c == 92 as u8 }
+export function regex_is_quantifier(c: u8): bool { return c == 42 as u8 || c == 43 as u8 || c == 63 as u8 }
+export function regex_escape_extra(c: u8): usize { if regex_is_meta(c) { return 1 as usize } return 0 as usize }
+export function regex_atom_matches(atom: u8, value: u8): bool { return atom == 46 as u8 || atom == value }
+
+function regex_token_width(pattern: []u8, index: usize): usize {
+    if index >= len(pattern) { return 0 as usize }
+    if pattern[index] == 92 as u8 && index + 1 as usize < len(pattern) { return 2 as usize }
+    return 1 as usize
+}
+
+function regex_token_atom(pattern: []u8, index: usize): u8 {
+    if pattern[index] == 92 as u8 && index + 1 as usize < len(pattern) { return pattern[index + 1 as usize] }
+    return pattern[index]
+}
+
+function regex_token_matches(pattern: []u8, index: usize, value: u8): bool {
+    if pattern[index] == 92 as u8 { if index + 1 as usize >= len(pattern) { return false } return pattern[index + 1 as usize] == value }
+    return regex_atom_matches(pattern[index], value)
+}
+
+function regex_match_from(pattern: []u8, pi: usize, text: []u8, ti: usize, requireEnd: bool): bool {
+    if pi >= len(pattern) { if requireEnd { return ti == len(text) } return true }
+    if pattern[pi] == 36 as u8 && pi + 1 as usize == len(pattern) { return ti == len(text) }
+
+    let width: usize = regex_token_width(pattern, pi)
+    if width == 0 as usize { return ti == len(text) }
+    let next: usize = pi + width
+    let quantifier: u8 = 0 as u8
+    if next < len(pattern) { quantifier = pattern[next] }
+
+    if quantifier == 42 as u8 {
+        let cursor: usize = ti
+        while cursor < len(text) && regex_token_matches(pattern, pi, text[cursor]) { cursor = cursor + 1 as usize }
+        while cursor >= ti {
+            if regex_match_from(pattern, next + 1 as usize, text, cursor, requireEnd) { return true }
+            if cursor == ti { return false }
+            cursor = cursor - 1 as usize
+        }
+        return false
+    }
+
+    if quantifier == 43 as u8 {
+        if ti >= len(text) || !regex_token_matches(pattern, pi, text[ti]) { return false }
+        let cursor: usize = ti + 1 as usize
+        while cursor < len(text) && regex_token_matches(pattern, pi, text[cursor]) { cursor = cursor + 1 as usize }
+        while cursor > ti {
+            if regex_match_from(pattern, next + 1 as usize, text, cursor, requireEnd) { return true }
+            cursor = cursor - 1 as usize
+        }
+        return false
+    }
+
+    if quantifier == 63 as u8 {
+        if regex_match_from(pattern, next + 1 as usize, text, ti, requireEnd) { return true }
+        if ti < len(text) && regex_token_matches(pattern, pi, text[ti]) { return regex_match_from(pattern, next + 1 as usize, text, ti + 1 as usize, requireEnd) }
+        return false
+    }
+
+    if ti >= len(text) || !regex_token_matches(pattern, pi, text[ti]) { return false }
+    return regex_match_from(pattern, next, text, ti + 1 as usize, requireEnd)
+}
+
+export function regex_full_match(pattern: []u8, text: []u8): bool {
+    if !regex_is_valid(pattern) { return false }
+    let start: usize = 0 as usize
+    if len(pattern) > 0 as usize && pattern[0] == 94 as u8 { start = 1 as usize }
+    return regex_match_from(pattern, start, text, 0 as usize, true)
+}
+
+export function regex_search(pattern: []u8, text: []u8): isize {
+    if !regex_is_valid(pattern) { return -1 as isize }
+    if len(pattern) > 0 as usize && pattern[0] == 94 as u8 { if regex_match_from(pattern, 1 as usize, text, 0 as usize, false) { return 0 as isize } return -1 as isize }
+    let i: usize = 0 as usize
+    while i <= len(text) { if regex_match_from(pattern, 0 as usize, text, i, false) { return i as isize } i = i + 1 as usize }
+    return -1 as isize
+}
+
+export function regex_is_valid(pattern: []u8): bool {
+    let i: usize = 0 as usize
+    let previousAtom: bool = false
+    while i < len(pattern) {
+        let c: u8 = pattern[i]
+        if c == 92 as u8 { if i + 1 as usize >= len(pattern) { return false } previousAtom = true i = i + 2 as usize }
+        else {
+            if regex_is_quantifier(c) { if !previousAtom { return false } previousAtom = false }
+            else if c == 94 as u8 { if i != 0 as usize { return false } previousAtom = false }
+            else if c == 36 as u8 { if i + 1 as usize != len(pattern) { return false } previousAtom = false }
+            else if c == 40 as u8 || c == 41 as u8 || c == 91 as u8 || c == 93 as u8 || c == 123 as u8 || c == 125 as u8 || c == 124 as u8 { return false }
+            else { previousAtom = true }
+            i = i + 1 as usize
+        }
+    }
+    return true
+}

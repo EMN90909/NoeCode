@@ -1,0 +1,34 @@
+# Noqeri benchmark methodology
+
+Performance is evidence, not branding. Noqeri must not say it is faster than Rust, Zig, C, C++, Go, or another implementation unless a reproducible result bundle supports the exact claim.
+
+## Required workloads
+
+The tracked suite is `Benchmarks/suite.json`: binary trees, JSON, regex, HTTP server, filesystem, database, matrix operations, allocation, strings, sorting, startup, and compilation. Every comparative implementation must perform equivalent work and validate an equivalent result before its timing is accepted.
+
+## Comparison languages
+
+Published comparative runs target Noqeri, C, C++, Rust, Zig, and Go. Versions, optimization flags, link mode, allocator changes, feature flags, and runtime settings are part of the result—not footnotes that may be omitted.
+
+## Run protocol
+
+1. Record git revision, Noqeri compiler revision, peer compiler versions, OS/kernel, CPU model/count, memory, power mode, and relevant environment variables.
+2. Build release artifacts before timing runtime workloads. Compilation is measured separately.
+3. Verify output correctness before collecting samples.
+4. Perform at least three warm-ups, then at least fifteen timed samples unless a workload documents why that is impractical.
+5. Report the raw sample list plus median and p95. Record peak RSS and binary size where meaningful.
+6. Pin server/client topology and concurrency for network tests. Do not compare a loopback single-request microbenchmark to a production server configuration.
+7. Do not discard inconvenient samples without recording the exclusion and reason.
+8. Keep historical result bundles. A graph without the underlying JSON/CSV evidence is not release evidence.
+
+## Regression gates
+
+Important workloads fail validation when their median exceeds the accepted baseline by more than the workload's `threshold_percent`. The baseline must have been captured on the same benchmark host/profile. Cross-machine results are informative, not gating.
+
+Run `node scripts/perf-gate.mjs baseline.json candidate.json` to enforce the policy. The gate intentionally has no fabricated baseline in the repository; the first baseline must come from a measured, archived run.
+
+## Claims
+
+Allowed: "On host X, revision A measured Y ms median for workload Z; revision B measured W ms using the published methodology."
+
+Not allowed without matching evidence: "Noqeri is faster than Rust/Zig/C++" or broad claims extrapolated from a single microbenchmark.

@@ -2,14 +2,20 @@
   "version": 3,
   "configurePresets": [
     {"name":"debug","displayName":"noqeri Debug","generator":"Ninja","binaryDir":"${sourceDir}/build/debug","cacheVariables":{"CMAKE_BUILD_TYPE":"Debug","BUILD_TESTING":"ON"}},
-    {"name":"release","displayName":"noqeri Release","generator":"Ninja","binaryDir":"${sourceDir}/build/release","cacheVariables":{"CMAKE_BUILD_TYPE":"Release","BUILD_TESTING":"ON"}}
+    {"name":"release","displayName":"noqeri Release","generator":"Ninja","binaryDir":"${sourceDir}/build/release","cacheVariables":{"CMAKE_BUILD_TYPE":"Release","BUILD_TESTING":"ON"}},
+    {"name":"memory-check","displayName":"noqeri Address/UB sanitizers","generator":"Ninja","binaryDir":"${sourceDir}/build/memory","cacheVariables":{"CMAKE_BUILD_TYPE":"RelWithDebInfo","BUILD_TESTING":"ON","CMAKE_CXX_FLAGS":"-fsanitize=address,undefined -fno-omit-frame-pointer","CMAKE_EXE_LINKER_FLAGS":"-fsanitize=address,undefined"}},
+    {"name":"race-check","displayName":"noqeri ThreadSanitizer","generator":"Ninja","binaryDir":"${sourceDir}/build/race","cacheVariables":{"CMAKE_BUILD_TYPE":"RelWithDebInfo","BUILD_TESTING":"ON","CMAKE_CXX_FLAGS":"-fsanitize=thread -fno-omit-frame-pointer","CMAKE_EXE_LINKER_FLAGS":"-fsanitize=thread"}}
   ],
   "buildPresets": [
     {"name":"debug","configurePreset":"debug"},
-    {"name":"release","configurePreset":"release"}
+    {"name":"release","configurePreset":"release"},
+    {"name":"memory-check","configurePreset":"memory-check"},
+    {"name":"race-check","configurePreset":"race-check"}
   ],
   "testPresets": [
     {"name":"debug","configurePreset":"debug","output":{"outputOnFailure":true}},
-    {"name":"release","configurePreset":"release","output":{"outputOnFailure":true}}
+    {"name":"release","configurePreset":"release","output":{"outputOnFailure":true}},
+    {"name":"memory-check","configurePreset":"memory-check","output":{"outputOnFailure":true}},
+    {"name":"race-check","configurePreset":"race-check","output":{"outputOnFailure":true}}
   ]
 }

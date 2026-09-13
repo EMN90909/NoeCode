@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "policy": {
+    "warmups": 3,
+    "samples": 15,
+    "report": ["median_ms", "p95_ms", "rss_kib", "binary_bytes"],
+    "claim_rule": "No comparative performance claim without a checked-in result bundle containing source revisions, compiler versions, flags, hardware/OS metadata and raw samples."
+  },
+  "languages": ["noqeri", "c", "cpp", "rust", "zig", "go"],
+  "workloads": [
+    {"id":"binary-trees","group":"cpu-allocation","threshold_percent":8},
+    {"id":"json","group":"parser","threshold_percent":8},
+    {"id":"regex","group":"text","threshold_percent":8},
+    {"id":"http-server","group":"network","threshold_percent":10},
+    {"id":"filesystem","group":"io","threshold_percent":10},
+    {"id":"database","group":"storage","threshold_percent":10},
+    {"id":"matrix","group":"numeric","threshold_percent":8},
+    {"id":"allocation","group":"runtime","threshold_percent":8},
+    {"id":"strings","group":"text","threshold_percent":8},
+    {"id":"sorting","group":"collections","threshold_percent":8},
+    {"id":"startup","group":"runtime","threshold_percent":5},
+    {"id":"compilation","group":"compiler","threshold_percent":5}
+  ]
+}

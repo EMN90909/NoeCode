@@ -28,30 +28,30 @@ extern function rwlockReadUnlock(lock: isize): isize
 extern function rwlockWriteLock(lock: isize): isize
 extern function rwlockWriteUnlock(lock: isize): isize
 
-export function task_spawn(entry: string): isize { return taskSpawn(entry) }
-export function task_join(task: isize): isize { return taskJoin(task) }
-export function task_cancel(task: isize): isize { return taskCancel(task) }
-export function task_cancelled(task: isize): bool { return taskIsCancelled(task) }
-export function task_sleep(milliseconds: i64): isize { return taskSleepMillis(milliseconds) }
-export function task_join_timeout(task: isize, milliseconds: i64): isize { return taskJoinTimeout(task, milliseconds) }
+export function task_spawn(entry: string): isize { unsafe { return taskSpawn(entry) } }
+export function task_join(task: isize): isize { unsafe { return taskJoin(task) } }
+export function task_cancel(task: isize): isize { unsafe { return taskCancel(task) } }
+export function task_cancelled(task: isize): bool { unsafe { return taskIsCancelled(task) } }
+export function task_sleep(milliseconds: i64): isize { unsafe { return taskSleepMillis(milliseconds) } }
+export function task_join_timeout(task: isize, milliseconds: i64): isize { unsafe { return taskJoinTimeout(task, milliseconds) } }
 
-export function channel_create(capacity: usize): isize { return channelCreate(capacity) }
-export function channel_send(channel: isize, value: isize): isize { return channelSend(channel, value) }
-export function channel_receive(channel: isize): isize { return channelReceive(channel) }
-export function channel_send_timeout(channel: isize, value: isize, milliseconds: i64): isize { return channelSendTimeout(channel, value, milliseconds) }
-export function channel_receive_timeout(channel: isize, milliseconds: i64): isize { return channelReceiveTimeout(channel, milliseconds) }
-export function channel_close(channel: isize): isize { return channelClose(channel) }
+export function channel_create(capacity: usize): isize { unsafe { return channelCreate(capacity) } }
+export function channel_send(channel: isize, value: isize): isize { unsafe { return channelSend(channel, value) } }
+export function channel_receive(channel: isize): isize { unsafe { return channelReceive(channel) } }
+export function channel_send_timeout(channel: isize, value: isize, milliseconds: i64): isize { unsafe { return channelSendTimeout(channel, value, milliseconds) } }
+export function channel_receive_timeout(channel: isize, milliseconds: i64): isize { unsafe { return channelReceiveTimeout(channel, milliseconds) } }
+export function channel_close(channel: isize): isize { unsafe { return channelClose(channel) } }
 
-export function mutex_create(): isize { return mutexCreate() }
-export function mutex_lock(mutex: isize): isize { return mutexLock(mutex) }
-export function mutex_try_lock(mutex: isize): bool { return mutexTryLock(mutex) }
-export function mutex_unlock(mutex: isize): isize { return mutexUnlock(mutex) }
+export function mutex_create(): isize { unsafe { return mutexCreate() } }
+export function mutex_lock(mutex: isize): isize { unsafe { return mutexLock(mutex) } }
+export function mutex_try_lock(mutex: isize): bool { unsafe { return mutexTryLock(mutex) } }
+export function mutex_unlock(mutex: isize): isize { unsafe { return mutexUnlock(mutex) } }
 
-export function rwlock_create(): isize { return rwlockCreate() }
-export function rwlock_read_lock(lock: isize): isize { return rwlockReadLock(lock) }
-export function rwlock_read_unlock(lock: isize): isize { return rwlockReadUnlock(lock) }
-export function rwlock_write_lock(lock: isize): isize { return rwlockWriteLock(lock) }
-export function rwlock_write_unlock(lock: isize): isize { return rwlockWriteUnlock(lock) }
+export function rwlock_create(): isize { unsafe { return rwlockCreate() } }
+export function rwlock_read_lock(lock: isize): isize { unsafe { return rwlockReadLock(lock) } }
+export function rwlock_read_unlock(lock: isize): isize { unsafe { return rwlockReadUnlock(lock) } }
+export function rwlock_write_lock(lock: isize): isize { unsafe { return rwlockWriteLock(lock) } }
+export function rwlock_write_unlock(lock: isize): isize { unsafe { return rwlockWriteUnlock(lock) } }
 
 // Structured concurrency status helpers.
 export function concurrency_ok(status: isize): bool { return status >= 0 as isize }

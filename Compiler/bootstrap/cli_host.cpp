@@ -17,15 +17,21 @@ void usage() {
     std::cout << "noqeri " << NOQERI_COMPILER_VERSION << "\nusage: noqeri <command> [options]\n\n"
               << "  new <name> [dir]                 create a Noqeri project\n"
               << "  lex <file>                        print lexer tokens\n"
-              << "  check [file] [-O...]              parse and type-check module graph\n"
+              << "  check [file] [-O...] [--target=<triple>]\n"
+              << "                                    parse and type-check module graph\n"
               << "  nir [file] [-O...]                lower module graph to typed NIR\n"
               << "  run [file] [--check-memory] [--race] [--overflow] [-O...]\n"
               << "                                    execute through reference runtime with optional checks\n"
-              << "  build [file] [assembly] [-O...]   emit target assembly\n"
+              << "  profile [file] [--output=profile.json] [--flame=profile.folded]\n"
+              << "                                    run with CPU/allocation/thread profiling\n"
+              << "  build [file] [assembly] [-O...] [--target=<triple>]\n"
+              << "                                    emit target assembly\n"
               << "  web [file] [module.nqo]           emit checked portable Noqeri web module\n"
-              << "  db <script.nqd> [data.nqdb]       execute a transactional NoqeriDB script\n"
+              << "  db <script.nqd|script.sql> [data.nqdb]\n"
+              << "                                    execute a transactional NoqeriDB script\n"
               << "  stress [dir] [--full]             stress-test compiler, libraries and NoqeriDB\n"
               << "  assemble <asm> <object> [target]  run assembler adapter without a shell\n"
+              << "  inspect-object <object>           validate object format and architecture\n"
               << "  link <output> <object...>          run explicit linker adapter\n"
               << "  targets                           list compiler target contracts\n"
               << "  format <file>                     canonical-format source in place\n"
@@ -50,11 +56,19 @@ std::optional<OptimizationLevel> parseOptimization(const std::string& arg) {
     return std::nullopt;
 }
 
+std::optional<std::string> optionValue(int argc,char**argv,const std::string&name){
+    const std::string prefix=name+"=";
+    for(int i=2;i<argc;++i){const std::string arg=argv[i];if(arg.rfind(prefix,0)==0)return arg.substr(prefix.size());}
+    return std::nullopt;
+}
+
 CompileOptions optionsFromArgs(int argc, char** argv, const std::string& target) {
     CompileOptions options;
     options.target = target.empty() ? NOQERI_DEFAULT_TARGET : target;
     for (int i = 2; i < argc; ++i) {
-        if (auto level = parseOptimization(argv[i])) options.optimization = *level;
+        const std::string arg=argv[i];
+        if (auto level = parseOptimization(arg)) options.optimization = *level;
+        else if(arg.rfind("--target=",0)==0&&arg.size()>9)options.target=arg.substr(9);
     }
     return options;
 }
@@ -74,6 +88,9 @@ std::filesystem::path firstPositional(int argc,char**argv,const std::filesystem:
     for(int i=2;i<argc;++i){const std::string arg=argv[i];if(!arg.empty()&&arg[0]!='-')return arg;}
     return fallback;
 }
+
+const char*objectFormatText(ObjectFormat format){switch(format){case ObjectFormat::Elf64:return"elf64";case ObjectFormat::Coff64:return"coff64";case ObjectFormat::MachO64:return"macho64";case ObjectFormat::Wasm:return"wasm";case ObjectFormat::Assembly:return"assembly";default:return"unknown";}}
+const char*architectureText(Architecture architecture){switch(architecture){case Architecture::X86_64:return"x86_64";case Architecture::AArch64:return"aarch64";case Architecture::Wasm32:return"wasm32";default:return"unknown";}}
 
 struct SourceSelection {
     std::filesystem::path source;
@@ -309,7 +326,7 @@ int main(int argc, char** argv) {
     if (cmd == "doctor" || cmd == "release-check") return runProductionDoctor(argc >= 3 ? argv[2] : ".");
     if (cmd == "audit") return runSecurityAudit(argc >= 3 ? argv[2] : ".");
     if (cmd == "db") {
-        if (argc < 3) { std::cerr << "NQR-D8041: db requires a .nqd script\n"; return 1; }
+        if (argc < 3) { std::cerr << "NQR-D8041: db requires a .nqd or .sql script\n"; return 1; }
         Diagnostics d;
         std::filesystem::path overridePath = argc >= 4 ? std::filesystem::path(argv[3]) : std::filesystem::path{};
         if (!NoqeriDatabase{}.execute(argv[2], overridePath, std::cout, d)) { d.print(argv[2]); return 1; }
@@ -322,6 +339,12 @@ int main(int argc, char** argv) {
             Diagnostics d;
             if (!AssemblerDriver{}.assemble(argv[2], argv[3], target, d)) { d.print(argv[2]); return 1; }
             std::cout << "assembled target object: " << argv[3] << " target=" << target.str() << "\n";
+            return 0;
+        }
+        if(cmd=="inspect-object"){
+            if(argc<3){std::cerr<<"NQR-K5138: inspect-object requires an object file\n";return 1;}
+            Diagnostics d;auto info=ObjectInspector::inspect(argv[2],d);if(!info){d.print(argv[2]);return 1;}
+            std::cout<<"object="<<argv[2]<<"\nformat="<<objectFormatText(info->format)<<"\narchitecture="<<architectureText(info->architecture)<<"\nsize="<<info->size<<"\n";
             return 0;
         }
         if (cmd == "link") {
@@ -395,6 +418,15 @@ int main(int argc, char** argv) {
             runtimeConfigureChecks(runtimeChecksFromArgs(argc,argv));
             const int result=Interpreter{}.run(compilation.nir);
             runtimeConfigureChecks({});
+            return result;
+        }
+        if(cmd=="profile"){
+            runtimeConfigureChecks(runtimeChecksFromArgs(argc,argv));
+            const auto json=optionValue(argc,argv,"--output").value_or("profile.json");
+            const auto folded=optionValue(argc,argv,"--flame").value_or("profile.folded");
+            const int result=Interpreter{}.runProfiled(compilation.nir,json,folded);
+            runtimeConfigureChecks({});
+            if(result==0)std::cout<<"profile="<<json<<"\nflamegraph-folded="<<folded<<"\n";
             return result;
         }
         if (cmd == "web") {

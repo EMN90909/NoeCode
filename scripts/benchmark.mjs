@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
-import { resolve, join } from 'node:path'
+import { resolve, join, dirname } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import os from 'node:os'
 
 const root=resolve(process.cwd())
-const suite=JSON.parse(await readFile(join(root,'benchmarks','suite.json'),'utf8'))
+const suite=JSON.parse(await readFile(join(root,'Benchmarks','suite.json'),'utf8'))
 const args=process.argv.slice(2)
 const wanted=new Set((args.find(x=>x.startsWith('--workloads='))?.split('=')[1]||'').split(',').filter(Boolean))
 const languages=(args.find(x=>x.startsWith('--languages='))?.split('=')[1]||'noqeri,c,cpp,rust,zig,go').split(',').filter(Boolean)
-const output=resolve(args.find(x=>x.startsWith('--output='))?.split('=')[1]||join(root,'benchmarks','results','latest.json'))
+const output=resolve(args.find(x=>x.startsWith('--output='))?.split('=')[1]||join(root,'Benchmarks','results','latest.json'))
 const runs=Number(args.find(x=>x.startsWith('--runs='))?.split('=')[1]||suite.policy.measurementRuns)
 const warmups=Number(args.find(x=>x.startsWith('--warmups='))?.split('=')[1]||suite.policy.warmupRuns)
 
@@ -66,7 +66,7 @@ const document={
   system:{platform:process.platform,arch:process.arch,node:process.version,cpu:os.cpus()[0]?.model||'unknown',logicalCpus:os.cpus().length,memoryBytes:os.totalmem()},
   results
 }
-await mkdir(resolve(output,'..'),{recursive:true})
+await mkdir(dirname(output),{recursive:true})
 await writeFile(output,JSON.stringify(document,null,2)+'\n')
 const ok=results.filter(x=>x.status==='ok').length,failed=results.filter(x=>x.status==='failed').length,skipped=results.filter(x=>x.status==='skipped').length
 console.log(`benchmark: ${ok} measured, ${skipped} skipped, ${failed} failed -> ${output}`)

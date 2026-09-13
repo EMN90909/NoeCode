@@ -5,6 +5,77 @@ export function sql_is_ascii_digit(c:u8):bool{return c>=48 as u8&&c<=57 as u8}
 export function sql_is_ascii_alpha(c:u8):bool{return (c>=65 as u8&&c<=90 as u8)||(c>=97 as u8&&c<=122 as u8)}
 export function sql_identifier_start(c:u8):bool{return sql_is_ascii_alpha(c)||c==95 as u8}
 export function sql_identifier_continue(c:u8):bool{return sql_identifier_start(c)||sql_is_ascii_digit(c)}
-export function sql_identifier_valid(value:[]u8):bool{if len(value)==0 as usize{return false}if !sql_identifier_start(value[0]){return false}let i:usize=1 as usize while i<len(value){if !sql_identifier_continue(value[i]){return false}i=i+1}return true}
-export function sql_trim_left_count(value:[]u8):usize{let i:usize=0 as usize while i<len(value)&&sql_is_ascii_space(value[i]){i=i+1}return i}
+export function sql_identifier_valid(value:[]u8):bool{if len(value)==0 as usize{return false}if !sql_identifier_start(value[0]){return false}let i:usize=1 as usize while i<len(value){if !sql_identifier_continue(value[i]){return false}i=i+1 as usize}return true}
+export function sql_trim_left_count(value:[]u8):usize{let i:usize=0 as usize while i<len(value)&&sql_is_ascii_space(value[i]){i=i+1 as usize}return i}
 export function sql_parameter_index_valid(index:usize,count:usize):bool{return index<count}
+
+export function sql_select():int{return 1}
+export function sql_insert():int{return 2}
+export function sql_update():int{return 3}
+export function sql_delete():int{return 4}
+export function sql_create():int{return 5}
+export function sql_alter():int{return 6}
+export function sql_drop():int{return 7}
+export function sql_begin():int{return 8}
+export function sql_commit():int{return 9}
+export function sql_rollback():int{return 10}
+
+export function sql_upper(c:u8):u8{if c>=97 as u8&&c<=122 as u8{return c-32 as u8}return c}
+
+export function sql_keyword_at(value:[]u8,start:usize,keyword:[]u8):bool{
+    if start+len(keyword)>len(value){return false}
+    let index:usize=0 as usize
+    while index<len(keyword){if sql_upper(value[start+index])!=keyword[index]{return false}index=index+1 as usize}
+    if start+len(keyword)<len(value)&&sql_identifier_continue(value[start+len(keyword)]){return false}
+    return true
+}
+
+export function sql_statement_kind(value:[]u8):int{
+    let start:usize=sql_trim_left_count(value)
+    if sql_keyword_at(value,start,slice([83 as u8,69 as u8,76 as u8,69 as u8,67 as u8,84 as u8])){return sql_select()}
+    if sql_keyword_at(value,start,slice([73 as u8,78 as u8,83 as u8,69 as u8,82 as u8,84 as u8])){return sql_insert()}
+    if sql_keyword_at(value,start,slice([85 as u8,80 as u8,68 as u8,65 as u8,84 as u8,69 as u8])){return sql_update()}
+    if sql_keyword_at(value,start,slice([68 as u8,69 as u8,76 as u8,69 as u8,84 as u8,69 as u8])){return sql_delete()}
+    if sql_keyword_at(value,start,slice([67 as u8,82 as u8,69 as u8,65 as u8,84 as u8,69 as u8])){return sql_create()}
+    if sql_keyword_at(value,start,slice([65 as u8,76 as u8,84 as u8,69 as u8,82 as u8])){return sql_alter()}
+    if sql_keyword_at(value,start,slice([68 as u8,82 as u8,79 as u8,80 as u8])){return sql_drop()}
+    if sql_keyword_at(value,start,slice([66 as u8,69 as u8,71 as u8,73 as u8,78 as u8])){return sql_begin()}
+    if sql_keyword_at(value,start,slice([67 as u8,79 as u8,77 as u8,77 as u8,73 as u8,84 as u8])){return sql_commit()}
+    if sql_keyword_at(value,start,slice([82 as u8,79 as u8,76 as u8,76 as u8,66 as u8,65 as u8,67 as u8,75 as u8])){return sql_rollback()}
+    return 0
+}
+
+export function sql_statement_supported(value:[]u8):bool{return sql_statement_kind(value)!=0}
+
+export function sql_count_parameters(value:[]u8):usize{
+    let count:usize=0 as usize
+    let index:usize=0 as usize
+    let single:bool=false
+    let double:bool=false
+    while index<len(value){
+        let c:u8=value[index]
+        if c==39 as u8&&!double{single=!single}
+        else if c==34 as u8&&!single{double=!double}
+        else if c==63 as u8&&!single&&!double{count=count+1 as usize}
+        index=index+1 as usize
+    }
+    return count
+}
+
+export function sql_has_group_by(value:[]u8):bool{
+    let index:usize=0 as usize
+    while index<len(value){if sql_keyword_at(value,index,slice([71 as u8,82 as u8,79 as u8,85 as u8,80 as u8])){let next:usize=index+5 as usize while next<len(value)&&sql_is_ascii_space(value[next]){next=next+1 as usize}if sql_keyword_at(value,next,slice([66 as u8,89 as u8])){return true}}index=index+1 as usize}
+    return false
+}
+
+export function sql_has_order_by(value:[]u8):bool{
+    let index:usize=0 as usize
+    while index<len(value){if sql_keyword_at(value,index,slice([79 as u8,82 as u8,68 as u8,69 as u8,82 as u8])){let next:usize=index+5 as usize while next<len(value)&&sql_is_ascii_space(value[next]){next=next+1 as usize}if sql_keyword_at(value,next,slice([66 as u8,89 as u8])){return true}}index=index+1 as usize}
+    return false
+}
+
+export function sql_has_join(value:[]u8):bool{
+    let index:usize=0 as usize
+    while index<len(value){if sql_keyword_at(value,index,slice([74 as u8,79 as u8,73 as u8,78 as u8])){return true}index=index+1 as usize}
+    return false
+}

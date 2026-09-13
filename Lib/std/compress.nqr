@@ -1,5 +1,38 @@
 module noqeri.std.compress
 
-export function compress_ratio_per_mille(input:usize,output:usize):usize{if input==0 as usize{return 0 as usize}return (output*1000 as usize)/input}
-export function compress_saved_bytes(input:usize,output:usize):usize{if output>=input{return 0 as usize}return input-output}
-export function compress_is_effective(input:usize,output:usize):bool{return output<input}
+extern function compressDeflate(source: []u8, destination: []u8, level: int): isize
+extern function compressInflate(source: []u8, destination: []u8): isize
+extern function compressGzip(source: []u8, destination: []u8, level: int): isize
+extern function decompressGzip(source: []u8, destination: []u8): isize
+extern function compressBoundDeflate(inputLength: usize): usize
+extern function compressBoundGzip(inputLength: usize): usize
+
+export function compress_level_valid(level: int): bool { return level >= 0 && level <= 9 }
+export function compress_default_level(): int { return 6 }
+export function compress_ratio_per_mille(input: usize, output: usize): usize { if input == 0 as usize { return 0 as usize } return (output * 1000 as usize) / input }
+export function compress_saved_bytes(input: usize, output: usize): usize { if output >= input { return 0 as usize } return input - output }
+export function compress_is_effective(input: usize, output: usize): bool { return output < input }
+export function compress_deflate_bound(inputLength: usize): usize { return compressBoundDeflate(inputLength) }
+export function compress_gzip_bound(inputLength: usize): usize { return compressBoundGzip(inputLength) }
+
+export function compress_deflate(source: []u8, destination: []u8, level: int): isize {
+    if !compress_level_valid(level) { return -2 as isize }
+    if len(destination) == 0 as usize && len(source) > 0 as usize { return -3 as isize }
+    return compressDeflate(source, destination, level)
+}
+
+export function decompress_deflate(source: []u8, destination: []u8): isize {
+    if len(destination) == 0 as usize && len(source) > 0 as usize { return -3 as isize }
+    return compressInflate(source, destination)
+}
+
+export function compress_gzip(source: []u8, destination: []u8, level: int): isize {
+    if !compress_level_valid(level) { return -2 as isize }
+    if len(destination) == 0 as usize && len(source) > 0 as usize { return -3 as isize }
+    return compressGzip(source, destination, level)
+}
+
+export function decompress_gzip(source: []u8, destination: []u8): isize {
+    if len(destination) == 0 as usize && len(source) > 0 as usize { return -3 as isize }
+    return decompressGzip(source, destination)
+}

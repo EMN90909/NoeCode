@@ -1,6 +1,7 @@
 module noqeri.compiler.selfhost.lower
 import "ast.nqr"
 import "nir.nqr"
+import "types.nqr"
 
 record NqLowerState {
     instructionCount: usize
@@ -12,6 +13,7 @@ export function nqLowerUnsupported(): isize { return -600 }
 export function nqLowerCapacity(): isize { return -601 }
 export function nqLowerBadLiteral(): isize { return -602 }
 export function nqLowerBadAst(): isize { return -603 }
+export function nqLowerBadTarget(): isize { return -604 }
 
 export function nqLowerStateInit(out: *NqLowerState): void { out.instructionCount = 0 as usize out.nextRegister = 0 as isize }
 
@@ -22,7 +24,7 @@ function nqLowerAllocRegister(state: *NqLowerState): isize {
 }
 
 function nqLowerEmit(instructions: []NqNirInstruction, state: *NqLowerState, opcode: int, dest: isize): isize {
-    if state.instructionCount >= len(instructions) { return nqLowerCapacity() }
+    if state == null || state.instructionCount >= len(instructions) { return nqLowerCapacity() }
     let index: usize = state.instructionCount
     nqNirInstructionInit(&instructions[index], opcode, dest)
     state.instructionCount = index + 1 as usize
@@ -36,8 +38,6 @@ function nqLowerHexDigit(c: u8): int {
     return -1
 }
 
-// Positive integer literals are accumulated with a pre-multiply overflow check.
-// Unary '-' is represented separately in the AST, which keeps parsing simple.
 export function nqLowerParseI64(source: []u8, start: usize, end: usize, out: *i64): bool {
     if out == null || start >= end || end > len(source) { return false }
     let base: i64 = 10 as i64
@@ -52,6 +52,31 @@ export function nqLowerParseI64(source: []u8, start: usize, end: usize, out: *i6
         value = value * base + digit as i64
         index = index + 1 as usize
     }
+    out[0] = value
+    return true
+}
+
+export function nqLowerParseFloat(source: []u8, start: usize, end: usize, out: *float): bool {
+    if out == null || start >= end || end > len(source) { return false }
+    let index: usize = start
+    let value: float = 0.0
+    let digits: usize = 0 as usize
+    while index < end && source[index] >= 48 as u8 && source[index] <= 57 as u8 {
+        value = value * 10.0 + (source[index] - 48 as u8) as float
+        digits = digits + 1 as usize
+        index = index + 1 as usize
+    }
+    if digits == 0 as usize || index >= end || source[index] != 46 as u8 { return false }
+    index = index + 1 as usize
+    let scale: float = 0.1
+    let fractionDigits: usize = 0 as usize
+    while index < end && source[index] >= 48 as u8 && source[index] <= 57 as u8 {
+        value = value + (source[index] - 48 as u8) as float * scale
+        scale = scale * 0.1
+        fractionDigits = fractionDigits + 1 as usize
+        index = index + 1 as usize
+    }
+    if index != end || fractionDigits == 0 as usize { return false }
     out[0] = value
     return true
 }
@@ -71,7 +96,139 @@ function nqLowerBinaryOpcode(encoded: u32): int {
     return -1
 }
 
-export function nqLowerExpression(source: []u8, nodes: []NqAstNode, nodeIndex: isize, instructions: []NqNirInstruction, state: *NqLowerState): isize {
+function nqLowerNodeSymbol(source: []u8, nodes: []NqAstNode, index: isize): u64 {
+    if index < 0 as isize || index as usize >= len(nodes) { return 0 as u64 }
+    return nqNirSymbolId(source, nodes[index as usize].start, nodes[index as usize].end)
+}
+
+function nqLowerNodeWidth(node: *NqAstNode): usize {
+    if node == null { return 8 as usize }
+    let width: usize = nqCompilerPrimitiveTypeWidth(node.typeCode)
+    if width == 0 as usize { return 8 as usize }
+    return width
+}
+
+function nqLowerEmitConst(instructions: []NqNirInstruction, state: *NqLowerState, value: i64, typeCode: int): isize {
+    let reg: isize = nqLowerAllocRegister(state)
+    let emitted: isize = nqLowerEmit(instructions, state, nqNirConstI64(), reg)
+    if emitted < 0 as isize { return emitted }
+    instructions[emitted as usize].immediate = value
+    instructions[emitted as usize].typeCode = typeCode
+    return reg
+}
+
+function nqLowerExpressionInternal(source: []u8, nodes: []NqAstNode, nodeIndex: isize, instructions: []NqNirInstruction, state: *NqLowerState): isize
+
+function nqLowerAddress(source: []u8, nodes: []NqAstNode, nodeIndex: isize, instructions: []NqNirInstruction, state: *NqLowerState): isize {
+    if nodeIndex < 0 as isize || nodeIndex as usize >= len(nodes) { return nqLowerBadAst() }
+    let node: *NqAstNode = &nodes[nodeIndex as usize]
+    if node.tag == nqAstName() {
+        let symbol: u64 = nqLowerNodeSymbol(source, nodes, nodeIndex)
+        if symbol == 0 as u64 { return nqLowerBadAst() }
+        let reg: isize = nqLowerAllocRegister(state)
+        let emitted: isize = nqLowerEmit(instructions, state, nqNirAddr(), reg)
+        if emitted < 0 as isize { return emitted }
+        instructions[emitted as usize].symbol = symbol
+        instructions[emitted as usize].sourceStart = node.start
+        instructions[emitted as usize].sourceEnd = node.end
+        return reg
+    }
+    if node.tag == nqAstUnary() && node.flags == 42 as u32 { return nqLowerExpressionInternal(source, nodes, node.left, instructions, state) }
+    if node.tag == nqAstIndex() {
+        let base: isize = nqLowerExpressionInternal(source, nodes, node.left, instructions, state)
+        if base < 0 as isize { return base }
+        let indexValue: isize = nqLowerExpressionInternal(source, nodes, node.right, instructions, state)
+        if indexValue < 0 as isize { return indexValue }
+        let baseNode: *NqAstNode = &nodes[node.left as usize]
+        let pointer: isize = base
+        if baseNode.typeCode == nqAstTypeSlice() {
+            let lengthReg: isize = nqLowerAllocRegister(state)
+            let lenOp: isize = nqLowerEmit(instructions, state, nqNirSliceLen(), lengthReg)
+            if lenOp < 0 as isize { return lenOp }
+            instructions[lenOp as usize].left = base
+            let check: isize = nqLowerEmit(instructions, state, nqNirBoundsCheck(), nqNirNoValue())
+            if check < 0 as isize { return check }
+            instructions[check as usize].left = indexValue
+            instructions[check as usize].right = lengthReg
+            let dataReg: isize = nqLowerAllocRegister(state)
+            let dataOp: isize = nqLowerEmit(instructions, state, nqNirSliceData(), dataReg)
+            if dataOp < 0 as isize { return dataOp }
+            instructions[dataOp as usize].left = base
+            pointer = dataReg
+        } else if baseNode.tag == nqAstArray() {
+            let lengthReg: isize = nqLowerEmitConst(instructions, state, baseNode.extra as i64, nqAstTypeUsize())
+            if lengthReg < 0 as isize { return lengthReg }
+            let check: isize = nqLowerEmit(instructions, state, nqNirBoundsCheck(), nqNirNoValue())
+            if check < 0 as isize { return check }
+            instructions[check as usize].left = indexValue
+            instructions[check as usize].right = lengthReg
+        }
+        let address: isize = nqLowerAllocRegister(state)
+        let offset: isize = nqLowerEmit(instructions, state, nqNirPtrAdd(), address)
+        if offset < 0 as isize { return offset }
+        instructions[offset as usize].left = pointer
+        instructions[offset as usize].right = indexValue
+        instructions[offset as usize].width = nqLowerNodeWidth(node)
+        return address
+    }
+    if node.tag == nqAstMember() {
+        let base: isize = nqLowerAddress(source, nodes, node.left, instructions, state)
+        if base < 0 as isize { return base }
+        let member: isize = node.right
+        let address: isize = nqLowerAllocRegister(state)
+        let offset: isize = nqLowerEmit(instructions, state, nqNirPtrAdd(), address)
+        if offset < 0 as isize { return offset }
+        instructions[offset as usize].left = base
+        instructions[offset as usize].right = nqLowerEmitConst(instructions, state, 0 as i64, nqAstTypeUsize())
+        instructions[offset as usize].immediate = node.extra as i64
+        instructions[offset as usize].symbol = nqLowerNodeSymbol(source, nodes, member)
+        instructions[offset as usize].width = nqLowerNodeWidth(node)
+        return address
+    }
+    return nqLowerBadTarget()
+}
+
+function nqLowerLogical(source: []u8, nodes: []NqAstNode, nodeIndex: isize, instructions: []NqNirInstruction, state: *NqLowerState, isAnd: bool): isize {
+    let node: *NqAstNode = &nodes[nodeIndex as usize]
+    let left: isize = nqLowerExpressionInternal(source, nodes, node.left, instructions, state)
+    if left < 0 as isize { return left }
+    let tempSymbol: u64 = 4294967293 as u64 + (nodeIndex as u64 % 1000003 as u64)
+    let storeLeft: isize = nqLowerEmit(instructions, state, nqNirStore(), nqNirNoValue())
+    if storeLeft < 0 as isize { return storeLeft }
+    instructions[storeLeft as usize].symbol = tempSymbol
+    instructions[storeLeft as usize].left = left
+    let branch: isize = nqLowerEmit(instructions, state, nqNirBranch(), nqNirNoValue())
+    if branch < 0 as isize { return branch }
+    instructions[branch as usize].left = left
+    if isAnd {
+        let right: isize = nqLowerExpressionInternal(source, nodes, node.right, instructions, state)
+        if right < 0 as isize { return right }
+        let storeRight: isize = nqLowerEmit(instructions, state, nqNirStore(), nqNirNoValue())
+        if storeRight < 0 as isize { return storeRight }
+        instructions[storeRight as usize].symbol = tempSymbol
+        instructions[storeRight as usize].left = right
+        instructions[branch as usize].immediate = state.instructionCount as i64
+    } else {
+        let skip: isize = nqLowerEmit(instructions, state, nqNirJump(), nqNirNoValue())
+        if skip < 0 as isize { return skip }
+        instructions[branch as usize].immediate = state.instructionCount as i64
+        let right: isize = nqLowerExpressionInternal(source, nodes, node.right, instructions, state)
+        if right < 0 as isize { return right }
+        let storeRight: isize = nqLowerEmit(instructions, state, nqNirStore(), nqNirNoValue())
+        if storeRight < 0 as isize { return storeRight }
+        instructions[storeRight as usize].symbol = tempSymbol
+        instructions[storeRight as usize].left = right
+        instructions[skip as usize].immediate = state.instructionCount as i64
+    }
+    let result: isize = nqLowerAllocRegister(state)
+    let load: isize = nqLowerEmit(instructions, state, nqNirLoad(), result)
+    if load < 0 as isize { return load }
+    instructions[load as usize].symbol = tempSymbol
+    instructions[load as usize].typeCode = nqAstTypeBool()
+    return result
+}
+
+function nqLowerExpressionInternal(source: []u8, nodes: []NqAstNode, nodeIndex: isize, instructions: []NqNirInstruction, state: *NqLowerState): isize {
     if state == null || nodeIndex < 0 as isize || nodeIndex as usize >= len(nodes) { return nqLowerBadAst() }
     let node: *NqAstNode = &nodes[nodeIndex as usize]
     if !nqAstNodeValid(node, len(source)) { return nqLowerBadAst() }
@@ -79,29 +236,54 @@ export function nqLowerExpression(source: []u8, nodes: []NqAstNode, nodeIndex: i
     if node.tag == nqAstInteger() {
         let literal: i64 = 0 as i64
         if !nqLowerParseI64(source, node.start, node.end, &literal) { return nqLowerBadLiteral() }
+        return nqLowerEmitConst(instructions, state, literal, nqAstTypeI64())
+    }
+    if node.tag == nqAstFloat() {
+        let literal: float = 0.0
+        if !nqLowerParseFloat(source, node.start, node.end, &literal) { return nqLowerBadLiteral() }
         let reg: isize = nqLowerAllocRegister(state)
-        let emitted: isize = nqLowerEmit(instructions, state, nqNirConstI64(), reg)
+        let emitted: isize = nqLowerEmit(instructions, state, nqNirConstF64(), reg)
         if emitted < 0 as isize { return emitted }
-        instructions[emitted as usize].immediate = literal
-        instructions[emitted as usize].typeCode = nqAstTypeI64()
+        instructions[emitted as usize].floatImmediate = literal
+        instructions[emitted as usize].typeCode = nqAstTypeFloat()
         return reg
     }
-
+    if node.tag == nqAstString() {
+        let reg: isize = nqLowerAllocRegister(state)
+        let emitted: isize = nqLowerEmit(instructions, state, nqNirConstString(), reg)
+        if emitted < 0 as isize { return emitted }
+        instructions[emitted as usize].sourceStart = node.start
+        instructions[emitted as usize].sourceEnd = node.end
+        instructions[emitted as usize].symbol = nqNirSymbolId(source, node.start, node.end)
+        instructions[emitted as usize].typeCode = nqAstTypeString()
+        return reg
+    }
     if node.tag == nqAstBool() {
         let value: i64 = 0 as i64
         if node.end - node.start == 4 as usize { value = 1 as i64 }
+        return nqLowerEmitConst(instructions, state, value, nqAstTypeBool())
+    }
+    if node.tag == nqAstNull() { return nqLowerEmitConst(instructions, state, 0 as i64, nqAstTypeNull()) }
+    if node.tag == nqAstName() {
+        let symbol: u64 = nqLowerNodeSymbol(source, nodes, nodeIndex)
+        if symbol == 0 as u64 { return nqLowerBadAst() }
         let reg: isize = nqLowerAllocRegister(state)
-        let emitted: isize = nqLowerEmit(instructions, state, nqNirConstI64(), reg)
+        let emitted: isize = nqLowerEmit(instructions, state, nqNirLoad(), reg)
         if emitted < 0 as isize { return emitted }
-        instructions[emitted as usize].immediate = value
-        instructions[emitted as usize].typeCode = nqAstTypeBool()
+        instructions[emitted as usize].symbol = symbol
+        instructions[emitted as usize].sourceStart = node.start
+        instructions[emitted as usize].sourceEnd = node.end
+        instructions[emitted as usize].typeCode = node.typeCode
         return reg
     }
-
     if node.tag == nqAstBinary() {
-        let left: isize = nqLowerExpression(source, nodes, node.left, instructions, state)
+        let andCode: u32 = 38 as u32 * 256 as u32 + 38 as u32
+        let orCode: u32 = 124 as u32 * 256 as u32 + 124 as u32
+        if node.flags == andCode { return nqLowerLogical(source, nodes, nodeIndex, instructions, state, true) }
+        if node.flags == orCode { return nqLowerLogical(source, nodes, nodeIndex, instructions, state, false) }
+        let left: isize = nqLowerExpressionInternal(source, nodes, node.left, instructions, state)
         if left < 0 as isize { return left }
-        let right: isize = nqLowerExpression(source, nodes, node.right, instructions, state)
+        let right: isize = nqLowerExpressionInternal(source, nodes, node.right, instructions, state)
         if right < 0 as isize { return right }
         let opcode: int = nqLowerBinaryOpcode(node.flags)
         if opcode < 0 { return nqLowerUnsupported() }
@@ -111,11 +293,23 @@ export function nqLowerExpression(source: []u8, nodes: []NqAstNode, nodeIndex: i
         instructions[emitted as usize].left = left
         instructions[emitted as usize].right = right
         instructions[emitted as usize].typeCode = node.typeCode
+        if opcode == nqNirAdd() || opcode == nqNirSub() || opcode == nqNirMul() { instructions[emitted as usize].flags = instructions[emitted as usize].flags + nqNirFlagChecked() }
         return reg
     }
-
     if node.tag == nqAstUnary() {
-        let operand: isize = nqLowerExpression(source, nodes, node.left, instructions, state)
+        if node.flags == 38 as u32 { return nqLowerAddress(source, nodes, node.left, instructions, state) }
+        if node.flags == 42 as u32 {
+            let address: isize = nqLowerExpressionInternal(source, nodes, node.left, instructions, state)
+            if address < 0 as isize { return address }
+            let reg: isize = nqLowerAllocRegister(state)
+            let emitted: isize = nqLowerEmit(instructions, state, nqNirLoadMemory(), reg)
+            if emitted < 0 as isize { return emitted }
+            instructions[emitted as usize].left = address
+            instructions[emitted as usize].width = nqLowerNodeWidth(node)
+            instructions[emitted as usize].typeCode = node.typeCode
+            return reg
+        }
+        let operand: isize = nqLowerExpressionInternal(source, nodes, node.left, instructions, state)
         if operand < 0 as isize { return operand }
         let opcode: int = -1
         if node.flags == 45 as u32 { opcode = nqNirNeg() }
@@ -130,19 +324,265 @@ export function nqLowerExpression(source: []u8, nodes: []NqAstNode, nodeIndex: i
         instructions[emitted as usize].typeCode = node.typeCode
         return reg
     }
-
     if node.tag == nqAstCast() {
-        // Numeric/pointer cast semantics are checked before lowering. A move in
-        // typed NIR is sufficient until target-specific conversion selection.
-        let sourceValue: isize = nqLowerExpression(source, nodes, node.left, instructions, state)
+        let sourceValue: isize = nqLowerExpressionInternal(source, nodes, node.left, instructions, state)
         if sourceValue < 0 as isize { return sourceValue }
         let reg: isize = nqLowerAllocRegister(state)
-        let emitted: isize = nqLowerEmit(instructions, state, nqNirMove(), reg)
+        let emitted: isize = nqLowerEmit(instructions, state, nqNirCast(), reg)
         if emitted < 0 as isize { return emitted }
         instructions[emitted as usize].left = sourceValue
         instructions[emitted as usize].typeCode = node.typeCode
+        instructions[emitted as usize].sourceStart = node.extra as usize
+        instructions[emitted as usize].sourceEnd = node.end
         return reg
     }
-
+    if node.tag == nqAstAssign() {
+        let value: isize = nqLowerExpressionInternal(source, nodes, node.right, instructions, state)
+        if value < 0 as isize { return value }
+        let target: *NqAstNode = &nodes[node.left as usize]
+        if target.tag == nqAstName() {
+            let store: isize = nqLowerEmit(instructions, state, nqNirStore(), nqNirNoValue())
+            if store < 0 as isize { return store }
+            instructions[store as usize].symbol = nqLowerNodeSymbol(source, nodes, node.left)
+            instructions[store as usize].left = value
+            return value
+        }
+        let address: isize = nqLowerAddress(source, nodes, node.left, instructions, state)
+        if address < 0 as isize { return address }
+        let store: isize = nqLowerEmit(instructions, state, nqNirStoreMemory(), nqNirNoValue())
+        if store < 0 as isize { return store }
+        instructions[store as usize].left = address
+        instructions[store as usize].right = value
+        instructions[store as usize].width = nqLowerNodeWidth(target)
+        return value
+    }
+    if node.tag == nqAstIndex() || node.tag == nqAstMember() {
+        let address: isize = nqLowerAddress(source, nodes, nodeIndex, instructions, state)
+        if address < 0 as isize { return address }
+        let reg: isize = nqLowerAllocRegister(state)
+        let load: isize = nqLowerEmit(instructions, state, nqNirLoadMemory(), reg)
+        if load < 0 as isize { return load }
+        instructions[load as usize].left = address
+        instructions[load as usize].width = nqLowerNodeWidth(node)
+        instructions[load as usize].typeCode = node.typeCode
+        return reg
+    }
+    if node.tag == nqAstArray() {
+        let count: usize = node.extra as usize
+        let elementWidth: usize = nqLowerNodeWidth(node)
+        let bytes: usize = count * elementWidth
+        let base: isize = nqLowerAllocRegister(state)
+        let alloc: isize = nqLowerEmit(instructions, state, nqNirStackAlloc(), base)
+        if alloc < 0 as isize { return alloc }
+        instructions[alloc as usize].width = bytes
+        let element: isize = node.right
+        let index: usize = 0 as usize
+        while element >= 0 as isize && index < count {
+            let value: isize = nqLowerExpressionInternal(source, nodes, element, instructions, state)
+            if value < 0 as isize { return value }
+            let indexReg: isize = nqLowerEmitConst(instructions, state, index as i64, nqAstTypeUsize())
+            if indexReg < 0 as isize { return indexReg }
+            let address: isize = nqLowerAllocRegister(state)
+            let offset: isize = nqLowerEmit(instructions, state, nqNirPtrAdd(), address)
+            if offset < 0 as isize { return offset }
+            instructions[offset as usize].left = base
+            instructions[offset as usize].right = indexReg
+            instructions[offset as usize].width = elementWidth
+            let store: isize = nqLowerEmit(instructions, state, nqNirStoreMemory(), nqNirNoValue())
+            if store < 0 as isize { return store }
+            instructions[store as usize].left = address
+            instructions[store as usize].right = value
+            instructions[store as usize].width = elementWidth
+            element = nodes[element as usize].next
+            index = index + 1 as usize
+        }
+        return base
+    }
+    if node.tag == nqAstCall() {
+        let callee: *NqAstNode = &nodes[node.left as usize]
+        let symbol: u64 = nqNirSymbolId(source, callee.start, callee.end)
+        if symbol == 0 as u64 { return nqLowerBadAst() }
+        let argument: isize = node.right
+        let argumentIndex: usize = 0 as usize
+        while argument >= 0 as isize && argumentIndex < node.extra as usize {
+            let value: isize = nqLowerExpressionInternal(source, nodes, argument, instructions, state)
+            if value < 0 as isize { return value }
+            let arg: isize = nqLowerEmit(instructions, state, nqNirCallArg(), nqNirNoValue())
+            if arg < 0 as isize { return arg }
+            instructions[arg as usize].left = value
+            instructions[arg as usize].immediate = argumentIndex as i64
+            argument = nodes[argument as usize].next
+            argumentIndex = argumentIndex + 1 as usize
+        }
+        let reg: isize = nqLowerAllocRegister(state)
+        let call: isize = nqLowerEmit(instructions, state, nqNirCall(), reg)
+        if call < 0 as isize { return call }
+        instructions[call as usize].symbol = symbol
+        instructions[call as usize].sourceStart = callee.start
+        instructions[call as usize].sourceEnd = callee.end
+        instructions[call as usize].width = argumentIndex
+        instructions[call as usize].typeCode = node.typeCode
+        return reg
+    }
     return nqLowerUnsupported()
+}
+
+export function nqLowerExpression(source: []u8, nodes: []NqAstNode, nodeIndex: isize, instructions: []NqNirInstruction, state: *NqLowerState): isize {
+    return nqLowerExpressionInternal(source, nodes, nodeIndex, instructions, state)
+}
+
+export function nqLowerStatement(source: []u8, nodes: []NqAstNode, nodeIndex: isize, instructions: []NqNirInstruction, state: *NqLowerState): isize {
+    if nodeIndex < 0 as isize || nodeIndex as usize >= len(nodes) { return nqLowerBadAst() }
+    let node: *NqAstNode = &nodes[nodeIndex as usize]
+    if node.tag == nqAstExpressionStatement() { let value: isize = nqLowerExpressionInternal(source, nodes, node.left, instructions, state) if value < 0 as isize { return value } return nqLowerOk() }
+    if node.tag == nqAstBinding() {
+        let value: isize = nqLowerExpressionInternal(source, nodes, node.right, instructions, state)
+        if value < 0 as isize { return value }
+        let store: isize = nqLowerEmit(instructions, state, nqNirStore(), nqNirNoValue())
+        if store < 0 as isize { return store }
+        instructions[store as usize].symbol = nqLowerNodeSymbol(source, nodes, node.left)
+        instructions[store as usize].left = value
+        instructions[store as usize].flags = node.flags
+        return nqLowerOk()
+    }
+    if node.tag == nqAstReturn() {
+        let value: isize = nqNirNoValue()
+        if node.left >= 0 as isize { value = nqLowerExpressionInternal(source, nodes, node.left, instructions, state) if value < 0 as isize { return value } }
+        let emitted: isize = nqLowerEmit(instructions, state, nqNirReturn(), nqNirNoValue())
+        if emitted < 0 as isize { return emitted }
+        instructions[emitted as usize].left = value
+        return nqLowerOk()
+    }
+    if node.tag == nqAstThrow() {
+        let value: isize = nqLowerExpressionInternal(source, nodes, node.left, instructions, state)
+        if value < 0 as isize { return value }
+        let emitted: isize = nqLowerEmit(instructions, state, nqNirThrow(), nqNirNoValue())
+        if emitted < 0 as isize { return emitted }
+        instructions[emitted as usize].left = value
+        return nqLowerOk()
+    }
+    if node.tag == nqAstBlock() {
+        let cursor: isize = node.left
+        while cursor >= 0 as isize {
+            let status: isize = nqLowerStatement(source, nodes, cursor, instructions, state)
+            if status < 0 as isize { return status }
+            cursor = nodes[cursor as usize].next
+        }
+        return nqLowerOk()
+    }
+    if node.tag == nqAstIf() {
+        let condition: isize = nqLowerExpressionInternal(source, nodes, node.left, instructions, state)
+        if condition < 0 as isize { return condition }
+        let branch: isize = nqLowerEmit(instructions, state, nqNirBranch(), nqNirNoValue())
+        if branch < 0 as isize { return branch }
+        instructions[branch as usize].left = condition
+        let thenStatus: isize = nqLowerStatement(source, nodes, node.right, instructions, state)
+        if thenStatus < 0 as isize { return thenStatus }
+        if node.extra >= 0 as isize {
+            let jump: isize = nqLowerEmit(instructions, state, nqNirJump(), nqNirNoValue())
+            if jump < 0 as isize { return jump }
+            instructions[branch as usize].immediate = state.instructionCount as i64
+            let elseStatus: isize = nqLowerStatement(source, nodes, node.extra, instructions, state)
+            if elseStatus < 0 as isize { return elseStatus }
+            instructions[jump as usize].immediate = state.instructionCount as i64
+        } else { instructions[branch as usize].immediate = state.instructionCount as i64 }
+        return nqLowerOk()
+    }
+    if node.tag == nqAstWhile() {
+        let loopStart: usize = state.instructionCount
+        let condition: isize = nqLowerExpressionInternal(source, nodes, node.left, instructions, state)
+        if condition < 0 as isize { return condition }
+        let branch: isize = nqLowerEmit(instructions, state, nqNirBranch(), nqNirNoValue())
+        if branch < 0 as isize { return branch }
+        instructions[branch as usize].left = condition
+        let bodyStatus: isize = nqLowerStatement(source, nodes, node.right, instructions, state)
+        if bodyStatus < 0 as isize { return bodyStatus }
+        let jump: isize = nqLowerEmit(instructions, state, nqNirJump(), nqNirNoValue())
+        if jump < 0 as isize { return jump }
+        instructions[jump as usize].immediate = loopStart as i64
+        instructions[branch as usize].immediate = state.instructionCount as i64
+        return nqLowerOk()
+    }
+    return nqLowerUnsupported()
+}
+
+export function nqLowerFunction(source: []u8, nodes: []NqAstNode, nodeIndex: isize, instructions: []NqNirInstruction, state: *NqLowerState, out: *NqNirFunction): isize {
+    if out == null || nodeIndex < 0 as isize || nodeIndex as usize >= len(nodes) { return nqLowerBadAst() }
+    let node: *NqAstNode = &nodes[nodeIndex as usize]
+    if node.tag != nqAstFunction() || node.left < 0 as isize { return nqLowerBadAst() }
+    let name: *NqAstNode = &nodes[node.left as usize]
+    out.symbol = nqNirSymbolId(source, name.start, name.end)
+    out.nameStart = name.start
+    out.nameEnd = name.end
+    out.firstInstruction = state.instructionCount
+    out.instructionCount = 0 as usize
+    out.parameterCount = 0 as usize
+    out.flags = node.flags
+    let parameter: isize = node.right
+    let parameterIndex: usize = 0 as usize
+    while parameter >= 0 as isize {
+        let param: *NqAstNode = &nodes[parameter as usize]
+        let paramName: *NqAstNode = &nodes[param.left as usize]
+        let reg: isize = nqLowerAllocRegister(state)
+        let emitted: isize = nqLowerEmit(instructions, state, nqNirParameter(), reg)
+        if emitted < 0 as isize { return emitted }
+        instructions[emitted as usize].symbol = nqNirSymbolId(source, paramName.start, paramName.end)
+        instructions[emitted as usize].immediate = parameterIndex as i64
+        instructions[emitted as usize].sourceStart = paramName.start
+        instructions[emitted as usize].sourceEnd = paramName.end
+        let store: isize = nqLowerEmit(instructions, state, nqNirStore(), nqNirNoValue())
+        if store < 0 as isize { return store }
+        instructions[store as usize].symbol = instructions[emitted as usize].symbol
+        instructions[store as usize].left = reg
+        parameterIndex = parameterIndex + 1 as usize
+        parameter = param.next
+    }
+    out.parameterCount = parameterIndex
+    if node.extra >= 0 as isize {
+        let status: isize = nqLowerStatement(source, nodes, node.extra, instructions, state)
+        if status < 0 as isize { return status }
+    }
+    if state.instructionCount == out.firstInstruction || !nqNirIsTerminator(instructions[state.instructionCount - 1 as usize].opcode) {
+        let ret: isize = nqLowerEmit(instructions, state, nqNirReturn(), nqNirNoValue())
+        if ret < 0 as isize { return ret }
+    }
+    out.instructionCount = state.instructionCount - out.firstInstruction
+    return nqLowerOk()
+}
+
+export function nqLowerProgram(source: []u8, nodes: []NqAstNode, first: isize, instructions: []NqNirInstruction, functions: []NqNirFunction, outInstructionCount: *usize, outFunctionCount: *usize): isize {
+    if outInstructionCount == null || outFunctionCount == null { return nqLowerCapacity() }
+    let state: NqLowerState
+    nqLowerStateInit(&state)
+    let functionCount: usize = 0 as usize
+    let cursor: isize = first
+    while cursor >= 0 as isize {
+        if cursor as usize >= len(nodes) { return nqLowerBadAst() }
+        let node: *NqAstNode = &nodes[cursor as usize]
+        if node.tag == nqAstFunction() {
+            if functionCount >= len(functions) { return nqLowerCapacity() }
+            let status: isize = nqLowerFunction(source, nodes, cursor, instructions, &state, &functions[functionCount])
+            if status < 0 as isize { return status }
+            functionCount = functionCount + 1 as usize
+        } else if node.tag != nqAstModule() && node.tag != nqAstImport() && node.tag != nqAstRecord() {
+            if functionCount == 0 as usize || functions[functionCount - 1 as usize].symbol != 4294967296 as u64 {
+                if functionCount >= len(functions) { return nqLowerCapacity() }
+                functions[functionCount].symbol = 4294967296 as u64
+                functions[functionCount].nameStart = 0 as usize
+                functions[functionCount].nameEnd = 1 as usize
+                functions[functionCount].firstInstruction = state.instructionCount
+                functions[functionCount].instructionCount = 0 as usize
+                functions[functionCount].parameterCount = 0 as usize
+                functions[functionCount].flags = 0 as u32
+                functionCount = functionCount + 1 as usize
+            }
+            let status: isize = nqLowerStatement(source, nodes, cursor, instructions, &state)
+            if status < 0 as isize { return status }
+            functions[functionCount - 1 as usize].instructionCount = state.instructionCount - functions[functionCount - 1 as usize].firstInstruction
+        }
+        cursor = node.next
+    }
+    outInstructionCount[0] = state.instructionCount
+    outFunctionCount[0] = functionCount
+    return nqLowerOk()
 }

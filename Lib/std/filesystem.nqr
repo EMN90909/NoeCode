@@ -1,0 +1,52 @@
+module noqeri.std.filesystem
+
+extern function fsReadText(path: string): string
+extern function fsWriteText(path: string, text: string): isize
+extern function fsAppendText(path: string, text: string): isize
+extern function fsExists(path: string): bool
+extern function fsIsDirectory(path: string): bool
+extern function fsCreateDirectory(path: string): isize
+extern function fsCreateDirectories(path: string): isize
+extern function fsRemove(path: string): isize
+extern function fsRemoveTree(path: string): isize
+extern function fsRename(from: string, to: string): isize
+extern function fsAtomicReplace(from: string, to: string): isize
+extern function fsSymlink(target: string, linkPath: string): isize
+extern function fsReadlink(path: string): string
+extern function fsPermissions(path: string): int
+extern function fsSetPermissions(path: string, mode: int): isize
+extern function fsMetadata(path: string): string
+extern function fsWalk(path: string): string
+extern function fsTempFile(prefix: string): string
+extern function fsTempDirectory(prefix: string): string
+extern function fsWatch(path: string): isize
+extern function fsWatchNext(watcher: isize, timeoutMillis: i64): string
+extern function fsWatchClose(watcher: isize): isize
+extern function fsMmap(path: string, writable: bool): isize
+extern function fsMunmap(mapping: isize): isize
+
+export function read_text(path: string): string { return fsReadText(path) }
+export function write_text(path: string, text: string): isize { return fsWriteText(path, text) }
+export function append_text(path: string, text: string): isize { return fsAppendText(path, text) }
+export function exists(path: string): bool { return fsExists(path) }
+export function is_directory(path: string): bool { return fsIsDirectory(path) }
+export function create_directory(path: string): isize { return fsCreateDirectory(path) }
+export function create_directories(path: string): isize { return fsCreateDirectories(path) }
+export function remove(path: string): isize { return fsRemove(path) }
+export function remove_tree(path: string): isize { return fsRemoveTree(path) }
+export function rename(from: string, to: string): isize { return fsRename(from, to) }
+export function atomic_replace(from: string, to: string): isize { return fsAtomicReplace(from, to) }
+export function symlink(target: string, link_path: string): isize { return fsSymlink(target, link_path) }
+export function readlink(path: string): string { return fsReadlink(path) }
+export function permissions(path: string): int { return fsPermissions(path) }
+export function set_permissions(path: string, mode: int): isize { return fsSetPermissions(path, mode) }
+export function metadata(path: string): string { return fsMetadata(path) }
+export function walk(path: string): string { return fsWalk(path) }
+export function temp_file(prefix: string): string { return fsTempFile(prefix) }
+export function temp_directory(prefix: string): string { return fsTempDirectory(prefix) }
+export function watch(path: string): isize { return fsWatch(path) }
+export function watch_next(watcher: isize, timeout_millis: i64): string { return fsWatchNext(watcher, timeout_millis) }
+export function watch_close(watcher: isize): isize { return fsWatchClose(watcher) }
+export function mmap(path: string, writable: bool): isize { return fsMmap(path, writable) }
+export function munmap(mapping: isize): isize { return fsMunmap(mapping) }
+export function status_ok(status: isize): bool { return status >= 0 as isize }

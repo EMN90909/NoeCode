@@ -1,0 +1,173 @@
+module noqeri.compiler.selfhost.type_ref
+import "ast.nqr"
+import "types.nqr"
+
+record NqTypeRef {
+    code: int
+    nameSymbol: u64
+    elementCode: int
+    elementSymbol: u64
+    arrayLength: usize
+    genericArgCount: usize
+    firstGenericCode: int
+    firstGenericSymbol: u64
+    start: usize
+    end: usize
+    flags: u32
+}
+
+export function nqTypeFlagVolatile(): u32 { return 1 as u32 }
+export function nqTypeParseError(): isize { return -1 as isize }
+
+function nqTypeSpace(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
+function nqTypeAlpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) || c == 95 as u8 }
+function nqTypeDigit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
+function nqTypeIdent(c: u8): bool { return nqTypeAlpha(c) || nqTypeDigit(c) }
+function nqTypeSkip(source: []u8, start: usize): usize { let i: usize = start while i < len(source) && nqTypeSpace(source[i]) { i = i + 1 as usize } return i }
+
+export function nqTypeNameSymbol(source: []u8, start: usize, end: usize): u64 {
+    if start >= end || end > len(source) { return 0 as u64 }
+    let hash: u64 = 2166136261 as u64
+    let index: usize = start
+    while index < end {
+        hash = (hash * 16777619 as u64 + source[index] as u64 + 1 as u64) % 4294967291 as u64
+        index = index + 1 as usize
+    }
+    return hash + 1 as u64
+}
+
+function nqTypeInit(out: *NqTypeRef, start: usize): void {
+    out.code = nqAstTypeUnknown()
+    out.nameSymbol = 0 as u64
+    out.elementCode = nqAstTypeUnknown()
+    out.elementSymbol = 0 as u64
+    out.arrayLength = 0 as usize
+    out.genericArgCount = 0 as usize
+    out.firstGenericCode = nqAstTypeUnknown()
+    out.firstGenericSymbol = 0 as u64
+    out.start = start
+    out.end = start
+    out.flags = 0 as u32
+}
+
+function nqTypeParseLength(source: []u8, start: usize, out: *usize): usize {
+    let index: usize = nqTypeSkip(source, start)
+    if index >= len(source) || !nqTypeDigit(source[index]) { return start }
+    let value: usize = 0 as usize
+    while index < len(source) && nqTypeDigit(source[index]) {
+        let digit: usize = (source[index] - 48 as u8) as usize
+        if value > (18446744073709551615 as usize - digit) / 10 as usize { return start }
+        value = value * 10 as usize + digit
+        index = index + 1 as usize
+    }
+    if value == 0 as usize { return start }
+    out[0] = value
+    return index
+}
+
+export function nqTypeRefParse(source: []u8, start: usize, out: *NqTypeRef): usize {
+    if out == null { return start }
+    let begin: usize = nqTypeSkip(source, start)
+    nqTypeInit(out, begin)
+    if begin >= len(source) { return start }
+    let cursor: usize = begin
+    if source[cursor] == 42 as u8 {
+        cursor = nqTypeSkip(source, cursor + 1 as usize)
+        let volatileStart: usize = cursor
+        if cursor + 8 as usize <= len(source) && source[cursor] == 118 as u8 && source[cursor + 1 as usize] == 111 as u8 && source[cursor + 2 as usize] == 108 as u8 && source[cursor + 3 as usize] == 97 as u8 && source[cursor + 4 as usize] == 116 as u8 && source[cursor + 5 as usize] == 105 as u8 && source[cursor + 6 as usize] == 108 as u8 && source[cursor + 7 as usize] == 101 as u8 {
+            if cursor + 8 as usize == len(source) || !nqTypeIdent(source[cursor + 8 as usize]) { out.flags = nqTypeFlagVolatile() cursor = nqTypeSkip(source, cursor + 8 as usize) }
+        }
+        let child: NqTypeRef
+        let childEnd: usize = nqTypeRefParse(source, cursor, &child)
+        if childEnd <= cursor { return start }
+        out.code = nqAstTypePointer()
+        out.elementCode = child.code
+        out.elementSymbol = child.nameSymbol
+        out.nameSymbol = child.nameSymbol
+        out.end = childEnd
+        return childEnd
+    }
+    if source[cursor] == 91 as u8 {
+        cursor = nqTypeSkip(source, cursor + 1 as usize)
+        if cursor < len(source) && source[cursor] == 93 as u8 {
+            cursor = nqTypeSkip(source, cursor + 1 as usize)
+            let child: NqTypeRef
+            let childEnd: usize = nqTypeRefParse(source, cursor, &child)
+            if childEnd <= cursor { return start }
+            out.code = nqAstTypeSlice()
+            out.elementCode = child.code
+            out.elementSymbol = child.nameSymbol
+            out.nameSymbol = child.nameSymbol
+            out.end = childEnd
+            return childEnd
+        }
+        let child: NqTypeRef
+        let childEnd: usize = nqTypeRefParse(source, cursor, &child)
+        if childEnd <= cursor { return start }
+        cursor = nqTypeSkip(source, childEnd)
+        if cursor >= len(source) || source[cursor] != 59 as u8 { return start }
+        let count: usize = 0 as usize
+        let countEnd: usize = nqTypeParseLength(source, cursor + 1 as usize, &count)
+        if countEnd <= cursor + 1 as usize { return start }
+        cursor = nqTypeSkip(source, countEnd)
+        if cursor >= len(source) || source[cursor] != 93 as u8 { return start }
+        out.code = nqAstTypeArray()
+        out.elementCode = child.code
+        out.elementSymbol = child.nameSymbol
+        out.nameSymbol = child.nameSymbol
+        out.arrayLength = count
+        out.end = cursor + 1 as usize
+        return out.end
+    }
+    if !nqTypeAlpha(source[cursor]) { return start }
+    let nameStart: usize = cursor
+    cursor = cursor + 1 as usize
+    while cursor < len(source) && nqTypeIdent(source[cursor]) { cursor = cursor + 1 as usize }
+    while cursor < len(source) && source[cursor] == 46 as u8 {
+        if cursor + 1 as usize >= len(source) || !nqTypeAlpha(source[cursor + 1 as usize]) { return start }
+        cursor = cursor + 2 as usize
+        while cursor < len(source) && nqTypeIdent(source[cursor]) { cursor = cursor + 1 as usize }
+    }
+    let nameEnd: usize = cursor
+    out.code = nqCompilerTypeCodeFromSource(source, nameStart)
+    out.nameSymbol = nqTypeNameSymbol(source, nameStart, nameEnd)
+    cursor = nqTypeSkip(source, cursor)
+    if cursor < len(source) && source[cursor] == 60 as u8 {
+        cursor = nqTypeSkip(source, cursor + 1 as usize)
+        while true {
+            let arg: NqTypeRef
+            let argEnd: usize = nqTypeRefParse(source, cursor, &arg)
+            if argEnd <= cursor { return start }
+            if out.genericArgCount == 0 as usize { out.firstGenericCode = arg.code out.firstGenericSymbol = arg.nameSymbol }
+            out.genericArgCount = out.genericArgCount + 1 as usize
+            cursor = nqTypeSkip(source, argEnd)
+            if cursor >= len(source) { return start }
+            if source[cursor] == 62 as u8 { cursor = cursor + 1 as usize break }
+            if source[cursor] != 44 as u8 { return start }
+            cursor = nqTypeSkip(source, cursor + 1 as usize)
+        }
+    }
+    out.end = cursor
+    return cursor
+}
+
+export function nqTypeRefValid(value: *NqTypeRef): bool {
+    if value == null || value.end <= value.start || !nqCompilerTypeValid(value.code) { return false }
+    if value.code == nqAstTypeArray() && value.arrayLength == 0 as usize { return false }
+    if (value.code == nqAstTypePointer() || value.code == nqAstTypeSlice() || value.code == nqAstTypeArray()) && value.elementCode == nqAstTypeUnknown() { return false }
+    return true
+}
+
+export function nqTypeRefStorageBytes(value: *NqTypeRef, pointerBytes: usize): usize {
+    if value == null { return 0 as usize }
+    if value.code == nqAstTypeArray() {
+        let element: NqTypeRef
+        nqTypeInit(&element, value.start)
+        element.code = value.elementCode
+        element.nameSymbol = value.elementSymbol
+        let width: usize = nqTypeRefStorageBytes(&element, pointerBytes)
+        if width == 0 as usize || value.arrayLength > 18446744073709551615 as usize / width { return 0 as usize }
+        return value.arrayLength * width
+    }
+    return nqCompilerTypeStorageBytes(value.code, pointerBytes)
+}

@@ -47,7 +47,7 @@ void NirAnalyzer::analyze(const Program&program,NirProgram&nir)const{
             case NirOp::AtomicLoad:case NirOp::AtomicExchange:case NirOp::AtomicCompareExchange:if(!in.args.empty()){auto p=regType(fn,in.args[0]);if(p.kind==TypeKind::Pointer&&p.pointee)t=*p.pointee;}break;
             case NirOp::Intrinsic:if(in.text=="x86.rdtsc")t=simple(TypeKind::U64);else t=simple(TypeKind::Void);break;
             case NirOp::Try:if(!in.args.empty())t=regType(fn,in.args[0]);break;
-            case NirOp::AtomicStore:case NirOp::AtomicFence:case NirOp::InlineAsm:case NirOp::StoreMemory:case NirOp::Jump:case NirOp::JumpIfFalse:case NirOp::Return:case NirOp::Throw:case NirOp::Nop:t=simple(TypeKind::Void);break;
+            case NirOp::CheckNonNull:case NirOp::CheckBounds:case NirOp::AtomicStore:case NirOp::AtomicFence:case NirOp::InlineAsm:case NirOp::StoreMemory:case NirOp::Jump:case NirOp::JumpIfFalse:case NirOp::Return:case NirOp::Throw:case NirOp::Nop:t=simple(TypeKind::Void);break;
         }in.type=t;if(in.dest){ensureReg(fn,*in.dest);fn.registerTypes[*in.dest]=t;}}
         blocks(fn);
     };

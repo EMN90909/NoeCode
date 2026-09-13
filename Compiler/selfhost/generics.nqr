@@ -37,14 +37,17 @@ export function nqGenericBindingsComplete(bindings: []int, count: usize): bool {
     return true
 }
 
-// Stable key used by Stage 2 to cache one monomorph per concrete type tuple.
+// Stable overflow-safe cache key. The modulus keeps every intermediate below
+// 2^63 even when checked arithmetic is enabled, so monomorphisation itself can
+// never introduce an overflow trap.
 export function nqGenericMonomorphKey(bindings: []int, count: usize): u64 {
     if count > len(bindings) { count = len(bindings) }
-    let hash: u64 = 1469598103934665603 as u64
+    let modulus: u64 = 1000000007 as u64
+    let hash: u64 = 17 as u64
     let index: usize = 0 as usize
     while index < count {
-        hash = hash * 1099511628211 as u64
-        hash = hash + bindings[index] as u64 + 1 as u64
+        let component: u64 = (bindings[index] as u64 + 257 as u64) % modulus
+        hash = ((hash * 131 as u64) % modulus + component) % modulus
         index = index + 1 as usize
     }
     return hash

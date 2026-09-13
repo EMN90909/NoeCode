@@ -1,9 +1,32 @@
 module noqeri.std.crypto.aes
 
-export function aes_key_size_valid(bits:usize):bool{return bits==128 as usize||bits==192 as usize||bits==256 as usize}
-export function aes_block_size():usize{return 16 as usize}
-export function aes_nonce_size_gcm():usize{return 12 as usize}
-export function aes_tag_size_gcm():usize{return 16 as usize}
-export function aes_block_aligned(length:usize):bool{return length%16 as usize==0 as usize}
-export function aes_gcm_parameters_valid(key_bits:usize,nonce_length:usize,tag_length:usize):bool{return aes_key_size_valid(key_bits)&&nonce_length==aes_nonce_size_gcm()&&tag_length==aes_tag_size_gcm()}
-export function aes_legacy_ecb_allowed():bool{return false}
+extern function cryptoAesGcmEncrypt(key: []u8, nonce: []u8, plaintext: []u8, aad: []u8, output: []u8, tag: []u8): isize
+extern function cryptoAesGcmDecrypt(key: []u8, nonce: []u8, ciphertext: []u8, aad: []u8, tag: []u8, output: []u8): isize
+
+export function aes_key_size_valid(bits: usize): bool { return bits == 128 as usize || bits == 192 as usize || bits == 256 as usize }
+export function aes_key_length_valid(bytes: usize): bool { return bytes == 16 as usize || bytes == 24 as usize || bytes == 32 as usize }
+export function aes_block_size(): usize { return 16 as usize }
+export function aes_nonce_size_gcm(): usize { return 12 as usize }
+export function aes_tag_size_gcm(): usize { return 16 as usize }
+export function aes_block_aligned(length: usize): bool { return length % 16 as usize == 0 as usize }
+export function aes_gcm_parameters_valid(key_bits: usize, nonce_length: usize, tag_length: usize): bool { return aes_key_size_valid(key_bits) && nonce_length == aes_nonce_size_gcm() && tag_length == aes_tag_size_gcm() }
+export function aes_legacy_ecb_allowed(): bool { return false }
+
+export function aes_gcm_encrypt(key: []u8, nonce: []u8, plaintext: []u8, aad: []u8, output: []u8, tag: []u8): isize {
+    if !aes_key_length_valid(len(key)) { return -2 as isize }
+    if len(nonce) != aes_nonce_size_gcm() { return -3 as isize }
+    if len(output) < len(plaintext) { return -4 as isize }
+    if len(tag) < aes_tag_size_gcm() { return -5 as isize }
+    return cryptoAesGcmEncrypt(key, nonce, plaintext, aad, output, tag)
+}
+
+export function aes_gcm_decrypt(key: []u8, nonce: []u8, ciphertext: []u8, aad: []u8, tag: []u8, output: []u8): isize {
+    if !aes_key_length_valid(len(key)) { return -2 as isize }
+    if len(nonce) != aes_nonce_size_gcm() { return -3 as isize }
+    if len(tag) != aes_tag_size_gcm() { return -5 as isize }
+    if len(output) < len(ciphertext) { return -4 as isize }
+    return cryptoAesGcmDecrypt(key, nonce, ciphertext, aad, tag, output)
+}
+
+export function aes_gcm_ciphertext_length(plaintext_length: usize): usize { return plaintext_length }
+export function aes_gcm_total_sealed_length(plaintext_length: usize): usize { return plaintext_length + aes_tag_size_gcm() }

@@ -1,0 +1,46 @@
+module noqeri.std.rwlock
+
+extern function rwlockHostCreate(): usize
+extern function rwlockHostReadLock(lock: usize, timeoutMillis: i64): bool
+extern function rwlockHostWriteLock(lock: usize, timeoutMillis: i64): bool
+extern function rwlockHostTryRead(lock: usize): bool
+extern function rwlockHostTryWrite(lock: usize): bool
+extern function rwlockHostUnlock(lock: usize): bool
+extern function rwlockHostDestroy(lock: usize): bool
+
+export function rwlock_handle_valid(lock: usize): bool { return lock != 0 as usize }
+export function rwlock_timeout_valid(timeoutMillis: i64): bool { return timeoutMillis >= 0 as i64 }
+
+export function rwlock_create(): usize {
+    unsafe { return rwlockHostCreate() }
+}
+
+export function rwlock_read_lock(lock: usize, timeoutMillis: i64): bool {
+    if !rwlock_handle_valid(lock) || !rwlock_timeout_valid(timeoutMillis) { return false }
+    unsafe { return rwlockHostReadLock(lock, timeoutMillis) }
+}
+
+export function rwlock_write_lock(lock: usize, timeoutMillis: i64): bool {
+    if !rwlock_handle_valid(lock) || !rwlock_timeout_valid(timeoutMillis) { return false }
+    unsafe { return rwlockHostWriteLock(lock, timeoutMillis) }
+}
+
+export function rwlock_try_read(lock: usize): bool {
+    if !rwlock_handle_valid(lock) { return false }
+    unsafe { return rwlockHostTryRead(lock) }
+}
+
+export function rwlock_try_write(lock: usize): bool {
+    if !rwlock_handle_valid(lock) { return false }
+    unsafe { return rwlockHostTryWrite(lock) }
+}
+
+export function rwlock_unlock(lock: usize): bool {
+    if !rwlock_handle_valid(lock) { return false }
+    unsafe { return rwlockHostUnlock(lock) }
+}
+
+export function rwlock_destroy(lock: usize): bool {
+    if !rwlock_handle_valid(lock) { return false }
+    unsafe { return rwlockHostDestroy(lock) }
+}

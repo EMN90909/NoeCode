@@ -76,16 +76,15 @@ export function sqlPreparedClose(statement: usize): void {
     }
 }
 
-// Capability labels are deliberately explicit so the implementation can gate
-// syntax/features while the SQL parser grows without silently accepting SQL it
-// cannot execute correctly.
+// Capability labels describe the common executable contract, not roadmap
+// intent. Provider-specific extensions must not silently raise these flags.
 export function sqlSupportsSelect(): bool { return true }
 export function sqlSupportsInsert(): bool { return true }
 export function sqlSupportsUpdate(): bool { return true }
 export function sqlSupportsDelete(): bool { return true }
 export function sqlSupportsTransactions(): bool { return true }
 export function sqlSupportsParameters(): bool { return true }
-export function sqlSupportsSchemaMigration(): bool { return true }
+export function sqlSupportsSchemaMigration(): bool { return false }
 export function sqlSupportsJoin(): bool { return false }
 export function sqlSupportsGroupBy(): bool { return false }
-export function sqlSupportsOrderBy(): bool { return false }
+export function sqlSupportsOrderBy(): bool { return true }

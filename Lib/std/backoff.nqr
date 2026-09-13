@@ -1,6 +1,195 @@
 module noqeri.std.backoff
 
+record BackoffPlan {
+    attempt: usize
+    max_attempts: usize
+    base_delay_ms: u64
+    max_delay_ms: u64
+    multiplier: u64
+}
+
 export function backoff_status_ok(status: isize): bool { return status >= 0 as isize }
 export function backoff_status_error(status: isize): bool { return status < 0 as isize }
 export function backoff_error_code(status: isize): isize { if status < 0 as isize { return -status } return 0 as isize }
 export function backoff_attempt_allowed(attempt: usize, max_attempts: usize): bool { return attempt < max_attempts }
+
+export function backoff_plan(base_delay_ms: u64, max_delay_ms: u64, max_attempts: usize): BackoffPlan {
+    let plan: BackoffPlan
+    plan.attempt = 0 as usize
+    plan.max_attempts = max_attempts
+    plan.base_delay_ms = base_delay_ms
+    plan.max_delay_ms = max_delay_ms
+    plan.multiplier = 2 as u64
+    return plan
+}
+
+export function backoff_plan_with_multiplier(base_delay_ms: u64, max_delay_ms: u64, max_attempts: usize, multiplier: u64): BackoffPlan {
+    let plan: BackoffPlan = backoff_plan(base_delay_ms, max_delay_ms, max_attempts)
+    if multiplier > 0 as u64 { plan.multiplier = multiplier }
+    return plan
+}
+
+export function backoff_plan_valid(plan: BackoffPlan): bool {
+    if plan.max_attempts == 0 as usize { return false }
+    if plan.base_delay_ms > plan.max_delay_ms { return false }
+    return plan.multiplier > 0 as u64
+}
+
+export function backoff_remaining_attempts(plan: BackoffPlan): usize {
+    if plan.attempt >= plan.max_attempts { return 0 as usize }
+    return plan.max_attempts - plan.attempt
+}
+
+export function backoff_exhausted(plan: BackoffPlan): bool {
+    return plan.attempt >= plan.max_attempts
+}
+
+export function backoff_can_retry(plan: BackoffPlan): bool {
+    return !backoff_exhausted(plan)
+}
+
+export function backoff_next(plan: BackoffPlan): BackoffPlan {
+    let next: BackoffPlan = plan
+    if next.attempt < next.max_attempts { next.attempt = next.attempt + 1 as usize }
+    return next
+}
+
+export function backoff_reset(plan: BackoffPlan): BackoffPlan {
+    let reset: BackoffPlan = plan
+    reset.attempt = 0 as usize
+    return reset
+}
+
+export function backoff_clamp_delay(delay_ms: u64, max_delay_ms: u64): u64 {
+    if delay_ms > max_delay_ms { return max_delay_ms }
+    return delay_ms
+}
+
+export function backoff_fixed_delay(base_delay_ms: u64, max_delay_ms: u64): u64 {
+    return backoff_clamp_delay(base_delay_ms, max_delay_ms)
+}
+
+export function backoff_linear_delay(attempt: usize, base_delay_ms: u64, max_delay_ms: u64): u64 {
+    if base_delay_ms == 0 as u64 { return 0 as u64 }
+    let steps: u64 = attempt as u64 + 1 as u64
+    if steps > max_delay_ms / base_delay_ms && max_delay_ms > 0 as u64 { return max_delay_ms }
+    return backoff_clamp_delay(base_delay_ms * steps, max_delay_ms)
+}
+
+export function backoff_exponential_delay(attempt: usize, base_delay_ms: u64, max_delay_ms: u64, multiplier: u64): u64 {
+    if base_delay_ms == 0 as u64 { return 0 as u64 }
+    if multiplier <= 1 as u64 { return backoff_linear_delay(attempt, base_delay_ms, max_delay_ms) }
+    let delay: u64 = base_delay_ms
+    let index: usize = 0 as usize
+    while index < attempt {
+        if max_delay_ms > 0 as u64 && delay > max_delay_ms / multiplier { return max_delay_ms }
+        delay = delay * multiplier
+        index = index + 1 as usize
+    }
+    return backoff_clamp_delay(delay, max_delay_ms)
+}
+
+export function backoff_binary_exponential_delay(attempt: usize, base_delay_ms: u64, max_delay_ms: u64): u64 {
+    return backoff_exponential_delay(attempt, base_delay_ms, max_delay_ms, 2 as u64)
+}
+
+export function backoff_fibonacci_number(index: usize): u64 {
+    if index == 0 as usize { return 0 as u64 }
+    if index == 1 as usize { return 1 as u64 }
+    let a: u64 = 0 as u64
+    let b: u64 = 1 as u64
+    let i: usize = 1 as usize
+    while i < index {
+        let next: u64 = a + b
+        a = b
+        b = next
+        i = i + 1 as usize
+    }
+    return b
+}
+
+export function backoff_fibonacci_delay(attempt: usize, base_delay_ms: u64, max_delay_ms: u64): u64 {
+    let factor: u64 = backoff_fibonacci_number(attempt + 1 as usize)
+    if factor == 0 as u64 || base_delay_ms == 0 as u64 { return 0 as u64 }
+    if max_delay_ms > 0 as u64 && factor > max_delay_ms / base_delay_ms { return max_delay_ms }
+    return backoff_clamp_delay(factor * base_delay_ms, max_delay_ms)
+}
+
+export function backoff_delay(plan: BackoffPlan): u64 {
+    return backoff_exponential_delay(plan.attempt, plan.base_delay_ms, plan.max_delay_ms, plan.multiplier)
+}
+
+export function backoff_previous_delay(plan: BackoffPlan): u64 {
+    if plan.attempt == 0 as usize { return 0 as u64 }
+    return backoff_exponential_delay(plan.attempt - 1 as usize, plan.base_delay_ms, plan.max_delay_ms, plan.multiplier)
+}
+
+export function backoff_jitter_floor(delay_ms: u64, percent: u64): u64 {
+    if percent >= 100 as u64 { return 0 as u64 }
+    return delay_ms * (100 as u64 - percent) / 100 as u64
+}
+
+export function backoff_jitter_ceiling(delay_ms: u64, percent: u64, max_delay_ms: u64): u64 {
+    let capped_percent: u64 = percent
+    if capped_percent > 100 as u64 { capped_percent = 100 as u64 }
+    let extra: u64 = delay_ms * capped_percent / 100 as u64
+    if max_delay_ms > 0 as u64 && extra > max_delay_ms - backoff_clamp_delay(delay_ms, max_delay_ms) { return max_delay_ms }
+    return backoff_clamp_delay(delay_ms + extra, max_delay_ms)
+}
+
+export function backoff_deterministic_jitter(delay_ms: u64, attempt: usize, percent: u64, max_delay_ms: u64): u64 {
+    let low: u64 = backoff_jitter_floor(delay_ms, percent)
+    let high: u64 = backoff_jitter_ceiling(delay_ms, percent, max_delay_ms)
+    if high <= low { return low }
+    let span: u64 = high - low + 1 as u64
+    let seed: u64 = (attempt as u64 + 1 as u64) * 1103515245 as u64 + 12345 as u64
+    return low + seed % span
+}
+
+export function backoff_deadline_allows(now_ms: u64, delay_ms: u64, deadline_ms: u64): bool {
+    if deadline_ms < now_ms { return false }
+    return delay_ms <= deadline_ms - now_ms
+}
+
+export function backoff_budget_allows(spent_ms: u64, delay_ms: u64, budget_ms: u64): bool {
+    if spent_ms > budget_ms { return false }
+    return delay_ms <= budget_ms - spent_ms
+}
+
+export function backoff_total_fixed(max_attempts: usize, delay_ms: u64): u64 {
+    if max_attempts == 0 as usize { return 0 as u64 }
+    let retries: u64 = (max_attempts - 1 as usize) as u64
+    return retries * delay_ms
+}
+
+export function backoff_total_exponential(max_attempts: usize, base_delay_ms: u64, max_delay_ms: u64, multiplier: u64): u64 {
+    if max_attempts <= 1 as usize { return 0 as u64 }
+    let total: u64 = 0 as u64
+    let attempt: usize = 0 as usize
+    while attempt + 1 as usize < max_attempts {
+        let delay: u64 = backoff_exponential_delay(attempt, base_delay_ms, max_delay_ms, multiplier)
+        total = total + delay
+        attempt = attempt + 1 as usize
+    }
+    return total
+}
+
+export function backoff_retry_after_status(status: isize, plan: BackoffPlan): u64 {
+    if backoff_status_ok(status) { return 0 as u64 }
+    if !backoff_can_retry(plan) { return 0 as u64 }
+    return backoff_delay(plan)
+}
+
+export function backoff_should_retry_status(status: isize, plan: BackoffPlan): bool {
+    return backoff_status_error(status) && backoff_can_retry(plan)
+}
+
+export function backoff_attempt_number(plan: BackoffPlan): usize {
+    return plan.attempt + 1 as usize
+}
+
+export function backoff_progress_percent(plan: BackoffPlan): usize {
+    if plan.max_attempts == 0 as usize { return 100 as usize }
+    if plan.attempt >= plan.max_attempts { return 100 as usize }
+    return plan.attempt * 100 as usize / plan.max_attempts
+}

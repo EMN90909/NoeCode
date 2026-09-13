@@ -26,6 +26,8 @@ reject() {
 "$NQ" run tests/time_modules.nqr >/dev/null
 "$NQ" check tests/data_integrity.nqr >/dev/null
 "$NQ" run tests/data_integrity.nqr >/dev/null
+"$NQ" check tests/encoding_foundations.nqr >/dev/null
+"$NQ" run tests/encoding_foundations.nqr >/dev/null
 
 cat > build/invalid_pointer_escape.nqr <<'EOF'
 function bad_pointer(): *u32 {

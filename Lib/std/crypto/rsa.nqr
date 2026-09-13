@@ -1,9 +1,37 @@
 module noqeri.std.crypto.rsa
 
-export function rsa_key_size_valid(bits:usize):bool{return bits>=2048 as usize&&bits<=16384 as usize&&bits%256 as usize==0 as usize}
-export function rsa_default_key_bits():usize{return 3072 as usize}
-export function rsa_public_exponent_default():u32{return 65537 as u32}
-export function rsa_public_exponent_valid(value:u32):bool{return value>=3 as u32&&value%2 as u32==1 as u32}
-export function rsa_oaep_required_for_encryption():bool{return true}
-export function rsa_pss_required_for_signature():bool{return true}
-export function rsa_key_pair_valid(bits:usize,exponent:u32):bool{return rsa_key_size_valid(bits)&&rsa_public_exponent_valid(exponent)}
+extern function cryptoRsaOaepSha256Encrypt(publicKey: []u8, plaintext: []u8, label: []u8, output: []u8): isize
+extern function cryptoRsaOaepSha256Decrypt(privateKey: []u8, ciphertext: []u8, label: []u8, output: []u8): isize
+extern function cryptoRsaPssSha256Sign(privateKey: []u8, message: []u8, signature: []u8): isize
+extern function cryptoRsaPssSha256Verify(publicKey: []u8, message: []u8, signature: []u8): bool
+
+export function rsa_key_size_valid(bits: usize): bool { return bits >= 2048 as usize && bits <= 16384 as usize && bits % 256 as usize == 0 as usize }
+export function rsa_default_key_bits(): usize { return 3072 as usize }
+export function rsa_public_exponent_default(): u32 { return 65537 as u32 }
+export function rsa_public_exponent_valid(value: u32): bool { return value >= 3 as u32 && value % 2 as u32 == 1 as u32 }
+export function rsa_oaep_required_for_encryption(): bool { return true }
+export function rsa_pss_required_for_signature(): bool { return true }
+export function rsa_key_pair_valid(bits: usize, exponent: u32): bool { return rsa_key_size_valid(bits) && rsa_public_exponent_valid(exponent) }
+
+export function rsa_oaep_sha256_encrypt(publicKey: []u8, plaintext: []u8, label: []u8, output: []u8): isize {
+    if len(publicKey) == 0 as usize { return -2 as isize }
+    if len(output) == 0 as usize { return -3 as isize }
+    return cryptoRsaOaepSha256Encrypt(publicKey, plaintext, label, output)
+}
+
+export function rsa_oaep_sha256_decrypt(privateKey: []u8, ciphertext: []u8, label: []u8, output: []u8): isize {
+    if len(privateKey) == 0 as usize { return -2 as isize }
+    if len(ciphertext) == 0 as usize || len(output) == 0 as usize { return -3 as isize }
+    return cryptoRsaOaepSha256Decrypt(privateKey, ciphertext, label, output)
+}
+
+export function rsa_pss_sha256_sign(privateKey: []u8, message: []u8, signature: []u8): isize {
+    if len(privateKey) == 0 as usize { return -2 as isize }
+    if len(signature) == 0 as usize { return -3 as isize }
+    return cryptoRsaPssSha256Sign(privateKey, message, signature)
+}
+
+export function rsa_pss_sha256_verify(publicKey: []u8, message: []u8, signature: []u8): bool {
+    if len(publicKey) == 0 as usize || len(signature) == 0 as usize { return false }
+    return cryptoRsaPssSha256Verify(publicKey, message, signature)
+}

@@ -26,15 +26,15 @@ export function sync_is_locked(state: *u64): bool {
     unsafe { return atomic.load(state)!=0 as u64 }
 }
 
-// RW lock layout: bit 63 is the writer flag; lower bits are the reader count.
-export function rwlock_writer_mask(): u64 { return 9223372036854775808 as u64 }
-export function rwlock_reader_mask(): u64 { return 9223372036854775807 as u64 }
+// Values below writer_flag are reader counts. writer_flag itself means one writer owns the lock.
+export function rwlock_writer_flag(): u64 { return 9223372036854775808 as u64 }
+export function rwlock_max_readers(): u64 { return 9223372036854775807 as u64 }
 
 export function rwlock_try_read(state: *u64): bool {
     unsafe {
         let current:u64=atomic.load(state)
-        if (current & rwlock_writer_mask())!=0 as u64 { return false }
-        if (current & rwlock_reader_mask())==rwlock_reader_mask() { return false }
+        if current>=rwlock_writer_flag() { return false }
+        if current>=rwlock_max_readers() { return false }
         return atomic.compareExchange(state,current,current+1 as u64)==current
     }
 }
@@ -46,14 +46,14 @@ export function rwlock_read_lock(state: *u64): void {
 export function rwlock_read_unlock(state: *u64): void {
     unsafe {
         let current:u64=atomic.load(state)
-        while current>0 as u64 && atomic.compareExchange(state,current,current-1 as u64)!=current {
+        while current>0 as u64 && current<rwlock_writer_flag() && atomic.compareExchange(state,current,current-1 as u64)!=current {
             current=atomic.load(state)
         }
     }
 }
 
 export function rwlock_try_write(state: *u64): bool {
-    unsafe { return atomic.compareExchange(state,0 as u64,rwlock_writer_mask())==0 as u64 }
+    unsafe { return atomic.compareExchange(state,0 as u64,rwlock_writer_flag())==0 as u64 }
 }
 
 export function rwlock_write_lock(state: *u64): void {

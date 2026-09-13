@@ -1,0 +1,20 @@
+module noqeri.std.pointer
+
+// SafePtr makes the common pointer operation explicit and checked. Raw pointer
+// extraction is deliberately named unsafe_* so systems code remains visible.
+record SafePtr<T> {
+    raw: *T
+}
+
+export function ptr_try<T>(out: *SafePtr<T>, raw: *T): bool {
+    if out == null || raw == null { return false }
+    out.raw = raw
+    return true
+}
+
+export function ptr_valid<T>(value: *SafePtr<T>): bool { return value != null && value.raw != null }
+export function ptr_get_or<T>(value: *SafePtr<T>, fallback: T): T { if !ptr_valid(value) { return fallback } return value.raw[0] }
+export function ptr_set<T>(value: *SafePtr<T>, next: T): bool { if !ptr_valid(value) { return false } value.raw[0] = next return true }
+export function unsafe_ptr_raw<T>(value: *SafePtr<T>): *T { if value == null { return null } return value.raw }
+export function unsafe_ptr_from_usize<T>(address: usize): *T { return address as *T }
+export function unsafe_ptr_to_usize<T>(value: *T): usize { return value as usize }

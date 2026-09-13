@@ -7,6 +7,7 @@ record NqAstNode {
     elementTypeCode: int
     elementTypeSymbol: u64
     arrayLength: usize
+    storageBytes: usize
     start: usize
     end: usize
     left: isize
@@ -94,6 +95,7 @@ export function nqAstNodeInit(out: *NqAstNode, tag: int, start: usize, end: usiz
     out.elementTypeCode = nqAstTypeUnknown()
     out.elementTypeSymbol = 0 as u64
     out.arrayLength = 0 as usize
+    out.storageBytes = 0 as usize
     out.start = start
     out.end = end
     out.left = nqAstNoNode()

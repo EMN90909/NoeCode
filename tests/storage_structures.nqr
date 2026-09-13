@@ -1,0 +1,96 @@
+import "../Lib/std/ring.nqr"
+import "../Lib/std/pool.nqr"
+import "../Lib/std/cache.nqr"
+
+function test_ring(): int {
+    let stateBytes: [u8; 64] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let storage: [i64; 3] = [0 as i64,0 as i64,0 as i64]
+    let output: [i64; 3] = [0 as i64,0 as i64,0 as i64]
+    let scratch: [i64; 3] = [0 as i64,0 as i64,0 as i64]
+    let ring: *Ring<i64> = (&stateBytes[0 as usize]) as *Ring<i64>
+    if !ring_init(ring, &storage[0 as usize], 3 as usize) { return 1 }
+    if !ring_push(ring, 1 as i64) || !ring_push(ring, 2 as i64) || !ring_push(ring, 3 as i64) { return 2 }
+    if !ring_full(ring) || ring_oldest_or(ring, -1 as i64) != 1 as i64 || ring_newest_or(ring, -1 as i64) != 3 as i64 { return 3 }
+    if !ring_push(ring, 4 as i64) { return 4 }
+    if ring_overwrite_count(ring) != 1 as u64 || ring_oldest_or(ring, -1 as i64) != 2 as i64 || ring_newest_or(ring, -1 as i64) != 4 as i64 { return 5 }
+    if ring_copy_into(slice(output), ring) != 3 as usize { return 6 }
+    if output[0 as usize] != 2 as i64 || output[1 as usize] != 3 as i64 || output[2 as usize] != 4 as i64 { return 7 }
+    if ring_pop_oldest_or(ring, -1 as i64) != 2 as i64 { return 8 }
+    if !ring_try_push(ring, 5 as i64) { return 9 }
+    if !ring_rebase(ring, slice(scratch)) || ring_logical_to_physical(ring, 0 as usize) != 0 as isize { return 10 }
+    if ring_oldest_or(ring, -1 as i64) != 3 as i64 || ring_newest_or(ring, -1 as i64) != 5 as i64 { return 11 }
+    if !ring_invariant(ring) { return 12 }
+    return 0
+}
+
+function test_pool(): int {
+    let stateBytes: [u8; 128] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let h1Bytes: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let h2Bytes: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let h3Bytes: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let staleBytes: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let values: [i64; 3] = [0 as i64,0 as i64,0 as i64]
+    let used: [bool; 3] = [false,false,false]
+    let generations: [u64; 3] = [0 as u64,0 as u64,0 as u64]
+    let pool: *Pool<i64> = (&stateBytes[0 as usize]) as *Pool<i64>
+    let h1: *PoolHandle = (&h1Bytes[0 as usize]) as *PoolHandle
+    let h2: *PoolHandle = (&h2Bytes[0 as usize]) as *PoolHandle
+    let h3: *PoolHandle = (&h3Bytes[0 as usize]) as *PoolHandle
+    let stale: *PoolHandle = (&staleBytes[0 as usize]) as *PoolHandle
+    if !pool_init(pool, &values[0 as usize], &used[0 as usize], &generations[0 as usize], 3 as usize) { return 1 }
+    if !pool_acquire_value(pool, h1, 10 as i64) || !pool_acquire_value(pool, h2, 20 as i64) { return 2 }
+    if pool_length(pool) != 2 as usize || pool_get_or(pool, h1, -1 as i64) != 10 as i64 { return 3 }
+    if !pool_handle_copy(stale, h1) { return 4 }
+    let releasedIndex: usize = h1.index
+    let oldGeneration: u64 = h1.generation
+    if !pool_release(pool, h1) { return 5 }
+    if pool_handle_valid(pool, stale) { return 6 }
+    if !pool_acquire_value(pool, h3, 30 as i64) { return 7 }
+    if h3.index != releasedIndex || h3.generation == oldGeneration { return 8 }
+    if pool_handle_valid(pool, stale) || !pool_handle_valid(pool, h3) { return 9 }
+    if pool_get_or(pool, h3, -1 as i64) != 30 as i64 { return 10 }
+    if pool_high_watermark(pool) != 2 as usize || pool_allocation_count(pool) != 3 as u64 { return 11 }
+    if !pool_invariant(pool) { return 12 }
+    if pool_release_all(pool) != 2 as usize || !pool_empty(pool) { return 13 }
+    if pool_handle_valid(pool, h2) || pool_handle_valid(pool, h3) { return 14 }
+    return 0
+}
+
+function test_cache(): int {
+    let stateBytes: [u8; 160] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let keys: [i64; 2] = [0 as i64,0 as i64]
+    let values: [i64; 2] = [0 as i64,0 as i64]
+    let ages: [u64; 2] = [0 as u64,0 as u64]
+    let occupied: [bool; 2] = [false,false]
+    let order: [i64; 2] = [0 as i64,0 as i64]
+    let cache: *Cache<i64,i64> = (&stateBytes[0 as usize]) as *Cache<i64,i64>
+    if !cache_init(cache, &keys[0 as usize], &values[0 as usize], &ages[0 as usize], &occupied[0 as usize], 2 as usize) { return 1 }
+    if !cache_put(cache, 1 as i64, 10 as i64) || !cache_put(cache, 2 as i64, 20 as i64) { return 2 }
+    if cache_get_or(cache, 1 as i64, -1 as i64) != 10 as i64 { return 3 }
+    if !cache_put(cache, 3 as i64, 30 as i64) { return 4 }
+    if !cache_contains(cache, 1 as i64) || cache_contains(cache, 2 as i64) || !cache_contains(cache, 3 as i64) { return 5 }
+    if cache_eviction_count(cache) != 1 as u64 { return 6 }
+    if cache_get_or(cache, 99 as i64, -1 as i64) != -1 as i64 { return 7 }
+    if cache_hit_count(cache) != 1 as u64 || cache_miss_count(cache) != 1 as u64 || cache_hit_rate_per_mille(cache) != 500 as usize { return 8 }
+    let evictedKey: i64 = -1 as i64
+    let evictedValue: i64 = -1 as i64
+    let didEvict: bool = false
+    if !cache_put_with_evicted(cache, 4 as i64, 40 as i64, &evictedKey, &evictedValue, &didEvict) { return 9 }
+    if !didEvict || evictedKey != 1 as i64 || evictedValue != 10 as i64 { return 10 }
+    if cache_copy_lru_keys(cache, slice(order)) != 2 as usize { return 11 }
+    if order[0 as usize] != 3 as i64 || order[1 as usize] != 4 as i64 { return 12 }
+    if !cache_invariant(cache) || cache_length(cache) != 2 as usize { return 13 }
+    if !cache_remove(cache, 3 as i64) || cache_length(cache) != 1 as usize { return 14 }
+    if !cache_clear(cache) || !cache_empty(cache) { return 15 }
+    return 0
+}
+
+function main(): int {
+    let result: int = test_ring()
+    if result != 0 { return 10 + result }
+    result = test_pool()
+    if result != 0 { return 40 + result }
+    result = test_cache()
+    if result != 0 { return 70 + result }
+    return 0
+}

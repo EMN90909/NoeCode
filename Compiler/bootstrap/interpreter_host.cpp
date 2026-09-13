@@ -28,7 +28,7 @@ bool stringValue(const NirValue&value,std::string&out){if(auto p=std::get_if<std
 }
 
 std::string Interpreter::valueToString(const NirValue&v)const{if(std::holds_alternative<std::monostate>(v))return"null";if(auto p=std::get_if<std::int64_t>(&v))return std::to_string(*p);if(auto p=std::get_if<double>(&v))return std::to_string(*p);if(auto p=std::get_if<bool>(&v))return*p?"true":"false";return std::get<std::string>(v);}
-int Interpreter::run(const NirProgram&p){try{allocations.clear();runtimeTaskReset();runtimeResetChecks();runFunction(p,p.entry,{});runtimeTaskJoinAll();runtimeTaskReset();allocations.clear();runtimeResetChecks();return 0;}catch(const std::exception&e){runtimeTaskReset();allocations.clear();runtimeResetChecks();std::cerr<<"NQR-R4000: runtime error: "<<e.what()<<"\n";return 1;}}
+int Interpreter::run(const NirProgram&p){try{allocations.clear();runtimeTaskReset();runtimeSyncReset();runtimeResetChecks();runFunction(p,p.entry,{});runtimeTaskJoinAll();runtimeTaskReset();runtimeSyncReset();allocations.clear();runtimeResetChecks();return 0;}catch(const std::exception&e){runtimeTaskReset();runtimeSyncReset();allocations.clear();runtimeResetChecks();std::cerr<<"NQR-R4000: runtime error: "<<e.what()<<"\n";return 1;}}
 NirValue Interpreter::runFunction(const NirProgram&p,const NirFunction&fn,const std::vector<NirValue>&argv){
     if(fn.isExtern)throw std::runtime_error("cannot directly interpret extern function "+fn.name);
     RuntimeProfileScope profileScope(fn.name);
@@ -70,14 +70,8 @@ NirValue Interpreter::runFunction(const NirProgram&p,const NirFunction&fn,const 
                     if(taskFn==p.functions.end())throw std::runtime_error("task entry not found: "+entry);
                     const NirFunction* fnPtr=&*taskFn;
                     const auto handle=runtimeTaskSpawn([this,&p,fnPtr,payload](const std::atomic_bool&cancelled)->std::int64_t{
-                        currentTaskCancellation=&cancelled;
-                        allocations.clear();
-                        try{
-                            if(cancelled.load(std::memory_order_acquire)){currentTaskCancellation=nullptr;return -3;}
-                            std::vector<NirValue> taskArgs;if(!fnPtr->params.empty())taskArgs.emplace_back(payload);
-                            auto value=runFunction(p,*fnPtr,taskArgs);
-                            allocations.clear();currentTaskCancellation=nullptr;return asInt(value);
-                        }catch(...){allocations.clear();currentTaskCancellation=nullptr;throw;}
+                        currentTaskCancellation=&cancelled;allocations.clear();
+                        try{if(cancelled.load(std::memory_order_acquire)){currentTaskCancellation=nullptr;return -3;}std::vector<NirValue> taskArgs;if(!fnPtr->params.empty())taskArgs.emplace_back(payload);auto value=runFunction(p,*fnPtr,taskArgs);allocations.clear();currentTaskCancellation=nullptr;return asInt(value);}catch(...){allocations.clear();currentTaskCancellation=nullptr;throw;}
                     });
                     regs[*i.dest]=static_cast<std::int64_t>(handle);break;
                 }
@@ -87,6 +81,24 @@ NirValue Interpreter::runFunction(const NirProgram&p,const NirFunction&fn,const 
                 if(i.text=="taskHostDestroy"){regs[*i.dest]=runtimeTaskDestroy(static_cast<std::size_t>(asInt(a.at(0))));break;}
                 if(i.text=="taskHostCancelled"){regs[*i.dest]=runtimeTaskCancelled(static_cast<std::size_t>(asInt(a.at(0))));break;}
                 if(i.text=="taskHostCurrentCancelled"){regs[*i.dest]=currentTaskCancellation&&currentTaskCancellation->load(std::memory_order_acquire);break;}
+                if(i.text=="channelHostCreate"){regs[*i.dest]=static_cast<std::int64_t>(runtimeChannelCreate(static_cast<std::size_t>(asInt(a.at(0)))));break;}
+                if(i.text=="channelHostSendI64"){regs[*i.dest]=runtimeChannelSendI64(static_cast<std::size_t>(asInt(a.at(0))),asInt(a.at(1)),asInt(a.at(2)));break;}
+                if(i.text=="channelHostReceiveI64"){regs[*i.dest]=runtimeChannelReceiveI64(static_cast<std::size_t>(asInt(a.at(0))),asInt(a.at(1)));break;}
+                if(i.text=="channelHostCount"){regs[*i.dest]=static_cast<std::int64_t>(runtimeChannelCount(static_cast<std::size_t>(asInt(a.at(0)))));break;}
+                if(i.text=="channelHostClose"){regs[*i.dest]=runtimeChannelClose(static_cast<std::size_t>(asInt(a.at(0))));break;}
+                if(i.text=="channelHostDestroy"){regs[*i.dest]=runtimeChannelDestroy(static_cast<std::size_t>(asInt(a.at(0))));break;}
+                if(i.text=="mutexHostCreate"){regs[*i.dest]=static_cast<std::int64_t>(runtimeMutexCreate());break;}
+                if(i.text=="mutexHostLock"){regs[*i.dest]=runtimeMutexLock(static_cast<std::size_t>(asInt(a.at(0))),asInt(a.at(1)));break;}
+                if(i.text=="mutexHostTryLock"){regs[*i.dest]=runtimeMutexTryLock(static_cast<std::size_t>(asInt(a.at(0))));break;}
+                if(i.text=="mutexHostUnlock"){regs[*i.dest]=runtimeMutexUnlock(static_cast<std::size_t>(asInt(a.at(0))));break;}
+                if(i.text=="mutexHostDestroy"){regs[*i.dest]=runtimeMutexDestroy(static_cast<std::size_t>(asInt(a.at(0))));break;}
+                if(i.text=="rwlockHostCreate"){regs[*i.dest]=static_cast<std::int64_t>(runtimeRwLockCreate());break;}
+                if(i.text=="rwlockHostReadLock"){regs[*i.dest]=runtimeRwLockRead(static_cast<std::size_t>(asInt(a.at(0))),asInt(a.at(1)));break;}
+                if(i.text=="rwlockHostWriteLock"){regs[*i.dest]=runtimeRwLockWrite(static_cast<std::size_t>(asInt(a.at(0))),asInt(a.at(1)));break;}
+                if(i.text=="rwlockHostTryRead"){regs[*i.dest]=runtimeRwLockTryRead(static_cast<std::size_t>(asInt(a.at(0))));break;}
+                if(i.text=="rwlockHostTryWrite"){regs[*i.dest]=runtimeRwLockTryWrite(static_cast<std::size_t>(asInt(a.at(0))));break;}
+                if(i.text=="rwlockHostUnlock"){regs[*i.dest]=runtimeRwLockUnlock(static_cast<std::size_t>(asInt(a.at(0))));break;}
+                if(i.text=="rwlockHostDestroy"){regs[*i.dest]=runtimeRwLockDestroy(static_cast<std::size_t>(asInt(a.at(0))));break;}
                 auto user=std::find_if(p.functions.begin(),p.functions.end(),[&](const auto&x){return x.name==i.text&&!x.isExtern;});if(user!=p.functions.end()){regs[*i.dest]=runFunction(p,*user,a);break;}std::string error;if(i.text=="host"||i.text=="abi"){if(a.empty()||!std::holds_alternative<std::string>(a[0]))throw std::runtime_error(i.text+" requires a string service name");std::string service=std::get<std::string>(a[0]);std::vector<NirValue>serviceArgs(a.begin()+1,a.end());std::optional<NirValue>result;if(host_)result=callNoqeriAbi(host_,service,serviceArgs,error);if(!result)result=callNoqeriAbi(defaultNoqeriAbi(),service,serviceArgs,error);if(!result)throw std::runtime_error(error.empty()?"unknown ABI service "+service:error);regs[*i.dest]=*result;break;}std::optional<NirValue>result;if(host_)result=callNoqeriAbi(host_,i.text,a,error);if(!result)result=callNoqeriAbi(defaultNoqeriAbi(),i.text,a,error);if(!result)throw std::runtime_error(error.empty()?"unknown function "+i.text:error);regs[*i.dest]=*result;break;}
             case NirOp::Jump:pc=i.target;continue;
             case NirOp::JumpIfFalse:if(!truthyValue(get(i.args[0]))){pc=i.target;continue;}break;

@@ -1,0 +1,178 @@
+module noqeri.compiler.selfhost.nqo_writer
+import "nir.nqr"
+
+// NQO2 is the portable bootstrap module format. It stores the original source,
+// the stable NIR function table and fixed-width NIR instructions. The format is
+// deliberately simple and little-endian so Stage 1 and Stage 2 can produce
+// byte-identical compiler modules without depending on a C++ object writer.
+//
+// Header (32 bytes):
+//   magic[4] = NQO2, version u32, sourceBytes u32, functions u32,
+//   instructions u32, functionRecordBytes u32, instructionRecordBytes u32,
+//   flags u32.
+// Function record (40 bytes): symbol u64, nameStart u32, nameEnd u32,
+//   firstInstruction u32, instructionCount u32, parameterCount u32, flags u32,
+//   reserved u64.
+// Instruction record (96 bytes): opcode i32, type i32, flags u32, reserved u32,
+//   dest i64, left i64, right i64, immediate i64, symbol u64, width u64,
+//   sourceStart u64, sourceEnd u64, floatSourceStart u32, floatSourceEnd u32,
+//   reserved u64.
+// Float constants are reconstructed from their source span. This deliberately
+// avoids host-specific floating bit-cast behavior in the bootstrap writer.
+
+export function nqNqoMagic0(): u8 { return 78 as u8 }
+export function nqNqoMagic1(): u8 { return 81 as u8 }
+export function nqNqoMagic2(): u8 { return 79 as u8 }
+export function nqNqoMagic3(): u8 { return 50 as u8 }
+export function nqNqoVersion(): u32 { return 2 as u32 }
+export function nqNqoHeaderBytes(): usize { return 32 as usize }
+export function nqNqoFunctionBytes(): usize { return 40 as usize }
+export function nqNqoInstructionBytes(): usize { return 96 as usize }
+export function nqNqoInvalid(): isize { return -800 as isize }
+export function nqNqoCapacity(): isize { return -801 as isize }
+export function nqNqoOverflow(): isize { return -802 as isize }
+
+function nqNqoCanWrite(out: []u8, offset: usize, bytes: usize): bool {
+    if offset > len(out) { return false }
+    return bytes <= len(out) - offset
+}
+
+function nqNqoWriteU32(out: []u8, offset: usize, value: u32): bool {
+    if !nqNqoCanWrite(out, offset, 4 as usize) { return false }
+    out[offset] = (value % 256 as u32) as u8
+    out[offset + 1 as usize] = ((value / 256 as u32) % 256 as u32) as u8
+    out[offset + 2 as usize] = ((value / 65536 as u32) % 256 as u32) as u8
+    out[offset + 3 as usize] = ((value / 16777216 as u32) % 256 as u32) as u8
+    return true
+}
+
+function nqNqoWriteU64(out: []u8, offset: usize, value: u64): bool {
+    if !nqNqoCanWrite(out, offset, 8 as usize) { return false }
+    let current: u64 = value
+    let index: usize = 0 as usize
+    while index < 8 as usize {
+        out[offset + index] = (current % 256 as u64) as u8
+        current = current / 256 as u64
+        index = index + 1 as usize
+    }
+    return true
+}
+
+function nqNqoWriteI64(out: []u8, offset: usize, value: i64): bool {
+    // Two's-complement bytes without relying on signed->unsigned overflow casts.
+    if !nqNqoCanWrite(out, offset, 8 as usize) { return false }
+    let current: i64 = value
+    let index: usize = 0 as usize
+    while index < 8 as usize {
+        let byte: i64 = current % 256 as i64
+        if byte < 0 as i64 { byte = byte + 256 as i64 }
+        out[offset + index] = byte as u8
+        current = (current - byte) / 256 as i64
+        index = index + 1 as usize
+    }
+    return true
+}
+
+function nqNqoCheckedAdd(a: usize, b: usize, out: *usize): bool {
+    if out == null { return false }
+    let maximum: usize = -1 as isize as usize
+    if b > maximum - a { return false }
+    out[0] = a + b
+    return true
+}
+
+function nqNqoCheckedMul(a: usize, b: usize, out: *usize): bool {
+    if out == null { return false }
+    if a == 0 as usize || b == 0 as usize { out[0] = 0 as usize return true }
+    let maximum: usize = -1 as isize as usize
+    if a > maximum / b { return false }
+    out[0] = a * b
+    return true
+}
+
+export function nqNqoRequiredBytes(sourceBytes: usize, functionCount: usize, instructionCount: usize, out: *usize): isize {
+    if out == null { return nqNqoInvalid() }
+    let functionBytes: usize = 0 as usize
+    let instructionBytes: usize = 0 as usize
+    let total: usize = nqNqoHeaderBytes()
+    if !nqNqoCheckedMul(functionCount, nqNqoFunctionBytes(), &functionBytes) { return nqNqoOverflow() }
+    if !nqNqoCheckedMul(instructionCount, nqNqoInstructionBytes(), &instructionBytes) { return nqNqoOverflow() }
+    if !nqNqoCheckedAdd(total, sourceBytes, &total) { return nqNqoOverflow() }
+    if !nqNqoCheckedAdd(total, functionBytes, &total) { return nqNqoOverflow() }
+    if !nqNqoCheckedAdd(total, instructionBytes, &total) { return nqNqoOverflow() }
+    out[0] = total
+    return total as isize
+}
+
+export function nqNqoWrite(source: []u8, functions: []NqNirFunction, instructions: []NqNirInstruction, out: []u8): isize {
+    if len(source) > 4294967295 as usize || len(functions) > 4294967295 as usize || len(instructions) > 4294967295 as usize { return nqNqoOverflow() }
+    let required: usize = 0 as usize
+    let status: isize = nqNqoRequiredBytes(len(source), len(functions), len(instructions), &required)
+    if status < 0 as isize { return status }
+    if len(out) < required { return nqNqoCapacity() }
+    out[0] = nqNqoMagic0()
+    out[1] = nqNqoMagic1()
+    out[2] = nqNqoMagic2()
+    out[3] = nqNqoMagic3()
+    if !nqNqoWriteU32(out, 4 as usize, nqNqoVersion()) { return nqNqoCapacity() }
+    if !nqNqoWriteU32(out, 8 as usize, len(source) as u32) { return nqNqoCapacity() }
+    if !nqNqoWriteU32(out, 12 as usize, len(functions) as u32) { return nqNqoCapacity() }
+    if !nqNqoWriteU32(out, 16 as usize, len(instructions) as u32) { return nqNqoCapacity() }
+    if !nqNqoWriteU32(out, 20 as usize, nqNqoFunctionBytes() as u32) { return nqNqoCapacity() }
+    if !nqNqoWriteU32(out, 24 as usize, nqNqoInstructionBytes() as u32) { return nqNqoCapacity() }
+    if !nqNqoWriteU32(out, 28 as usize, 0 as u32) { return nqNqoCapacity() }
+
+    let offset: usize = nqNqoHeaderBytes()
+    let sourceIndex: usize = 0 as usize
+    while sourceIndex < len(source) { out[offset + sourceIndex] = source[sourceIndex] sourceIndex = sourceIndex + 1 as usize }
+    offset = offset + len(source)
+
+    let functionIndex: usize = 0 as usize
+    while functionIndex < len(functions) {
+        let function: *NqNirFunction = &functions[functionIndex]
+        if !nqNirFunctionValid(function, len(instructions)) || function.nameEnd > len(source) { return nqNqoInvalid() }
+        if function.nameStart > 4294967295 as usize || function.nameEnd > 4294967295 as usize || function.firstInstruction > 4294967295 as usize || function.instructionCount > 4294967295 as usize || function.parameterCount > 4294967295 as usize { return nqNqoOverflow() }
+        if !nqNqoWriteU64(out, offset, function.symbol) { return nqNqoCapacity() }
+        if !nqNqoWriteU32(out, offset + 8 as usize, function.nameStart as u32) { return nqNqoCapacity() }
+        if !nqNqoWriteU32(out, offset + 12 as usize, function.nameEnd as u32) { return nqNqoCapacity() }
+        if !nqNqoWriteU32(out, offset + 16 as usize, function.firstInstruction as u32) { return nqNqoCapacity() }
+        if !nqNqoWriteU32(out, offset + 20 as usize, function.instructionCount as u32) { return nqNqoCapacity() }
+        if !nqNqoWriteU32(out, offset + 24 as usize, function.parameterCount as u32) { return nqNqoCapacity() }
+        if !nqNqoWriteU32(out, offset + 28 as usize, function.flags) { return nqNqoCapacity() }
+        if !nqNqoWriteU64(out, offset + 32 as usize, 0 as u64) { return nqNqoCapacity() }
+        offset = offset + nqNqoFunctionBytes()
+        functionIndex = functionIndex + 1 as usize
+    }
+
+    let instructionIndex: usize = 0 as usize
+    while instructionIndex < len(instructions) {
+        let instruction: *NqNirInstruction = &instructions[instructionIndex]
+        if !nqNirInstructionValid(instruction) || instruction.sourceEnd > len(source) { return nqNqoInvalid() }
+        if instruction.width > 18446744073709551615 as usize || instruction.sourceStart > 18446744073709551615 as usize || instruction.sourceEnd > 18446744073709551615 as usize { return nqNqoOverflow() }
+        if !nqNqoWriteU32(out, offset, instruction.opcode as u32) { return nqNqoCapacity() }
+        if !nqNqoWriteU32(out, offset + 4 as usize, instruction.typeCode as u32) { return nqNqoCapacity() }
+        if !nqNqoWriteU32(out, offset + 8 as usize, instruction.flags) { return nqNqoCapacity() }
+        if !nqNqoWriteU32(out, offset + 12 as usize, 0 as u32) { return nqNqoCapacity() }
+        if !nqNqoWriteI64(out, offset + 16 as usize, instruction.dest as i64) { return nqNqoCapacity() }
+        if !nqNqoWriteI64(out, offset + 24 as usize, instruction.left as i64) { return nqNqoCapacity() }
+        if !nqNqoWriteI64(out, offset + 32 as usize, instruction.right as i64) { return nqNqoCapacity() }
+        if !nqNqoWriteI64(out, offset + 40 as usize, instruction.immediate) { return nqNqoCapacity() }
+        if !nqNqoWriteU64(out, offset + 48 as usize, instruction.symbol) { return nqNqoCapacity() }
+        if !nqNqoWriteU64(out, offset + 56 as usize, instruction.width as u64) { return nqNqoCapacity() }
+        if !nqNqoWriteU64(out, offset + 64 as usize, instruction.sourceStart as u64) { return nqNqoCapacity() }
+        if !nqNqoWriteU64(out, offset + 72 as usize, instruction.sourceEnd as u64) { return nqNqoCapacity() }
+        let floatStart: u32 = 0 as u32
+        let floatEnd: u32 = 0 as u32
+        if instruction.opcode == nqNirConstF64() {
+            if instruction.sourceStart > 4294967295 as usize || instruction.sourceEnd > 4294967295 as usize { return nqNqoOverflow() }
+            floatStart = instruction.sourceStart as u32
+            floatEnd = instruction.sourceEnd as u32
+        }
+        if !nqNqoWriteU32(out, offset + 80 as usize, floatStart) { return nqNqoCapacity() }
+        if !nqNqoWriteU32(out, offset + 84 as usize, floatEnd) { return nqNqoCapacity() }
+        if !nqNqoWriteU64(out, offset + 88 as usize, 0 as u64) { return nqNqoCapacity() }
+        offset = offset + nqNqoInstructionBytes()
+        instructionIndex = instructionIndex + 1 as usize
+    }
+    return offset as isize
+}

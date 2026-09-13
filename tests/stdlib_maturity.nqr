@@ -8,6 +8,17 @@ import "../Lib/std/random.nqr"
 import "../Lib/std/bytes.nqr"
 import "../Lib/std/time.nqr"
 import "../Lib/std/string.nqr"
+import "../Lib/std/text.nqr"
+import "../Lib/std/utf8.nqr"
+import "../Lib/std/unicode.nqr"
+import "../Lib/std/format.nqr"
+import "../Lib/std/json.nqr"
+import "../Lib/std/csv.nqr"
+import "../Lib/std/xml.nqr"
+import "../Lib/std/net.nqr"
+import "../Lib/std/crypto/aes.nqr"
+import "../Lib/std/crypto/rsa.nqr"
+import "../Lib/std/crypto/ed25519.nqr"
 import "../Lib/std/list.nqr"
 import "../Lib/std/map.nqr"
 import "../Lib/std/set.nqr"
@@ -58,6 +69,42 @@ function main(): int {
     if checked_add_i64(checked_i64_max(), 1 as i64, &checked) { return 25 }
     if !nqAlmostEqualFloat(nqAtanFloat(1.0), nqPi() / 4.0, 0.0001) { return 26 }
     if !nqAlmostEqualFloat(nqAsinFloat(1.0), nqPi() / 2.0, 0.0001) { return 27 }
+
+    let utf8Word: [u8; 6] = [78 as u8,111 as u8,113 as u8,101 as u8,114 as u8,105 as u8]
+    if !nqUtf8Valid(slice(utf8Word)) || nqUtf8ScalarCount(slice(utf8Word)) != 6 as isize { return 28 }
+    let euro: [u8; 3] = [226 as u8,130 as u8,172 as u8]
+    let scalar: u32 = 0 as u32
+    if nqUtf8DecodeAt(slice(euro), 0 as usize, &scalar) != 3 as isize || scalar != 8364 as u32 { return 29 }
+    let encoded: [u8; 4] = [0 as u8,0 as u8,0 as u8,0 as u8]
+    if nqUtf8EncodeInto(128512 as u32, slice(encoded)) != 4 as isize { return 30 }
+    if !unicode_is_scalar(128512 as u32) || unicode_is_scalar(55296 as u32) { return 31 }
+    if !unicode_is_whitespace(12288 as u32) { return 32 }
+
+    let numberText: [u8; 20] = [45 as u8,57 as u8,50 as u8,50 as u8,51 as u8,51 as u8,55 as u8,50 as u8,48 as u8,51 as u8,54 as u8,56 as u8,53 as u8,52 as u8,55 as u8,55 as u8,53 as u8,56 as u8,48 as u8,56 as u8]
+    let parsed: i64 = 0 as i64
+    if !text_parse_i64(slice(numberText), &parsed) || parsed != ((-9223372036854775807 as i64) - 1 as i64) { return 33 }
+    let decimalBuffer: [u8; 24] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    if format_i64_decimal(parsed, slice(decimalBuffer)) != 20 as isize { return 34 }
+
+    let jsonText: [u8; 20] = [123 as u8,34 as u8,111 as u8,107 as u8,34 as u8,58 as u8,116 as u8,114 as u8,117 as u8,101 as u8,44 as u8,34 as u8,110 as u8,34 as u8,58 as u8,52 as u8,50 as u8,125 as u8,32 as u8,32 as u8]
+    if json_token_count(slice(jsonText)) != 9 as isize { return 35 }
+    let csvLine: [u8; 9] = [97 as u8,44 as u8,34 as u8,98 as u8,44 as u8,99 as u8,34 as u8,44 as u8,100 as u8]
+    if csv_count_columns(slice(csvLine)) != 3 as usize { return 36 }
+    let xmlName: [u8; 7] = [110 as u8,113 as u8,101 as u8,114 as u8,105 as u8,95 as u8,49 as u8]
+    if !xml_name_valid(slice(xmlName)) { return 37 }
+
+    let address: Ipv4Address
+    address.a = 8 as u8
+    address.b = 8 as u8
+    address.c = 8 as u8
+    address.d = 8 as u8
+    if !net_ipv4_is_public(&address) { return 38 }
+    address.a = 192 as u8
+    address.b = 168 as u8
+    if net_ipv4_is_public(&address) { return 39 }
+    if !aes_key_length_valid(32 as usize) || aes_key_length_valid(20 as usize) { return 40 }
+    if !rsa_key_size_valid(3072 as usize) || rsa_key_size_valid(1024 as usize) { return 41 }
+    if !ed25519_signature_length_valid(64 as usize) { return 42 }
 
     return 0
 }

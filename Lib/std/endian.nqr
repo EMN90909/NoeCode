@@ -1,6 +1,351 @@
 module noqeri.std.endian
 
-export function endian_byte_sum(data: []u8): u64 { let sum: u64 = 0 as u64 let i: usize = 0 as usize while i < len(data) { sum = sum + data[i] as u64 i = i + 1 } return sum }
-export function endian_all_zero(data: []u8): bool { let i: usize = 0 as usize while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 } return true }
+// Fixed-width byte-order helpers plus a small bounded cursor. All public
+// readers/writers validate the range before indexing so packet/file parsers can
+// use them on untrusted input without repeating overflow-prone offset checks.
+record EndianCursor {
+    offset: usize
+    little: bool
+    ok: bool
+}
+
+export function endian_little(): int { return 0 }
+export function endian_big(): int { return 1 }
+
+export function endian_range_valid(data: []u8, offset: usize, width: usize): bool {
+    if offset > len(data) { return false }
+    return width <= len(data) - offset
+}
+
+export function endian_checked_end(offset: usize, width: usize, capacity: usize): bool {
+    if offset > capacity { return false }
+    return width <= capacity - offset
+}
+
+export function endian_cursor_init(cursor: *EndianCursor, offset: usize, little: bool): bool {
+    if cursor == null { return false }
+    cursor.offset = offset
+    cursor.little = little
+    cursor.ok = true
+    return true
+}
+
+export function endian_cursor_reset(cursor: *EndianCursor, offset: usize): bool {
+    if cursor == null { return false }
+    cursor.offset = offset
+    cursor.ok = true
+    return true
+}
+
+export function endian_cursor_offset(cursor: *EndianCursor): usize {
+    if cursor == null { return 0 as usize }
+    return cursor.offset
+}
+
+export function endian_cursor_ok(cursor: *EndianCursor): bool {
+    return cursor != null && cursor.ok
+}
+
+export function endian_cursor_failed(cursor: *EndianCursor): bool {
+    return cursor == null || !cursor.ok
+}
+
+export function endian_cursor_remaining(cursor: *EndianCursor, data: []u8): usize {
+    if cursor == null || cursor.offset >= len(data) { return 0 as usize }
+    return len(data) - cursor.offset
+}
+
+export function endian_cursor_skip(cursor: *EndianCursor, data: []u8, width: usize): bool {
+    if cursor == null || !cursor.ok { return false }
+    if !endian_range_valid(data, cursor.offset, width) { cursor.ok = false return false }
+    cursor.offset = cursor.offset + width
+    return true
+}
+
+export function endian_read_u8(data: []u8, offset: usize, out: *u8): bool {
+    if out == null || !endian_range_valid(data, offset, 1 as usize) { return false }
+    *out = data[offset]
+    return true
+}
+
+export function endian_write_u8(output: []u8, offset: usize, value: u8): bool {
+    if !endian_range_valid(output, offset, 1 as usize) { return false }
+    output[offset] = value
+    return true
+}
+
+export function endian_read_u16_le(data: []u8, offset: usize, out: *u16): bool {
+    if out == null || !endian_range_valid(data, offset, 2 as usize) { return false }
+    *out = data[offset] as u16 + data[offset + 1 as usize] as u16 * 256 as u16
+    return true
+}
+
+export function endian_read_u16_be(data: []u8, offset: usize, out: *u16): bool {
+    if out == null || !endian_range_valid(data, offset, 2 as usize) { return false }
+    *out = data[offset] as u16 * 256 as u16 + data[offset + 1 as usize] as u16
+    return true
+}
+
+export function endian_write_u16_le(output: []u8, offset: usize, value: u16): bool {
+    if !endian_range_valid(output, offset, 2 as usize) { return false }
+    output[offset] = (value % 256 as u16) as u8
+    output[offset + 1 as usize] = ((value / 256 as u16) % 256 as u16) as u8
+    return true
+}
+
+export function endian_write_u16_be(output: []u8, offset: usize, value: u16): bool {
+    if !endian_range_valid(output, offset, 2 as usize) { return false }
+    output[offset] = ((value / 256 as u16) % 256 as u16) as u8
+    output[offset + 1 as usize] = (value % 256 as u16) as u8
+    return true
+}
+
+export function endian_read_u24_le(data: []u8, offset: usize, out: *u32): bool {
+    if out == null || !endian_range_valid(data, offset, 3 as usize) { return false }
+    *out = data[offset] as u32 + data[offset + 1 as usize] as u32 * 256 as u32 + data[offset + 2 as usize] as u32 * 65536 as u32
+    return true
+}
+
+export function endian_read_u24_be(data: []u8, offset: usize, out: *u32): bool {
+    if out == null || !endian_range_valid(data, offset, 3 as usize) { return false }
+    *out = data[offset] as u32 * 65536 as u32 + data[offset + 1 as usize] as u32 * 256 as u32 + data[offset + 2 as usize] as u32
+    return true
+}
+
+export function endian_write_u24_le(output: []u8, offset: usize, value: u32): bool {
+    if value >= 16777216 as u32 || !endian_range_valid(output, offset, 3 as usize) { return false }
+    output[offset] = (value % 256 as u32) as u8
+    output[offset + 1 as usize] = ((value / 256 as u32) % 256 as u32) as u8
+    output[offset + 2 as usize] = ((value / 65536 as u32) % 256 as u32) as u8
+    return true
+}
+
+export function endian_write_u24_be(output: []u8, offset: usize, value: u32): bool {
+    if value >= 16777216 as u32 || !endian_range_valid(output, offset, 3 as usize) { return false }
+    output[offset] = ((value / 65536 as u32) % 256 as u32) as u8
+    output[offset + 1 as usize] = ((value / 256 as u32) % 256 as u32) as u8
+    output[offset + 2 as usize] = (value % 256 as u32) as u8
+    return true
+}
+
+export function endian_read_u32_le(data: []u8, offset: usize, out: *u32): bool {
+    if out == null || !endian_range_valid(data, offset, 4 as usize) { return false }
+    *out = data[offset] as u32 + data[offset + 1 as usize] as u32 * 256 as u32 + data[offset + 2 as usize] as u32 * 65536 as u32 + data[offset + 3 as usize] as u32 * 16777216 as u32
+    return true
+}
+
+export function endian_read_u32_be(data: []u8, offset: usize, out: *u32): bool {
+    if out == null || !endian_range_valid(data, offset, 4 as usize) { return false }
+    *out = data[offset] as u32 * 16777216 as u32 + data[offset + 1 as usize] as u32 * 65536 as u32 + data[offset + 2 as usize] as u32 * 256 as u32 + data[offset + 3 as usize] as u32
+    return true
+}
+
+export function endian_write_u32_le(output: []u8, offset: usize, value: u32): bool {
+    if !endian_range_valid(output, offset, 4 as usize) { return false }
+    let current: u32 = value
+    let i: usize = 0 as usize
+    while i < 4 as usize {
+        output[offset + i] = (current % 256 as u32) as u8
+        current = current / 256 as u32
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function endian_write_u32_be(output: []u8, offset: usize, value: u32): bool {
+    if !endian_range_valid(output, offset, 4 as usize) { return false }
+    let current: u32 = value
+    let i: usize = 0 as usize
+    while i < 4 as usize {
+        output[offset + 3 as usize - i] = (current % 256 as u32) as u8
+        current = current / 256 as u32
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function endian_read_u64_le(data: []u8, offset: usize, out: *u64): bool {
+    if out == null || !endian_range_valid(data, offset, 8 as usize) { return false }
+    let value: u64 = 0 as u64
+    let multiplier: u64 = 1 as u64
+    let i: usize = 0 as usize
+    while i < 8 as usize {
+        value = value + data[offset + i] as u64 * multiplier
+        if i < 7 as usize { multiplier = multiplier * 256 as u64 }
+        i = i + 1 as usize
+    }
+    *out = value
+    return true
+}
+
+export function endian_read_u64_be(data: []u8, offset: usize, out: *u64): bool {
+    if out == null || !endian_range_valid(data, offset, 8 as usize) { return false }
+    let value: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < 8 as usize {
+        value = value * 256 as u64 + data[offset + i] as u64
+        i = i + 1 as usize
+    }
+    *out = value
+    return true
+}
+
+export function endian_write_u64_le(output: []u8, offset: usize, value: u64): bool {
+    if !endian_range_valid(output, offset, 8 as usize) { return false }
+    let current: u64 = value
+    let i: usize = 0 as usize
+    while i < 8 as usize {
+        output[offset + i] = (current % 256 as u64) as u8
+        current = current / 256 as u64
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function endian_write_u64_be(output: []u8, offset: usize, value: u64): bool {
+    if !endian_range_valid(output, offset, 8 as usize) { return false }
+    let current: u64 = value
+    let i: usize = 0 as usize
+    while i < 8 as usize {
+        output[offset + 7 as usize - i] = (current % 256 as u64) as u8
+        current = current / 256 as u64
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function endian_read_u16(data: []u8, offset: usize, little: bool, out: *u16): bool {
+    if little { return endian_read_u16_le(data, offset, out) }
+    return endian_read_u16_be(data, offset, out)
+}
+
+export function endian_read_u32(data: []u8, offset: usize, little: bool, out: *u32): bool {
+    if little { return endian_read_u32_le(data, offset, out) }
+    return endian_read_u32_be(data, offset, out)
+}
+
+export function endian_read_u64(data: []u8, offset: usize, little: bool, out: *u64): bool {
+    if little { return endian_read_u64_le(data, offset, out) }
+    return endian_read_u64_be(data, offset, out)
+}
+
+export function endian_write_u16(output: []u8, offset: usize, value: u16, little: bool): bool {
+    if little { return endian_write_u16_le(output, offset, value) }
+    return endian_write_u16_be(output, offset, value)
+}
+
+export function endian_write_u32(output: []u8, offset: usize, value: u32, little: bool): bool {
+    if little { return endian_write_u32_le(output, offset, value) }
+    return endian_write_u32_be(output, offset, value)
+}
+
+export function endian_write_u64(output: []u8, offset: usize, value: u64, little: bool): bool {
+    if little { return endian_write_u64_le(output, offset, value) }
+    return endian_write_u64_be(output, offset, value)
+}
+
+export function endian_swap_u16(value: u16): u16 {
+    return (value % 256 as u16) * 256 as u16 + value / 256 as u16
+}
+
+export function endian_swap_u32(value: u32): u32 {
+    let b0: u32 = value % 256 as u32
+    let b1: u32 = (value / 256 as u32) % 256 as u32
+    let b2: u32 = (value / 65536 as u32) % 256 as u32
+    let b3: u32 = (value / 16777216 as u32) % 256 as u32
+    return b0 * 16777216 as u32 + b1 * 65536 as u32 + b2 * 256 as u32 + b3
+}
+
+export function endian_reverse_copy(input: []u8, output: []u8): bool {
+    if len(output) < len(input) { return false }
+    let i: usize = 0 as usize
+    while i < len(input) {
+        output[i] = input[len(input) - 1 as usize - i]
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function endian_reverse_in_place(data: []u8): bool {
+    if len(data) <= 1 as usize { return true }
+    let left: usize = 0 as usize
+    let right: usize = len(data) - 1 as usize
+    while left < right {
+        let temporary: u8 = data[left]
+        data[left] = data[right]
+        data[right] = temporary
+        left = left + 1 as usize
+        right = right - 1 as usize
+    }
+    return true
+}
+
+export function endian_has_utf16_le_bom(data: []u8): bool {
+    return len(data) >= 2 as usize && data[0 as usize] == 255 as u8 && data[1 as usize] == 254 as u8
+}
+
+export function endian_has_utf16_be_bom(data: []u8): bool {
+    return len(data) >= 2 as usize && data[0 as usize] == 254 as u8 && data[1 as usize] == 255 as u8
+}
+
+export function endian_has_utf32_le_bom(data: []u8): bool {
+    return len(data) >= 4 as usize && data[0 as usize] == 255 as u8 && data[1 as usize] == 254 as u8 && data[2 as usize] == 0 as u8 && data[3 as usize] == 0 as u8
+}
+
+export function endian_has_utf32_be_bom(data: []u8): bool {
+    return len(data) >= 4 as usize && data[0 as usize] == 0 as u8 && data[1 as usize] == 0 as u8 && data[2 as usize] == 254 as u8 && data[3 as usize] == 255 as u8
+}
+
+export function endian_cursor_read_u8(cursor: *EndianCursor, data: []u8, out: *u8): bool {
+    if cursor == null || !cursor.ok || !endian_read_u8(data, cursor.offset, out) { if cursor != null { cursor.ok = false } return false }
+    cursor.offset = cursor.offset + 1 as usize
+    return true
+}
+
+export function endian_cursor_read_u16(cursor: *EndianCursor, data: []u8, out: *u16): bool {
+    if cursor == null || !cursor.ok || !endian_read_u16(data, cursor.offset, cursor.little, out) { if cursor != null { cursor.ok = false } return false }
+    cursor.offset = cursor.offset + 2 as usize
+    return true
+}
+
+export function endian_cursor_read_u32(cursor: *EndianCursor, data: []u8, out: *u32): bool {
+    if cursor == null || !cursor.ok || !endian_read_u32(data, cursor.offset, cursor.little, out) { if cursor != null { cursor.ok = false } return false }
+    cursor.offset = cursor.offset + 4 as usize
+    return true
+}
+
+export function endian_cursor_read_u64(cursor: *EndianCursor, data: []u8, out: *u64): bool {
+    if cursor == null || !cursor.ok || !endian_read_u64(data, cursor.offset, cursor.little, out) { if cursor != null { cursor.ok = false } return false }
+    cursor.offset = cursor.offset + 8 as usize
+    return true
+}
+
+export function endian_cursor_write_u8(cursor: *EndianCursor, output: []u8, value: u8): bool {
+    if cursor == null || !cursor.ok || !endian_write_u8(output, cursor.offset, value) { if cursor != null { cursor.ok = false } return false }
+    cursor.offset = cursor.offset + 1 as usize
+    return true
+}
+
+export function endian_cursor_write_u16(cursor: *EndianCursor, output: []u8, value: u16): bool {
+    if cursor == null || !cursor.ok || !endian_write_u16(output, cursor.offset, value, cursor.little) { if cursor != null { cursor.ok = false } return false }
+    cursor.offset = cursor.offset + 2 as usize
+    return true
+}
+
+export function endian_cursor_write_u32(cursor: *EndianCursor, output: []u8, value: u32): bool {
+    if cursor == null || !cursor.ok || !endian_write_u32(output, cursor.offset, value, cursor.little) { if cursor != null { cursor.ok = false } return false }
+    cursor.offset = cursor.offset + 4 as usize
+    return true
+}
+
+export function endian_cursor_write_u64(cursor: *EndianCursor, output: []u8, value: u64): bool {
+    if cursor == null || !cursor.ok || !endian_write_u64(output, cursor.offset, value, cursor.little) { if cursor != null { cursor.ok = false } return false }
+    cursor.offset = cursor.offset + 8 as usize
+    return true
+}
+
+// Compatibility helpers from the placeholder era.
+export function endian_byte_sum(data: []u8): u64 { let sum: u64 = 0 as u64 let i: usize = 0 as usize while i < len(data) { sum = sum + data[i] as u64 i = i + 1 as usize } return sum }
+export function endian_all_zero(data: []u8): bool { let i: usize = 0 as usize while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 as usize } return true }
 export function endian_bounded_length(data: []u8, max: usize): bool { return len(data) <= max }
 export function endian_nonempty(data: []u8): bool { return len(data) > 0 as usize }

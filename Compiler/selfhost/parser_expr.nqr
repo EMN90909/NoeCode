@@ -32,6 +32,7 @@ function nqExprParsePrimary(source: []u8, start: usize, nodes: []NqAstNode, coun
     if token.kind == nqTokenIdentifier() {
         let tag: int = nqAstName()
         if nqTokenTextEqual(source, &token, slice([116 as u8,114 as u8,117 as u8,101 as u8])) || nqTokenTextEqual(source, &token, slice([102 as u8,97 as u8,108 as u8,115 as u8,101 as u8])) { tag = nqAstBool() }
+        if nqTokenTextEqual(source, &token, slice([110 as u8,117 as u8,108 as u8,108 as u8])) { tag = nqAstNull() }
         outEnd[0] = token.end
         return nqExprPush(nodes, count, tag, token.start, token.end)
     }
@@ -48,6 +49,7 @@ function nqExprParsePrimary(source: []u8, start: usize, nodes: []NqAstNode, coun
     if token.kind == nqTokenPunctuation() && token.first == 91 as u8 {
         let cursor: usize = token.end
         let firstElement: isize = nqAstNoNode()
+        let lastElement: isize = nqAstNoNode()
         let elementCount: usize = 0 as usize
         let look: NqToken
         nqCompilerNextToken(source, cursor, &look)
@@ -61,7 +63,7 @@ function nqExprParsePrimary(source: []u8, start: usize, nodes: []NqAstNode, coun
             let elementEnd: usize = cursor
             let element: isize = nqExprParseAssignment(source, cursor, nodes, count, &elementEnd)
             if element < 0 as isize { return nqAstNoNode() }
-            if firstElement < 0 as isize { firstElement = element }
+            if !nqAstAppend(nodes, &firstElement, &lastElement, element) { return nqAstNoNode() }
             elementCount = elementCount + 1 as usize
             cursor = elementEnd
             nqCompilerNextToken(source, cursor, &look)
@@ -91,6 +93,7 @@ function nqExprParsePostfix(source: []u8, start: usize, nodes: []NqAstNode, coun
             let callStart: usize = nodes[value as usize].start
             let argCursor: usize = token.end
             let firstArg: isize = nqAstNoNode()
+            let lastArg: isize = nqAstNoNode()
             let argCount: usize = 0 as usize
             let look: NqToken
             nqCompilerNextToken(source, argCursor, &look)
@@ -99,7 +102,7 @@ function nqExprParsePostfix(source: []u8, start: usize, nodes: []NqAstNode, coun
                     let argEnd: usize = argCursor
                     let arg: isize = nqExprParseAssignment(source, argCursor, nodes, count, &argEnd)
                     if arg < 0 as isize { return nqAstNoNode() }
-                    if firstArg < 0 as isize { firstArg = arg }
+                    if !nqAstAppend(nodes, &firstArg, &lastArg, arg) { return nqAstNoNode() }
                     argCount = argCount + 1 as usize
                     argCursor = argEnd
                     nqCompilerNextToken(source, argCursor, &look)
@@ -142,7 +145,6 @@ function nqExprParsePostfix(source: []u8, start: usize, nodes: []NqAstNode, coun
             cursor = member.end
         } else { outEnd[0] = cursor return value }
     }
-    outEnd[0] = cursor
     return value
 }
 
@@ -164,7 +166,6 @@ function nqExprParseCast(source: []u8, start: usize, nodes: []NqAstNode, count: 
         value = cast
         cursor = typeEnd
     }
-    outEnd[0] = cursor
     return value
 }
 
@@ -202,7 +203,6 @@ function nqExprParseFactor(source: []u8, start: usize, nodes: []NqAstNode, count
         if left < 0 as isize { return left }
         cursor = rightEnd
     }
-    outEnd[0] = cursor
     return left
 }
 
@@ -221,7 +221,6 @@ function nqExprParseTerm(source: []u8, start: usize, nodes: []NqAstNode, count: 
         if left < 0 as isize { return left }
         cursor = rightEnd
     }
-    outEnd[0] = cursor
     return left
 }
 
@@ -240,7 +239,6 @@ function nqExprParseComparison(source: []u8, start: usize, nodes: []NqAstNode, c
         if left < 0 as isize { return left }
         cursor = rightEnd
     }
-    outEnd[0] = cursor
     return left
 }
 
@@ -260,7 +258,6 @@ function nqExprParseEquality(source: []u8, start: usize, nodes: []NqAstNode, cou
         if left < 0 as isize { return left }
         cursor = rightEnd
     }
-    outEnd[0] = cursor
     return left
 }
 
@@ -279,7 +276,6 @@ function nqExprParseLogicalAnd(source: []u8, start: usize, nodes: []NqAstNode, c
         if left < 0 as isize { return left }
         cursor = rightEnd
     }
-    outEnd[0] = cursor
     return left
 }
 
@@ -298,7 +294,6 @@ function nqExprParseLogicalOr(source: []u8, start: usize, nodes: []NqAstNode, co
         if left < 0 as isize { return left }
         cursor = rightEnd
     }
-    outEnd[0] = cursor
     return left
 }
 
@@ -309,6 +304,7 @@ function nqExprParseAssignment(source: []u8, start: usize, nodes: []NqAstNode, c
     let op: NqToken
     nqCompilerNextToken(source, cursor, &op)
     if op.kind == nqTokenOperator() && op.first == 61 as u8 && op.end - op.start == 1 as usize {
+        if nodes[left as usize].tag != nqAstName() && nodes[left as usize].tag != nqAstIndex() && nodes[left as usize].tag != nqAstMember() && !(nodes[left as usize].tag == nqAstUnary() && nodes[left as usize].flags == 42 as u32) { return nqAstNoNode() }
         let rightEnd: usize = op.end
         let right: isize = nqExprParseAssignment(source, op.end, nodes, count, &rightEnd)
         if right < 0 as isize { return right }

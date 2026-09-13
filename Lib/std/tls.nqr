@@ -1,5 +1,42 @@
 module noqeri.std.tls
 
-export function tls_record_type_valid(t:u8):bool{return t==20 as u8||t==21 as u8||t==22 as u8||t==23 as u8}
-export function tls_version_is_12(major:u8,minor:u8):bool{return major==3 as u8&&minor==3 as u8}
-export function tls_record_length_valid(n:usize):bool{return n<=18432 as usize}
+extern function tlsConnect(host: string, port: u32, timeoutMillis: i64): isize
+extern function tlsRead(session: usize, data: []u8): isize
+extern function tlsWrite(session: usize, data: []u8): isize
+extern function tlsPeerVerified(session: usize): bool
+extern function tlsProtocol(session: usize): string
+extern function tlsClose(session: usize): void
+
+export function tls_record_type_valid(t: u8): bool { return t == 20 as u8 || t == 21 as u8 || t == 22 as u8 || t == 23 as u8 }
+export function tls_version_is_12(major: u8, minor: u8): bool { return major == 3 as u8 && minor == 3 as u8 }
+export function tls_record_length_valid(n: usize): bool { return n <= 18432 as usize }
+export function tls_default_port(): u32 { return 443 as u32 }
+export function tls_default_timeout_millis(): i64 { return 30000 as i64 }
+export function tls_handle_valid(handle: isize): bool { return handle >= 0 as isize }
+
+export function tls_connect(host: string, port: u32, timeoutMillis: i64): isize {
+    if textLength(host) == 0 as usize || port == 0 as u32 || port > 65535 as u32 { return -2 as isize }
+    if timeoutMillis < 0 as i64 { return -3 as isize }
+    return tlsConnect(host, port, timeoutMillis)
+}
+
+export function tls_connect_https(host: string): isize { return tls_connect(host, tls_default_port(), tls_default_timeout_millis()) }
+export function tls_read(session: usize, buffer: []u8): isize { if len(buffer) == 0 as usize { return 0 as isize } return tlsRead(session, buffer) }
+export function tls_write(session: usize, buffer: []u8): isize { if len(buffer) == 0 as usize { return 0 as isize } return tlsWrite(session, buffer) }
+export function tls_peer_verified(session: usize): bool { return tlsPeerVerified(session) }
+export function tls_protocol(session: usize): string { return tlsProtocol(session) }
+
+export function tls_write_all(session: usize, buffer: []u8): isize {
+    let offset: usize = 0 as usize
+    while offset < len(buffer) {
+        let chunk: []u8 = slice(&buffer[offset], len(buffer) - offset)
+        let wrote: isize = tlsWrite(session, chunk)
+        if wrote < 0 as isize { return wrote }
+        if wrote == 0 as isize { return -4 as isize }
+        offset = offset + wrote as usize
+    }
+    return offset as isize
+}
+
+export function tls_close(session: usize): void { tlsClose(session) }
+export function tls_insecure_skip_verify_allowed(): bool { return false }

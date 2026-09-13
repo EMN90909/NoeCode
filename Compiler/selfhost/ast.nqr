@@ -1,7 +1,24 @@
 module noqeri.compiler.selfhost.ast
 
 // Compact stable node/type tags. The self-hosted frontend uses index-based
-// arenas in host memory so the compiler never depends on host object layout.
+// arenas so the compiler never depends on host object layout.
+record NqAstNode {
+    tag: int
+    typeCode: int
+    start: usize
+    end: usize
+    left: isize
+    right: isize
+    extra: isize
+    flags: u32
+}
+
+export function nqAstNoNode(): isize { return -1 as isize }
+export function nqAstFlagExport(): u32 { return 1 as u32 }
+export function nqAstFlagExtern(): u32 { return 2 as u32 }
+export function nqAstFlagConst(): u32 { return 4 as u32 }
+export function nqAstFlagUnsafe(): u32 { return 8 as u32 }
+
 export function nqAstInvalid(): int { return 0 }
 export function nqAstModule(): int { return 1 }
 export function nqAstImport(): int { return 2 }
@@ -56,3 +73,28 @@ export function nqAstTypeRecord(): int { return 19 }
 export function nqAstTypeScalar(code: int): bool { return code >= nqAstTypeBool() && code <= nqAstTypeUsize() }
 export function nqAstTypeInteger(code: int): bool { return code == nqAstTypeInt() || (code >= nqAstTypeI8() && code <= nqAstTypeUsize()) }
 export function nqAstTypeAggregate(code: int): bool { return code == nqAstTypeSlice() || code == nqAstTypeArray() || code == nqAstTypeRecord() }
+
+export function nqAstNodeInit(out: *NqAstNode, tag: int, start: usize, end: usize): void {
+    out.tag = tag
+    out.typeCode = nqAstTypeUnknown()
+    out.start = start
+    out.end = end
+    out.left = nqAstNoNode()
+    out.right = nqAstNoNode()
+    out.extra = nqAstNoNode()
+    out.flags = 0 as u32
+}
+
+export function nqAstNodeValid(node: *NqAstNode, sourceBytes: usize): bool {
+    if node == null || !nqAstNodeTagValid(node.tag) { return false }
+    if node.start > node.end || node.end > sourceBytes { return false }
+    return true
+}
+
+export function nqAstArenaPush(nodes: []NqAstNode, count: *usize, tag: int, start: usize, end: usize): isize {
+    if count == null || count[0] >= len(nodes) || start > end { return nqAstNoNode() }
+    let index: usize = count[0]
+    nqAstNodeInit(&nodes[index], tag, start, end)
+    count[0] = index + 1 as usize
+    return index as isize
+}

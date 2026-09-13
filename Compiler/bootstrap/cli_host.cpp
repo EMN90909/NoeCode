@@ -19,7 +19,8 @@ void usage() {
               << "  lex <file>                        print lexer tokens\n"
               << "  check [file] [-O...]              parse and type-check module graph\n"
               << "  nir [file] [-O...]                lower module graph to typed NIR\n"
-              << "  run [file] [-O...]                execute through reference runtime\n"
+              << "  run [file] [--check-memory] [--race] [--overflow] [-O...]\n"
+              << "                                    execute through reference runtime with optional checks\n"
               << "  build [file] [assembly] [-O...]   emit target assembly\n"
               << "  web [file] [module.nqo]           emit checked portable Noqeri web module\n"
               << "  db <script.nqd> [data.nqdb]       execute a transactional NoqeriDB script\n"
@@ -31,7 +32,8 @@ void usage() {
               << "  manifest [file]                   read project.nqr\n"
               << "  lock [file]                       generate content-addressed noqeri.lock\n"
               << "  audit [dir]                       verify lock integrity and review capabilities\n"
-              << "  test [dir]                        compile and run .nqr tests\n"
+              << "  test [dir] [--check-memory] [--race] [--overflow]\n"
+              << "                                    compile and run .nqr tests under optional checks\n"
               << "  doctor [dir]                      verify repository health\n"
               << "  release-check [dir]               repository production checks\n"
               << "  lsp                               run JSON-RPC language server\n\n"
@@ -57,6 +59,22 @@ CompileOptions optionsFromArgs(int argc, char** argv, const std::string& target)
     return options;
 }
 
+RuntimeCheckConfig runtimeChecksFromArgs(int argc,char**argv){
+    RuntimeCheckConfig checks;
+    for(int i=2;i<argc;++i){
+        const std::string arg=argv[i];
+        if(arg=="--check-memory")checks.memory=true;
+        else if(arg=="--race")checks.race=true;
+        else if(arg=="--overflow")checks.overflow=true;
+    }
+    return checks;
+}
+
+std::filesystem::path firstPositional(int argc,char**argv,const std::filesystem::path&fallback){
+    for(int i=2;i<argc;++i){const std::string arg=argv[i];if(!arg.empty()&&arg[0]!='-')return arg;}
+    return fallback;
+}
+
 struct SourceSelection {
     std::filesystem::path source;
     std::string projectName;
@@ -64,8 +82,9 @@ struct SourceSelection {
 };
 
 std::optional<SourceSelection> selectSource(int argc, char** argv, Diagnostics& d) {
-    if (argc >= 3 && argv[2][0] != '-') {
-        return SourceSelection{argv[2], std::filesystem::path(argv[2]).stem().string(), NOQERI_DEFAULT_TARGET};
+    for(int i=2;i<argc;++i){
+        const std::string arg=argv[i];
+        if(!arg.empty()&&arg[0]!='-')return SourceSelection{arg,std::filesystem::path(arg).stem().string(),NOQERI_DEFAULT_TARGET};
     }
     auto manifest = PackageManager{}.loadManifest("project.nqr", d);
     if (!manifest) return std::nullopt;
@@ -322,7 +341,7 @@ int main(int argc, char** argv) {
             std::cout << "created Noqeri project " << dir << "\n";
             return 0;
         }
-        if (cmd == "test") return TestRunner{}.runDirectory(argc >= 3 ? argv[2] : "tests");
+        if (cmd == "test") return TestRunner{}.runDirectory(firstPositional(argc,argv,"tests"),runtimeChecksFromArgs(argc,argv));
         if (cmd == "manifest" || cmd == "lock") {
             std::filesystem::path path = argc >= 3 ? argv[2] : "project.nqr";
             Diagnostics d;
@@ -372,7 +391,12 @@ int main(int argc, char** argv) {
             return 0;
         }
         if (cmd == "nir") { std::cout << printNir(compilation.nir); return 0; }
-        if (cmd == "run") return Interpreter{}.run(compilation.nir);
+        if (cmd == "run") {
+            runtimeConfigureChecks(runtimeChecksFromArgs(argc,argv));
+            const int result=Interpreter{}.run(compilation.nir);
+            runtimeConfigureChecks({});
+            return result;
+        }
         if (cmd == "web") {
             std::filesystem::path output = argc >= 4 && argv[3][0] != '-' ? std::filesystem::path(argv[3]) : std::filesystem::path("build") / (selected->projectName + ".nqo");
             if (output.extension().empty()) output += ".nqo";
@@ -398,6 +422,7 @@ int main(int argc, char** argv) {
         usage();
         return 1;
     } catch (const std::exception& e) {
+        runtimeConfigureChecks({});
         std::cerr << "NQR-C0001: " << e.what() << "\n";
         return 1;
     }

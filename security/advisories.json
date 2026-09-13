@@ -1,0 +1,14 @@
+{
+  "format": "noqeri-advisories-v1",
+  "updated": "2026-09-13",
+  "advisories": [],
+  "schema": {
+    "id": "NOQERI-YYYY-NNNN or CVE identifier",
+    "package": "namespace/name or compiler/runtime",
+    "affected": ["exact semver or simple comparator range"],
+    "fixed": ["semver"],
+    "severity": "low|moderate|high|critical",
+    "summary": "short human-readable description",
+    "url": "optional advisory URL"
+  }
+}

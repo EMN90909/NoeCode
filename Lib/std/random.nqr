@@ -24,26 +24,17 @@ export function nqRandomRange(seed: i64, low: i64, highExclusive: i64): i64 {
 }
 
 export function random_seed(state: *Random, seed: u64): void {
-    if seed == 0 as u64 { state.state = 0x9E3779B97F4A7C15 as u64 return }
+    if seed == 0 as u64 { state.state = 1442695040888963407 as u64 return }
     state.state = seed
 }
 
-// SplitMix64 is used to decorrelate seeds and is also useful as a compact
-// deterministic generator for simulation/test workloads.
-export function random_splitmix64(value: u64): u64 {
-    let z: u64 = value + 0x9E3779B97F4A7C15 as u64
-    z = (z ^ (z / 0x40000000 as u64)) * 0xBF58476D1CE4E5B9 as u64
-    z = (z ^ (z / 0x8000000 as u64)) * 0x94D049BB133111EB as u64
-    return z ^ (z / 0x80000000 as u64)
-}
-
-// LCG compatibility helper retained for existing applications.
+// 64-bit LCG with a full-period odd increment. This is deterministic and fast,
+// but deliberately not advertised as cryptographically secure.
 export function random_next(state: u64): u64 { return state * 6364136223846793005 as u64 + 1442695040888963407 as u64 }
 
 export function random_next_u64(state: *Random): u64 {
-    let next: u64 = random_splitmix64(state.state)
-    state.state = state.state + 0x9E3779B97F4A7C15 as u64
-    return next
+    state.state = random_next(state.state)
+    return state.state
 }
 
 export function random_next_u32(state: *Random): u32 { return (random_next_u64(state) % 4294967296 as u64) as u32 }
@@ -65,8 +56,8 @@ export function random_range_i64(state: *Random, low: i64, highExclusive: i64): 
 
 export function random_range_inclusive_state(state: *Random, low: u64, high: u64): u64 {
     if high <= low { return low }
-    if high == 18446744073709551615 as u64 { return random_range_u64(state, low, high) }
-    return random_range_u64(state, low, high + 1 as u64)
+    let width: u64 = high - low
+    return low + random_next_u64(state) % (width + 1 as u64)
 }
 
 export function random_choose_index(state: *Random, count: usize): usize {

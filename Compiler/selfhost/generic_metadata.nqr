@@ -1,0 +1,74 @@
+module noqeri.compiler.selfhost.generic_metadata
+import "lexer.nqr"
+import "ast.nqr"
+import "type_ref.nqr"
+
+export function nqGenericMetadataOk(): isize { return 0 }
+export function nqGenericMetadataMalformed(): isize { return -320 }
+export function nqGenericMetadataCapacity(): isize { return -321 }
+
+export function nqGenericMetadataAttach(source: []u8, nodes: []NqAstNode, count: *usize, first: isize): isize {
+    if count == null { return nqGenericMetadataCapacity() }
+    let cursor: isize = first
+    while cursor >= 0 as isize {
+        if cursor as usize >= len(nodes) { return nqGenericMetadataMalformed() }
+        let fn: *NqAstNode = &nodes[cursor as usize]
+        if fn.tag == nqAstFunction() {
+            fn.genericFirst = nqAstNoNode()
+            fn.genericCount = 0 as usize
+            let token: NqToken
+            nqCompilerNextToken(source, fn.start, &token)
+            nqCompilerNextToken(source, token.end, &token)
+            nqCompilerNextToken(source, token.end, &token)
+            if token.kind == nqTokenOperator() && token.first == 60 as u8 {
+                let position: usize = token.end
+                let firstGeneric: isize = nqAstNoNode()
+                let lastGeneric: isize = nqAstNoNode()
+                while true {
+                    let name: NqToken
+                    nqCompilerNextToken(source, position, &name)
+                    if name.kind != nqTokenIdentifier() { return nqGenericMetadataMalformed() }
+                    let nameNode: isize = nqAstArenaPush(nodes, count, nqAstName(), name.start, name.end)
+                    if nameNode < 0 as isize { return nqGenericMetadataCapacity() }
+                    let parameter: isize = nqAstArenaPush(nodes, count, nqAstParameter(), name.start, name.end)
+                    if parameter < 0 as isize { return nqGenericMetadataCapacity() }
+                    nodes[parameter as usize].left = nameNode
+                    nodes[parameter as usize].typeCode = nqAstTypeGeneric()
+                    nodes[parameter as usize].typeSymbol = nqTypeNameSymbol(source, name.start, name.end)
+                    nodes[parameter as usize].flags = nqAstFlagGeneric()
+                    position = name.end
+                    let separator: NqToken
+                    nqCompilerNextToken(source, position, &separator)
+                    if separator.kind == nqTokenPunctuation() && separator.first == 58 as u8 {
+                        let constraint: NqToken
+                        nqCompilerNextToken(source, separator.end, &constraint)
+                        if constraint.kind != nqTokenIdentifier() { return nqGenericMetadataMalformed() }
+                        nodes[parameter as usize].elementTypeSymbol = nqTypeNameSymbol(source, constraint.start, constraint.end)
+                        nodes[parameter as usize].end = constraint.end
+                        position = constraint.end
+                        nqCompilerNextToken(source, position, &separator)
+                    }
+                    if !nqAstAppend(nodes, &firstGeneric, &lastGeneric, parameter) { return nqGenericMetadataCapacity() }
+                    fn.genericCount = fn.genericCount + 1 as usize
+                    if separator.kind == nqTokenOperator() && separator.first == 62 as u8 { position = separator.end break }
+                    if separator.kind != nqTokenPunctuation() || separator.first != 44 as u8 { return nqGenericMetadataMalformed() }
+                    position = separator.end
+                }
+                fn.genericFirst = firstGeneric
+            }
+        }
+        cursor = fn.next
+    }
+    return nqGenericMetadataOk()
+}
+
+export function nqGenericMetadataFind(nodes: []NqAstNode, functionIndex: isize, symbol: u64): isize {
+    if functionIndex < 0 as isize || functionIndex as usize >= len(nodes) { return nqAstNoNode() }
+    let cursor: isize = nodes[functionIndex as usize].genericFirst
+    while cursor >= 0 as isize {
+        if cursor as usize >= len(nodes) { return nqAstNoNode() }
+        if nodes[cursor as usize].typeSymbol == symbol { return cursor }
+        cursor = nodes[cursor as usize].next
+    }
+    return nqAstNoNode()
+}

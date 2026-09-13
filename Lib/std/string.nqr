@@ -4,3 +4,62 @@ export function string_length(value: string): usize { return textLength(value) }
 export function string_is_empty(value: string): bool { return textLength(value) == 0 as usize }
 export function string_nonempty(value: string): bool { return textLength(value) > 0 as usize }
 export function string_same_length(a: string, b: string): bool { return textLength(a) == textLength(b) }
+export function string_equals(a: string, b: string): bool { return a == b }
+export function string_not_equals(a: string, b: string): bool { return a != b }
+
+export function string_concat(left: string, right: string): string { return left + right }
+export function string_concat3(a: string, b: string, c: string): string { return a + b + c }
+export function string_concat4(a: string, b: string, c: string, d: string): string { return a + b + c + d }
+export function string_or(value: string, fallback: string): string { if string_is_empty(value) { return fallback } return value }
+
+export function string_repeat(value: string, count: usize): string {
+    let result: string = ""
+    let i: usize = 0 as usize
+    while i < count { result = result + value i = i + 1 as usize }
+    return result
+}
+
+export function string_pad_left(value: string, width: usize, padding: string): string {
+    let length: usize = textLength(value)
+    if length >= width || string_is_empty(padding) { return value }
+    let result: string = ""
+    let remaining: usize = width - length
+    let i: usize = 0 as usize
+    while i < remaining { result = result + padding i = i + 1 as usize }
+    return result + value
+}
+
+export function string_pad_right(value: string, width: usize, padding: string): string {
+    let length: usize = textLength(value)
+    if length >= width || string_is_empty(padding) { return value }
+    let result: string = value
+    let remaining: usize = width - length
+    let i: usize = 0 as usize
+    while i < remaining { result = result + padding i = i + 1 as usize }
+    return result
+}
+
+export function string_center(value: string, width: usize, padding: string): string {
+    let length: usize = textLength(value)
+    if length >= width || string_is_empty(padding) { return value }
+    let total: usize = width - length
+    let left: usize = total / 2 as usize
+    let right: usize = total - left
+    return string_repeat(padding, left) + value + string_repeat(padding, right)
+}
+
+export function string_join2(a: string, separator: string, b: string): string {
+    if string_is_empty(a) { return b }
+    if string_is_empty(b) { return a }
+    return a + separator + b
+}
+
+export function string_join3(a: string, b: string, c: string, separator: string): string {
+    return string_join2(string_join2(a, separator, b), separator, c)
+}
+
+export function string_surround(value: string, prefix: string, suffix: string): string { return prefix + value + suffix }
+export function string_quote(value: string): string { return "\"" + value + "\"" }
+export function string_parenthesize(value: string): string { return "(" + value + ")" }
+export function string_bracket(value: string): string { return "[" + value + "]" }
+export function string_brace(value: string): string { return "{" + value + "}" }

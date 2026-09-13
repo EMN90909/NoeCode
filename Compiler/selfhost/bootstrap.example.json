@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "note": "Copy this file to Compiler/selfhost/bootstrap-local.json. Replace every null command with a command that exercises the actual local Noqeri toolchain. Do not set release_needs_cpp=false until the normal release build no longer uses C++.",
+  "stage0_built_stage1": false,
+  "release_needs_cpp": true,
+  "artifacts": {
+    "stage2": "build/bootstrap/noqeri-stage2",
+    "rebuilt": "build/bootstrap/noqeri-stage2-rebuilt"
+  },
+  "commands": {
+    "stage1_builds_stage2": null,
+    "stage2_rebuilds_compiler": null,
+    "semantic_equivalence": null
+  },
+  "suites": {
+    "frontend": null,
+    "nir": null,
+    "optimizer": null,
+    "object_writers": null,
+    "formatter": null,
+    "lsp": null,
+    "package_manager": null,
+    "fuzz": null,
+    "race": null,
+    "memory": null,
+    "overflow": null,
+    "reproducible_build": null,
+    "practical_corpus": null
+  }
+}

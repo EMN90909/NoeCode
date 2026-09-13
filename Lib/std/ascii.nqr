@@ -1,6 +1,379 @@
 module noqeri.std.ascii
 
-export function ascii_clamp(value: int, low: int, high: int): int { if value < low { return low } if value > high { return high } return value }
-export function ascii_between(value: int, low: int, high: int): bool { return value >= low && value <= high }
-export function ascii_min(a: int, b: int): int { if a < b { return a } return b }
-export function ascii_max(a: int, b: int): int { if a > b { return a } return b }
+// ASCII classification and conversion helpers.
+// The API deliberately uses integer/byte primitives so it stays useful in
+// freestanding programs and does not require Unicode tables.
+
+export function ascii_nul(): u8 { return 0 as u8 }
+export function ascii_tab(): u8 { return 9 as u8 }
+export function ascii_lf(): u8 { return 10 as u8 }
+export function ascii_cr(): u8 { return 13 as u8 }
+export function ascii_space(): u8 { return 32 as u8 }
+export function ascii_delete(): u8 { return 127 as u8 }
+
+export function ascii_is_valid(value: int): bool {
+    return value >= 0 && value <= 127
+}
+
+export function ascii_is_control(value: int): bool {
+    return ascii_is_valid(value) && (value < 32 || value == 127)
+}
+
+export function ascii_is_printable(value: int): bool {
+    return value >= 32 && value <= 126
+}
+
+export function ascii_is_graphic(value: int): bool {
+    return value >= 33 && value <= 126
+}
+
+export function ascii_is_space(value: int): bool {
+    return value == 32 || value == 9 || value == 10 || value == 11 || value == 12 || value == 13
+}
+
+export function ascii_is_horizontal_space(value: int): bool {
+    return value == 32 || value == 9
+}
+
+export function ascii_is_vertical_space(value: int): bool {
+    return value == 10 || value == 11 || value == 12 || value == 13
+}
+
+export function ascii_is_digit(value: int): bool {
+    return value >= 48 && value <= 57
+}
+
+export function ascii_is_lower(value: int): bool {
+    return value >= 97 && value <= 122
+}
+
+export function ascii_is_upper(value: int): bool {
+    return value >= 65 && value <= 90
+}
+
+export function ascii_is_alpha(value: int): bool {
+    return ascii_is_lower(value) || ascii_is_upper(value)
+}
+
+export function ascii_is_alnum(value: int): bool {
+    return ascii_is_alpha(value) || ascii_is_digit(value)
+}
+
+export function ascii_is_hex_digit(value: int): bool {
+    return ascii_is_digit(value) || (value >= 65 && value <= 70) || (value >= 97 && value <= 102)
+}
+
+export function ascii_is_oct_digit(value: int): bool {
+    return value >= 48 && value <= 55
+}
+
+export function ascii_is_bin_digit(value: int): bool {
+    return value == 48 || value == 49
+}
+
+export function ascii_is_punctuation(value: int): bool {
+    if !ascii_is_printable(value) { return false }
+    return !ascii_is_alnum(value) && value != 32
+}
+
+export function ascii_is_identifier_start(value: int): bool {
+    return ascii_is_alpha(value) || value == 95
+}
+
+export function ascii_is_identifier_continue(value: int): bool {
+    return ascii_is_identifier_start(value) || ascii_is_digit(value)
+}
+
+export function ascii_is_quote(value: int): bool {
+    return value == 34 || value == 39
+}
+
+export function ascii_is_path_separator(value: int): bool {
+    return value == 47 || value == 92
+}
+
+export function ascii_is_newline(value: int): bool {
+    return value == 10 || value == 13
+}
+
+export function ascii_to_lower(value: int): int {
+    if ascii_is_upper(value) { return value + 32 }
+    return value
+}
+
+export function ascii_to_upper(value: int): int {
+    if ascii_is_lower(value) { return value - 32 }
+    return value
+}
+
+export function ascii_toggle_case(value: int): int {
+    if ascii_is_lower(value) { return value - 32 }
+    if ascii_is_upper(value) { return value + 32 }
+    return value
+}
+
+export function ascii_digit_value(value: int): int {
+    if ascii_is_digit(value) { return value - 48 }
+    return -1
+}
+
+export function ascii_hex_value(value: int): int {
+    if ascii_is_digit(value) { return value - 48 }
+    if value >= 65 && value <= 70 { return value - 55 }
+    if value >= 97 && value <= 102 { return value - 87 }
+    return -1
+}
+
+export function ascii_oct_value(value: int): int {
+    if ascii_is_oct_digit(value) { return value - 48 }
+    return -1
+}
+
+export function ascii_bin_value(value: int): int {
+    if ascii_is_bin_digit(value) { return value - 48 }
+    return -1
+}
+
+export function ascii_from_digit(value: int): int {
+    if value < 0 || value > 9 { return -1 }
+    return 48 + value
+}
+
+export function ascii_from_hex_lower(value: int): int {
+    if value >= 0 && value <= 9 { return 48 + value }
+    if value >= 10 && value <= 15 { return 87 + value }
+    return -1
+}
+
+export function ascii_from_hex_upper(value: int): int {
+    if value >= 0 && value <= 9 { return 48 + value }
+    if value >= 10 && value <= 15 { return 55 + value }
+    return -1
+}
+
+export function ascii_equal_ignore_case(a: int, b: int): bool {
+    return ascii_to_lower(a) == ascii_to_lower(b)
+}
+
+export function ascii_compare_ignore_case(a: int, b: int): int {
+    let left: int = ascii_to_lower(a)
+    let right: int = ascii_to_lower(b)
+    if left < right { return -1 }
+    if left > right { return 1 }
+    return 0
+}
+
+export function ascii_clamp(value: int, low: int, high: int): int {
+    if value < low { return low }
+    if value > high { return high }
+    return value
+}
+
+export function ascii_between(value: int, low: int, high: int): bool {
+    return value >= low && value <= high
+}
+
+export function ascii_min(a: int, b: int): int {
+    if a < b { return a }
+    return b
+}
+
+export function ascii_max(a: int, b: int): int {
+    if a > b { return a }
+    return b
+}
+
+export function ascii_count_digits(data: []u8): usize {
+    let count: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(data) {
+        if ascii_is_digit(data[i] as int) { count = count + 1 as usize }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function ascii_count_alpha(data: []u8): usize {
+    let count: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(data) {
+        if ascii_is_alpha(data[i] as int) { count = count + 1 as usize }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function ascii_count_alnum(data: []u8): usize {
+    let count: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(data) {
+        if ascii_is_alnum(data[i] as int) { count = count + 1 as usize }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function ascii_count_space(data: []u8): usize {
+    let count: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(data) {
+        if ascii_is_space(data[i] as int) { count = count + 1 as usize }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function ascii_all_digits(data: []u8): bool {
+    if len(data) == 0 as usize { return false }
+    let i: usize = 0 as usize
+    while i < len(data) {
+        if !ascii_is_digit(data[i] as int) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function ascii_all_hex(data: []u8): bool {
+    if len(data) == 0 as usize { return false }
+    let i: usize = 0 as usize
+    while i < len(data) {
+        if !ascii_is_hex_digit(data[i] as int) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function ascii_all_printable(data: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(data) {
+        if !ascii_is_printable(data[i] as int) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function ascii_all_identifier(data: []u8): bool {
+    if len(data) == 0 as usize { return false }
+    if !ascii_is_identifier_start(data[0 as usize] as int) { return false }
+    let i: usize = 1 as usize
+    while i < len(data) {
+        if !ascii_is_identifier_continue(data[i] as int) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function ascii_first_non_space(data: []u8): usize {
+    let i: usize = 0 as usize
+    while i < len(data) {
+        if !ascii_is_space(data[i] as int) { return i }
+        i = i + 1 as usize
+    }
+    return len(data)
+}
+
+export function ascii_last_non_space_end(data: []u8): usize {
+    let end: usize = len(data)
+    while end > 0 as usize {
+        if !ascii_is_space(data[end - 1 as usize] as int) { return end }
+        end = end - 1 as usize
+    }
+    return 0 as usize
+}
+
+export function ascii_find_byte(data: []u8, value: u8): usize {
+    let i: usize = 0 as usize
+    while i < len(data) {
+        if data[i] == value { return i }
+        i = i + 1 as usize
+    }
+    return len(data)
+}
+
+export function ascii_rfind_byte(data: []u8, value: u8): usize {
+    let end: usize = len(data)
+    while end > 0 as usize {
+        let i: usize = end - 1 as usize
+        if data[i] == value { return i }
+        end = i
+    }
+    return len(data)
+}
+
+export function ascii_starts_with_ignore_case(data: []u8, prefix: []u8): bool {
+    if len(prefix) > len(data) { return false }
+    let i: usize = 0 as usize
+    while i < len(prefix) {
+        if !ascii_equal_ignore_case(data[i] as int, prefix[i] as int) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function ascii_ends_with_ignore_case(data: []u8, suffix: []u8): bool {
+    if len(suffix) > len(data) { return false }
+    let start: usize = len(data) - len(suffix)
+    let i: usize = 0 as usize
+    while i < len(suffix) {
+        if !ascii_equal_ignore_case(data[start + i] as int, suffix[i] as int) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function ascii_equal_bytes_ignore_case(a: []u8, b: []u8): bool {
+    if len(a) != len(b) { return false }
+    let i: usize = 0 as usize
+    while i < len(a) {
+        if !ascii_equal_ignore_case(a[i] as int, b[i] as int) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function ascii_parse_u64(data: []u8): u64 {
+    let value: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < len(data) {
+        let digit: int = ascii_digit_value(data[i] as int)
+        if digit < 0 { return 0 as u64 }
+        value = value * 10 as u64 + digit as u64
+        i = i + 1 as usize
+    }
+    return value
+}
+
+export function ascii_parse_hex_u64(data: []u8): u64 {
+    let value: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < len(data) {
+        let digit: int = ascii_hex_value(data[i] as int)
+        if digit < 0 { return 0 as u64 }
+        value = value * 16 as u64 + digit as u64
+        i = i + 1 as usize
+    }
+    return value
+}
+
+export function ascii_checksum(data: []u8): u64 {
+    let sum: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < len(data) {
+        sum = sum + data[i] as u64
+        i = i + 1 as usize
+    }
+    return sum
+}
+
+export function ascii_fnv1a32(data: []u8): u32 {
+    // Multiplication/addition form keeps this helper available before bitwise
+    // operators become part of the stable surface. It is a deterministic
+    // lightweight text fingerprint, not a cryptographic hash.
+    let hash: u32 = 2166136261 as u32
+    let i: usize = 0 as usize
+    while i < len(data) {
+        hash = (hash + data[i] as u32) * 16777619 as u32
+        i = i + 1 as usize
+    }
+    return hash
+}

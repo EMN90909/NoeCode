@@ -76,6 +76,44 @@ if NOQERI_CHECKED_OVERFLOW=1 "$NQ" run build/overflow_checked_bad.nqr >/dev/null
   exit 1
 fi
 
+# Aggregate field-path analysis must reject a field that keeps a borrow after
+# the borrowed local leaves its scope.
+cat > build/aggregate_borrow_escape.nqr <<'EOF'
+record Holder {
+    value: *i64
+}
+function bad(): int {
+    let storage: [u8; 16] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let holder: *Holder = (&storage[0 as usize]) as *Holder
+    {
+        let local: i64 = 7 as i64
+        holder.value = &local
+    }
+    let escaped: *i64 = holder.value
+    return 0
+}
+EOF
+reject_check build/aggregate_borrow_escape.nqr "aggregate field retains borrow of expired local"
+
+# Interprocedural summaries must carry escape information through a helper
+# rather than only checking direct assignments in the caller.
+cat > build/interprocedural_borrow_escape.nqr <<'EOF'
+record Holder {
+    value: *i64
+}
+function remember(holder: *Holder, value: *i64): void {
+    holder.value = value
+}
+function bad(): int {
+    let storage: [u8; 16] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let holder: *Holder = (&storage[0 as usize]) as *Holder
+    let local: i64 = 9 as i64
+    remember(holder, &local)
+    return 0
+}
+EOF
+reject_check build/interprocedural_borrow_escape.nqr "callee summary stores borrow of caller local"
+
 cat > build/web_checked_index.nqr <<'EOF'
 export function pick(index: usize): int {
     let values: [int; 3] = [4, 8, 12]
@@ -88,4 +126,4 @@ if command -v node >/dev/null 2>&1; then
   node --input-type=module -e 'import("./build/web_checked_index.mjs").then(m => { if(m.pick(1)!==8) process.exit(1); let trapped=false; try { m.pick(9) } catch(e) { trapped=e instanceof RangeError } if(!trapped) process.exit(2) })'
 fi
 
-echo "unsafe-boundary, runtime-bounds, null-check, checked-overflow, and web-safety tests passed"
+echo "unsafe-boundary, runtime-bounds, null-check, checked-overflow, aggregate-borrow, interprocedural-borrow, and web-safety tests passed"

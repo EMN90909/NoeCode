@@ -1,11 +1,61 @@
 module noqeri.std.task
 
+record Task<T> {
+    state: u64
+    value: T
+    error: isize
+}
+
 export function task_pending(): int { return 0 }
 export function task_running(): int { return 1 }
 export function task_ready(): int { return 2 }
 export function task_failed(): int { return 3 }
 export function task_cancelled(): int { return 4 }
-export function task_state_valid(state:int):bool{return state>=0&&state<=4}
-export function task_terminal(state:int):bool{return state==task_ready()||state==task_failed()||state==task_cancelled()}
-export function task_can_start(state:int):bool{return state==task_pending()}
-export function task_can_cancel(state:int):bool{return state==task_pending()||state==task_running()}
+export function task_state_valid(state: int): bool { return state >= 0 && state <= 4 }
+export function task_terminal(state: int): bool { return state == task_ready() || state == task_failed() || state == task_cancelled() }
+export function task_can_start(state: int): bool { return state == task_pending() }
+export function task_can_cancel(state: int): bool { return state == task_pending() || state == task_running() }
+
+export function task_init<T>(task: *Task<T>, fallback: T): void {
+    task.value = fallback
+    task.error = 0 as isize
+    atomic.store(&task.state, task_pending() as u64)
+}
+
+export function task_state<T>(task: *Task<T>): int { return atomic.load(&task.state) as int }
+export function task_is_terminal<T>(task: *Task<T>): bool { return task_terminal(task_state(task)) }
+export function task_is_ready<T>(task: *Task<T>): bool { return task_state(task) == task_ready() }
+export function task_is_failed<T>(task: *Task<T>): bool { return task_state(task) == task_failed() }
+export function task_is_cancelled<T>(task: *Task<T>): bool { return task_state(task) == task_cancelled() }
+
+export function task_try_start<T>(task: *Task<T>): bool {
+    return atomic.compareExchange(&task.state, task_pending() as u64, task_running() as u64) == task_pending() as u64
+}
+
+export function task_complete<T>(task: *Task<T>, value: T): bool {
+    if task_state(task) != task_running() { return false }
+    task.value = value
+    task.error = 0 as isize
+    atomic.fence()
+    return atomic.compareExchange(&task.state, task_running() as u64, task_ready() as u64) == task_running() as u64
+}
+
+export function task_fail<T>(task: *Task<T>, error: isize): bool {
+    if task_state(task) != task_running() { return false }
+    task.error = error
+    atomic.fence()
+    return atomic.compareExchange(&task.state, task_running() as u64, task_failed() as u64) == task_running() as u64
+}
+
+export function task_cancel<T>(task: *Task<T>): bool {
+    let current: u64 = atomic.load(&task.state)
+    while current == task_pending() as u64 || current == task_running() as u64 {
+        let observed: u64 = atomic.compareExchange(&task.state, current, task_cancelled() as u64)
+        if observed == current { return true }
+        current = observed
+    }
+    return false
+}
+
+export function task_value_or<T>(task: *Task<T>, fallback: T): T { if task_is_ready(task) { return task.value } return fallback }
+export function task_error<T>(task: *Task<T>): isize { if task_is_failed(task) { return task.error } return 0 as isize }

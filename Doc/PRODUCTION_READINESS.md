@@ -1,9 +1,28 @@
 # Production readiness
 
-noqeri 1.0 is on a production track, not yet a claim of full production maturity.
+Noqeri is being hardened toward production use with evidence-based gates rather than version-number claims.
 
-Already represented: cross-platform bootstrap CI, lexer/parser/type-check/NIR/interpreter pipeline, Linux x86-64 native smoke path, `.nqr` tests, project/lock format, diagnostics, formatter, LSP foundation, public policies, editor support and repository-doctor checks.
+## Implemented source surfaces
 
-Still required for a stable production release: broader positive/negative conformance and fuzzing; implemented import/module semantics; PE/COFF and Mach-O native backends; package registry/signature/trust design; stable diagnostic/compiler API policy; performance/memory regression suites; reproducible signed release artifacts; and a self-hosted compiler or formally supported long-term bootstrap strategy.
+- Noqeri-owned stage-1 bootstrap source under `Compiler/selfhost/`.
+- Noqeri-owned AST, parser-policy, semantic, NIR, optimiser, target/ABI, backend/link, formatter and LSP modules.
+- Package manager with SemVer selection, SHA-256 cache verification, offline mode, dependency-depth/conflict limits, traversal rejection and lockfiles.
+- NoqeriDB modules for limits, security, indexes, transactions, WAL/recovery policy, migrations, planning and storage capabilities.
+- Expanded standard math and a broader package/framework ecosystem.
+- Target descriptions for Windows/Linux/macOS on x86-64 and ARM64.
 
-`noqeri doctor` validates repository structure. It does not pretend the unfinished gates are complete.
+## Gates that still decide a production release
+
+A source file existing is not equivalent to a proven compiler/database/runtime implementation. Before a stable production claim, local release evidence must include:
+
+- stage1 → stage2 → stage3 compiler rebuild and semantic-equivalence comparison;
+- positive/negative language conformance and fuzzing;
+- independent validation of emitted PE/COFF, ELF and Mach-O objects;
+- executable/link tests on Windows x64/ARM64, Linux x64/ARM64, macOS x64/ARM64;
+- cross-compilation fixtures, static/shared libraries and debug-symbol validation;
+- NoqeriDB crash/fault injection, WAL recovery, corruption, transaction atomicity/isolation and index/constraint tests;
+- package-manager tamper/offline/dependency-conflict tests;
+- performance and memory regression suites;
+- reproducible signed release artifacts.
+
+The project intentionally does not use GitHub Actions as the only source of truth. These gates can be run locally and on self-managed machines without consuming GitHub-hosted Actions minutes.

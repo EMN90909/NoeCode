@@ -1,0 +1,18 @@
+module noqeri.database.catalog
+
+export function dbTypeInt(): int { return 1 }
+export function dbTypeReal(): int { return 2 }
+export function dbTypeBool(): int { return 3 }
+export function dbTypeText(): int { return 4 }
+export function dbTypeBytes(): int { return 5 }
+
+export function dbColumnTypeValid(kind: int): bool { return kind >= dbTypeInt() && kind <= dbTypeBytes() }
+export function dbColumnCountValid(count: usize): bool { return count > 0 as usize && count <= 256 as usize }
+export function dbPrimaryKeyCountValid(count: usize): bool { return count <= 1 as usize }
+export function dbIndexColumnCountValid(count: usize): bool { return count > 0 as usize && count <= 16 as usize }
+
+export function dbColumnFlagsValid(required: bool, unique: bool, key: bool): bool {
+    if key && !unique { return false }
+    if key && !required { return false }
+    return true
+}

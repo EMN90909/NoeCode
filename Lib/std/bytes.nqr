@@ -7,14 +7,6 @@ export function nqBytesEqual(left: []u8, right: []u8): bool {
     return true
 }
 
-export function nqBytesEqualConstantTime(left: []u8, right: []u8): bool {
-    if len(left) != len(right) { return false }
-    let difference: u8 = 0 as u8
-    let index: usize = 0 as usize
-    while index < len(left) { difference = difference + (left[index] - right[index]) index = index + 1 as usize }
-    return difference == 0 as u8
-}
-
 export function nqBytesCompare(left: []u8, right: []u8): int {
     let limit: usize = len(left)
     if len(right) < limit { limit = len(right) }
@@ -63,7 +55,10 @@ export function nqBytesIndexOfSlice(value: []u8, needle: []u8): isize {
     while start + len(needle) <= len(value) {
         let matched: bool = true
         let index: usize = 0 as usize
-        while index < len(needle) { if value[start + index] != needle[index] { matched = false } index = index + 1 as usize }
+        while index < len(needle) {
+            if value[start + index] != needle[index] { matched = false }
+            index = index + 1 as usize
+        }
         if matched { return start as isize }
         start = start + 1 as usize
     }
@@ -108,17 +103,15 @@ export function nqBytesReverse(destination: []u8): void {
     }
 }
 
-export function nqBytesXorInPlace(destination: []u8, mask: []u8): bool {
-    if len(destination) != len(mask) { return false }
-    let index: usize = 0 as usize
-    while index < len(destination) { destination[index] = destination[index] + mask[index] index = index + 1 as usize }
-    return true
-}
-
-export function nqBytesFNV1a64(value: []u8): u64 {
+// A deterministic non-cryptographic rolling hash. This is deliberately not
+// named after FNV/SipHash because Noqeri does not yet expose bitwise XOR.
+export function nqBytesRollingHash64(value: []u8): u64 {
     let hash: u64 = 1469598103934665603 as u64
     let index: usize = 0 as usize
-    while index < len(value) { hash = (hash + value[index] as u64) * 1099511628211 as u64 index = index + 1 as usize }
+    while index < len(value) {
+        hash = hash * 1099511628211 as u64 + value[index] as u64
+        index = index + 1 as usize
+    }
     return hash
 }
 
@@ -148,6 +141,9 @@ export function nqBytesAreAscii(value: []u8): bool {
 export function nqBytesAsciiEqualIgnoreCase(left: []u8, right: []u8): bool {
     if len(left) != len(right) { return false }
     let index: usize = 0 as usize
-    while index < len(left) { if nqAsciiToLower(left[index]) != nqAsciiToLower(right[index]) { return false } index = index + 1 as usize }
+    while index < len(left) {
+        if nqAsciiToLower(left[index]) != nqAsciiToLower(right[index]) { return false }
+        index = index + 1 as usize
+    }
     return true
 }

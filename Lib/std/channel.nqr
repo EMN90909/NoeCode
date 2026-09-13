@@ -1,5 +1,272 @@
 module noqeri.std.channel
 
+// Channel<T> is a bounded nonblocking mailbox backed by caller-owned storage.
+// It deliberately does not hide an OS/thread wait primitive: send/receive say
+// immediately whether progress was possible. Schedulers can build blocking or
+// async waiting on top of this deterministic state machine.
+record Channel<T> {
+    data: *T
+    capacity: usize
+    length: usize
+    head: usize
+    closed: bool
+    sent: u64
+    received: u64
+    rejected_sends: u64
+    empty_receives: u64
+}
+
+export function channel_init<T>(channel: *Channel<T>, data: *T, capacity: usize): bool {
+    if channel == null { return false }
+    if capacity > 0 as usize && data == null { return false }
+    channel.data = data
+    channel.capacity = capacity
+    channel.length = 0 as usize
+    channel.head = 0 as usize
+    channel.closed = false
+    channel.sent = 0 as u64
+    channel.received = 0 as u64
+    channel.rejected_sends = 0 as u64
+    channel.empty_receives = 0 as u64
+    return true
+}
+
+export function channel_invariant<T>(channel: *Channel<T>): bool {
+    if channel == null { return false }
+    if channel.length > channel.capacity { return false }
+    if channel.capacity > 0 as usize && channel.data == null { return false }
+    if channel.capacity == 0 as usize { return channel.length == 0 as usize && channel.head == 0 as usize }
+    return channel.head < channel.capacity
+}
+
+export function channel_capacity<T>(channel: *Channel<T>): usize {
+    if channel == null { return 0 as usize }
+    return channel.capacity
+}
+
+export function channel_length<T>(channel: *Channel<T>): usize {
+    if channel == null { return 0 as usize }
+    return channel.length
+}
+
+export function channel_remaining<T>(channel: *Channel<T>): usize {
+    if channel == null || channel.length >= channel.capacity { return 0 as usize }
+    return channel.capacity - channel.length
+}
+
+export function channel_empty<T>(channel: *Channel<T>): bool { return channel == null || channel.length == 0 as usize }
+export function channel_full<T>(channel: *Channel<T>): bool { return channel != null && channel.capacity > 0 as usize && channel.length >= channel.capacity }
+export function channel_closed<T>(channel: *Channel<T>): bool { return channel == null || channel.closed }
+export function channel_open<T>(channel: *Channel<T>): bool { return channel != null && !channel.closed }
+
+export function channel_can_send<T>(channel: *Channel<T>): bool {
+    return channel != null && !channel.closed && channel.capacity > 0 as usize && channel.length < channel.capacity && channel.data != null
+}
+
+export function channel_can_receive<T>(channel: *Channel<T>): bool {
+    return channel != null && channel.length > 0 as usize && channel.data != null
+}
+
+export function channel_drained<T>(channel: *Channel<T>): bool {
+    return channel != null && channel.closed && channel.length == 0 as usize
+}
+
+function channel_slot<T>(channel: *Channel<T>, logicalIndex: usize): usize {
+    if channel == null || channel.capacity == 0 as usize { return 0 as usize }
+    return (channel.head + logicalIndex) % channel.capacity
+}
+
+function channel_tail<T>(channel: *Channel<T>): usize {
+    if channel == null || channel.capacity == 0 as usize { return 0 as usize }
+    return (channel.head + channel.length) % channel.capacity
+}
+
+export function channel_ref<T>(channel: *Channel<T>, logicalIndex: usize): *T {
+    if channel == null || channel.data == null || logicalIndex >= channel.length { return null as *T }
+    return &channel.data[channel_slot(channel, logicalIndex)]
+}
+
+export function channel_peek_or<T: Copy>(channel: *Channel<T>, fallback: T): T {
+    let value: *T = channel_ref(channel, 0 as usize)
+    if value == null { return fallback }
+    return *value
+}
+
+export function channel_peek_newest_or<T: Copy>(channel: *Channel<T>, fallback: T): T {
+    if channel == null || channel.length == 0 as usize { return fallback }
+    let value: *T = channel_ref(channel, channel.length - 1 as usize)
+    if value == null { return fallback }
+    return *value
+}
+
+export function channel_try_send<T: Copy>(channel: *Channel<T>, value: T): bool {
+    if !channel_can_send(channel) {
+        if channel != null { channel.rejected_sends = channel.rejected_sends + 1 as u64 }
+        return false
+    }
+    let slot: usize = channel_tail(channel)
+    channel.data[slot] = value
+    channel.length = channel.length + 1 as usize
+    channel.sent = channel.sent + 1 as u64
+    return true
+}
+
+export function channel_try_send_many<T: Copy>(channel: *Channel<T>, values: []T): usize {
+    if channel == null { return 0 as usize }
+    let sent: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(values) {
+        if !channel_try_send(channel, values[i]) { return sent }
+        sent = sent + 1 as usize
+        i = i + 1 as usize
+    }
+    return sent
+}
+
+export function channel_try_receive<T: Copy>(channel: *Channel<T>, out: *T): bool {
+    if out == null || !channel_can_receive(channel) {
+        if channel != null { channel.empty_receives = channel.empty_receives + 1 as u64 }
+        return false
+    }
+    *out = channel.data[channel.head]
+    channel.head = (channel.head + 1 as usize) % channel.capacity
+    channel.length = channel.length - 1 as usize
+    channel.received = channel.received + 1 as u64
+    if channel.length == 0 as usize { channel.head = 0 as usize }
+    return true
+}
+
+export function channel_receive_or<T: Copy>(channel: *Channel<T>, fallback: T): T {
+    let value: T = fallback
+    if !channel_try_receive(channel, &value) { return fallback }
+    return value
+}
+
+export function channel_receive_many<T: Copy>(channel: *Channel<T>, output: []T): usize {
+    if channel == null { return 0 as usize }
+    let received: usize = 0 as usize
+    while received < len(output) {
+        let value: T = output[received]
+        if !channel_try_receive(channel, &value) { return received }
+        output[received] = value
+        received = received + 1 as usize
+    }
+    return received
+}
+
+export function channel_close<T>(channel: *Channel<T>): bool {
+    if channel == null || channel.closed { return false }
+    channel.closed = true
+    return true
+}
+
+export function channel_reopen_if_empty<T>(channel: *Channel<T>): bool {
+    if channel == null || !channel.closed || channel.length != 0 as usize { return false }
+    channel.closed = false
+    return true
+}
+
+export function channel_clear<T>(channel: *Channel<T>): bool {
+    if channel == null { return false }
+    channel.length = 0 as usize
+    channel.head = 0 as usize
+    return true
+}
+
+export function channel_reset<T>(channel: *Channel<T>): bool {
+    if channel == null { return false }
+    channel.length = 0 as usize
+    channel.head = 0 as usize
+    channel.closed = false
+    channel.sent = 0 as u64
+    channel.received = 0 as u64
+    channel.rejected_sends = 0 as u64
+    channel.empty_receives = 0 as u64
+    return true
+}
+
+export function channel_sent_count<T>(channel: *Channel<T>): u64 {
+    if channel == null { return 0 as u64 }
+    return channel.sent
+}
+
+export function channel_received_count<T>(channel: *Channel<T>): u64 {
+    if channel == null { return 0 as u64 }
+    return channel.received
+}
+
+export function channel_rejected_send_count<T>(channel: *Channel<T>): u64 {
+    if channel == null { return 0 as u64 }
+    return channel.rejected_sends
+}
+
+export function channel_empty_receive_count<T>(channel: *Channel<T>): u64 {
+    if channel == null { return 0 as u64 }
+    return channel.empty_receives
+}
+
+export function channel_utilization_per_mille<T>(channel: *Channel<T>): usize {
+    if channel == null || channel.capacity == 0 as usize { return 0 as usize }
+    return channel.length * 1000 as usize / channel.capacity
+}
+
+export function channel_copy_into<T: Copy>(channel: *Channel<T>, output: []T): usize {
+    if channel == null { return 0 as usize }
+    let count: usize = channel.length
+    if count > len(output) { count = len(output) }
+    let i: usize = 0 as usize
+    while i < count {
+        let value: *T = channel_ref(channel, i)
+        if value != null { output[i] = *value }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function channel_contains<T: Eq + Copy>(channel: *Channel<T>, value: T): bool {
+    if channel == null { return false }
+    let i: usize = 0 as usize
+    while i < channel.length {
+        let item: *T = channel_ref(channel, i)
+        if item != null && *item == value { return true }
+        i = i + 1 as usize
+    }
+    return false
+}
+
+export function channel_count_value<T: Eq + Copy>(channel: *Channel<T>, value: T): usize {
+    if channel == null { return 0 as usize }
+    let count: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < channel.length {
+        let item: *T = channel_ref(channel, i)
+        if item != null && *item == value { count = count + 1 as usize }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function channel_drop_oldest<T>(channel: *Channel<T>, count: usize): usize {
+    if channel == null || channel.length == 0 as usize { return 0 as usize }
+    let removed: usize = count
+    if removed > channel.length { removed = channel.length }
+    if channel.capacity > 0 as usize { channel.head = (channel.head + removed) % channel.capacity }
+    channel.length = channel.length - removed
+    if channel.length == 0 as usize { channel.head = 0 as usize }
+    return removed
+}
+
+export function channel_keep_newest<T>(channel: *Channel<T>, count: usize): usize {
+    if channel == null { return 0 as usize }
+    if count >= channel.length { return channel.length }
+    channel_drop_oldest(channel, channel.length - count)
+    return channel.length
+}
+
+export function channel_has_wrapped<T>(channel: *Channel<T>): bool {
+    return channel != null && channel.length > 0 as usize && channel.capacity > 0 as usize && channel.head + channel.length > channel.capacity
+}
+
 export function channel_state_valid(state: int): bool { return state >= 0 && state <= 4 }
 export function channel_can_transition(current: int, next: int): bool { if current < 0 || next < 0 { return false } return next >= current || next == 0 }
 export function channel_default_spin_limit(): usize { return 64 as usize }

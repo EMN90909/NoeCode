@@ -1,14 +1,91 @@
 module noqeri.std.fs
 
-extern function fsExists(path: string): bool
-extern function fsIsDirectory(path: string): bool
-extern function fsCreateDirectory(path: string): isize
-extern function fsRemove(path: string): isize
-extern function fsRename(from: string, to: string): isize
+unsafe extern function fsExists(path: string): bool
+unsafe extern function fsIsDirectory(path: string): bool
+unsafe extern function fsCreateDirectory(path: string): isize
+unsafe extern function fsCreateDirectoryAll(path: string): isize
+unsafe extern function fsRemove(path: string): isize
+unsafe extern function fsRemoveAll(path: string): isize
+unsafe extern function fsRename(from: string, to: string): isize
+unsafe extern function fsReadText(path: string): string
+unsafe extern function fsWriteText(path: string, value: string): isize
+unsafe extern function fsAppendText(path: string, value: string): isize
+unsafe extern function fsCopy(from: string, to: string): isize
+unsafe extern function fsAtomicReplace(temp: string, destination: string): isize
+unsafe extern function fsMetadata(path: string, field: int): i64
+unsafe extern function fsSetPermissions(path: string, mode: u32): isize
+unsafe extern function fsReadLink(path: string): string
+unsafe extern function fsCreateSymlink(target: string, linkPath: string): isize
+unsafe extern function fsTempFile(prefix: string): string
+unsafe extern function fsTempDirectory(prefix: string): string
+unsafe extern function fsWalkOpen(root: string): isize
+unsafe extern function fsWalkNext(handle: usize): string
+unsafe extern function fsWalkClose(handle: usize): void
+unsafe extern function fsWatchOpen(root: string, recursive: bool): isize
+unsafe extern function fsWatchNext(handle: usize, timeoutMillis: i64): string
+unsafe extern function fsWatchClose(handle: usize): void
+unsafe extern function fsMmapOpen(path: string, writable: bool): isize
+unsafe extern function fsMmapAddress(handle: usize): usize
+unsafe extern function fsMmapLength(handle: usize): usize
+unsafe extern function fsMmapFlush(handle: usize): isize
+unsafe extern function fsMmapClose(handle: usize): void
 
-export function fs_exists(path: string): bool { return fsExists(path) }
-export function fs_is_directory(path: string): bool { return fsIsDirectory(path) }
-export function fs_create_directory(path: string): isize { return fsCreateDirectory(path) }
-export function fs_remove(path: string): isize { return fsRemove(path) }
-export function fs_rename(from: string, to: string): isize { return fsRename(from,to) }
-export function fs_status_ok(status: isize): bool { return status >= 0 as isize }
+export function metadata_size():int{return 1}
+export function metadata_modified_millis():int{return 2}
+export function metadata_mode():int{return 3}
+export function metadata_is_symlink():int{return 4}
+
+export function exists(path:string):bool{unsafe{return fsExists(path)}}
+export function is_directory(path:string):bool{unsafe{return fsIsDirectory(path)}}
+export function create_directory(path:string):isize{if len(path)==0 as usize{return -2 as isize} unsafe{return fsCreateDirectory(path)}}
+export function create_directories(path:string):isize{if len(path)==0 as usize{return -2 as isize} unsafe{return fsCreateDirectoryAll(path)}}
+export function remove(path:string):isize{if len(path)==0 as usize{return -2 as isize} unsafe{return fsRemove(path)}}
+export function remove_all(path:string):isize{if len(path)==0 as usize{return -2 as isize} unsafe{return fsRemoveAll(path)}}
+export function rename(from:string,to:string):isize{if len(from)==0 as usize||len(to)==0 as usize{return -2 as isize} unsafe{return fsRename(from,to)}}
+export function read_text(path:string):string{if len(path)==0 as usize{return ""} unsafe{return fsReadText(path)}}
+export function write_text(path:string,value:string):isize{if len(path)==0 as usize{return -2 as isize} unsafe{return fsWriteText(path,value)}}
+export function append_text(path:string,value:string):isize{if len(path)==0 as usize{return -2 as isize} unsafe{return fsAppendText(path,value)}}
+export function copy(from:string,to:string):isize{if len(from)==0 as usize||len(to)==0 as usize{return -2 as isize} unsafe{return fsCopy(from,to)}}
+export function atomic_replace(temp:string,destination:string):isize{if len(temp)==0 as usize||len(destination)==0 as usize{return -2 as isize} unsafe{return fsAtomicReplace(temp,destination)}}
+export function metadata(path:string,field:int):i64{if len(path)==0 as usize{return -1 as i64} unsafe{return fsMetadata(path,field)}}
+export function set_permissions(path:string,mode:u32):isize{if len(path)==0 as usize{return -2 as isize} unsafe{return fsSetPermissions(path,mode)}}
+export function read_link(path:string):string{if len(path)==0 as usize{return ""} unsafe{return fsReadLink(path)}}
+export function symlink(target:string,linkPath:string):isize{if len(target)==0 as usize||len(linkPath)==0 as usize{return -2 as isize} unsafe{return fsCreateSymlink(target,linkPath)}}
+export function temp_file(prefix:string):string{unsafe{return fsTempFile(prefix)}}
+export function temp_directory(prefix:string):string{unsafe{return fsTempDirectory(prefix)}}
+
+export function walk_open(root:string):isize{if len(root)==0 as usize{return -2 as isize} unsafe{return fsWalkOpen(root)}}
+export function walk_next(handle:usize):string{if handle==0 as usize{return ""} unsafe{return fsWalkNext(handle)}}
+export function walk_close(handle:usize):void{if handle!=0 as usize{unsafe{fsWalkClose(handle)}}}
+
+export function watch_open(root:string,recursive:bool):isize{if len(root)==0 as usize{return -2 as isize} unsafe{return fsWatchOpen(root,recursive)}}
+export function watch_next(handle:usize,timeoutMillis:i64):string{if handle==0 as usize||timeoutMillis<0 as i64{return ""} unsafe{return fsWatchNext(handle,timeoutMillis)}}
+export function watch_close(handle:usize):void{if handle!=0 as usize{unsafe{fsWatchClose(handle)}}}
+
+record Mmap {
+    handle: usize
+    address: usize
+    length: usize
+}
+
+export function mmap(path:string,writable:bool):Mmap{
+    if len(path)==0 as usize{return Mmap{handle:0 as usize,address:0 as usize,length:0 as usize}}
+    let raw:isize=0 as isize
+    unsafe{raw=fsMmapOpen(path,writable)}
+    if raw<0 as isize{return Mmap{handle:0 as usize,address:0 as usize,length:0 as usize}}
+    let handle:usize=raw as usize
+    let address:usize=0 as usize
+    let length:usize=0 as usize
+    unsafe{address=fsMmapAddress(handle);length=fsMmapLength(handle)}
+    return Mmap{handle:handle,address:address,length:length}
+}
+export function mmap_flush(mapping:Mmap):isize{if mapping.handle==0 as usize{return -2 as isize} unsafe{return fsMmapFlush(mapping.handle)}}
+export function mmap_close(mapping:Mmap):void{if mapping.handle!=0 as usize{unsafe{fsMmapClose(mapping.handle)}}}
+
+// Compatibility aliases retained for existing source.
+export function fs_exists(path:string):bool{return exists(path)}
+export function fs_is_directory(path:string):bool{return is_directory(path)}
+export function fs_create_directory(path:string):isize{return create_directory(path)}
+export function fs_remove(path:string):isize{return remove(path)}
+export function fs_rename(from:string,to:string):isize{return rename(from,to)}
+export function fs_status_ok(status:isize):bool{return status>=0 as isize}

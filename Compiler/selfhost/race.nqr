@@ -1,0 +1,105 @@
+module noqeri.compiler.selfhost.race
+import "nir.nqr"
+
+record NqRaceAccessInfo {
+    kind: int
+    symbol: u64
+    addressValue: isize
+    width: usize
+    sourceStart: usize
+    sourceEnd: usize
+    atomicAccess: bool
+}
+
+export function nqRaceAccessNone(): int { return 0 }
+export function nqRaceAccessRead(): int { return 1 }
+export function nqRaceAccessWrite(): int { return 2 }
+export function nqRaceAccessReadWrite(): int { return 3 }
+export function nqRaceAccessFence(): int { return 4 }
+
+export function nqRaceInstructionNeedsEvent(instruction: *NqNirInstruction): bool {
+    if instruction == null { return false }
+    let op: int = instruction.opcode
+    return op == nqNirLoad() || op == nqNirStore() || op == nqNirLoadMemory() || op == nqNirStoreMemory() || op == nqNirAtomicLoad() || op == nqNirAtomicStore() || op == nqNirAtomicExchange() || op == nqNirCmpXchg() || op == nqNirFence()
+}
+
+export function nqRaceDescribeInstruction(instruction: *NqNirInstruction, out: *NqRaceAccessInfo): bool {
+    if instruction == null || out == null || !nqRaceInstructionNeedsEvent(instruction) { return false }
+    out.kind = nqRaceAccessNone()
+    out.symbol = instruction.symbol
+    out.addressValue = nqNirNoValue()
+    out.width = instruction.width
+    if out.width == 0 as usize { out.width = 8 as usize }
+    out.sourceStart = instruction.sourceStart
+    out.sourceEnd = instruction.sourceEnd
+    out.atomicAccess = false
+
+    if instruction.opcode == nqNirLoad() {
+        out.kind = nqRaceAccessRead()
+        return instruction.symbol != 0 as u64
+    }
+    if instruction.opcode == nqNirStore() {
+        out.kind = nqRaceAccessWrite()
+        return instruction.symbol != 0 as u64
+    }
+    if instruction.opcode == nqNirLoadMemory() {
+        out.kind = nqRaceAccessRead()
+        out.addressValue = instruction.left
+        return instruction.left >= 0 as isize
+    }
+    if instruction.opcode == nqNirStoreMemory() {
+        out.kind = nqRaceAccessWrite()
+        out.addressValue = instruction.left
+        return instruction.left >= 0 as isize
+    }
+    if instruction.opcode == nqNirAtomicLoad() {
+        out.kind = nqRaceAccessRead()
+        out.addressValue = instruction.left
+        out.atomicAccess = true
+        return instruction.left >= 0 as isize
+    }
+    if instruction.opcode == nqNirAtomicStore() {
+        out.kind = nqRaceAccessWrite()
+        out.addressValue = instruction.left
+        out.atomicAccess = true
+        return instruction.left >= 0 as isize
+    }
+    if instruction.opcode == nqNirAtomicExchange() || instruction.opcode == nqNirCmpXchg() {
+        out.kind = nqRaceAccessReadWrite()
+        out.addressValue = instruction.left
+        out.atomicAccess = true
+        return instruction.left >= 0 as isize
+    }
+    if instruction.opcode == nqNirFence() {
+        out.kind = nqRaceAccessFence()
+        out.atomicAccess = true
+        return true
+    }
+    return false
+}
+
+export function nqRaceCountInstrumented(instructions: []NqNirInstruction): usize {
+    let total: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(instructions) {
+        if nqRaceInstructionNeedsEvent(&instructions[index]) { total = total + 1 as usize }
+        index = index + 1 as usize
+    }
+    return total
+}
+
+// Runtime instrumentation can use symbols directly for named storage. Pointer
+// accesses carry the NIR address register and are resolved after register
+// allocation. This function makes unknown/uninstrumentable accesses explicit
+// instead of silently omitting them from --race.
+export function nqRaceProgramInstrumentable(instructions: []NqNirInstruction): bool {
+    let index: usize = 0 as usize
+    while index < len(instructions) {
+        if nqRaceInstructionNeedsEvent(&instructions[index]) {
+            let info: NqRaceAccessInfo
+            if !nqRaceDescribeInstruction(&instructions[index], &info) { return false }
+        }
+        index = index + 1 as usize
+    }
+    return true
+}

@@ -1,5 +1,357 @@
 module noqeri.std.pool
 
+// Pool<T> is a fixed-capacity caller-owned object pool. A PoolHandle contains
+// both a slot and its generation, so a handle released and later reused cannot
+// silently refer to a different object. This gives application code a safer
+// default than passing reusable raw slot indexes around.
+record Pool<T> {
+    data: *T
+    used: *bool
+    generations: *u64
+    capacity: usize
+    in_use: usize
+    high_watermark: usize
+    scan_hint: usize
+    allocations: u64
+    releases: u64
+}
+
+record PoolHandle {
+    index: usize
+    generation: u64
+}
+
+export function pool_invalid_generation(): u64 { return 0 as u64 }
+export function pool_first_generation(): u64 { return 1 as u64 }
+export function pool_max_generation(): u64 { return 9223372036854775806 as u64 }
+
+export function pool_init<T>(pool: *Pool<T>, data: *T, used: *bool, generations: *u64, capacity: usize): bool {
+    if pool == null { return false }
+    if capacity > 0 as usize && (data == null || used == null || generations == null) { return false }
+    pool.data = data
+    pool.used = used
+    pool.generations = generations
+    pool.capacity = capacity
+    pool.in_use = 0 as usize
+    pool.high_watermark = 0 as usize
+    pool.scan_hint = 0 as usize
+    pool.allocations = 0 as u64
+    pool.releases = 0 as u64
+    let i: usize = 0 as usize
+    while i < capacity {
+        pool.used[i] = false
+        if pool.generations[i] == pool_invalid_generation() { pool.generations[i] = pool_first_generation() }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function pool_invariant<T>(pool: *Pool<T>): bool {
+    if pool == null { return false }
+    if pool.in_use > pool.capacity || pool.high_watermark > pool.capacity { return false }
+    if pool.capacity > 0 as usize && (pool.data == null || pool.used == null || pool.generations == null) { return false }
+    if pool.capacity == 0 as usize { return pool.in_use == 0 as usize && pool.scan_hint == 0 as usize }
+    if pool.scan_hint >= pool.capacity { return false }
+    let counted: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < pool.capacity {
+        if pool.used[i] { counted = counted + 1 as usize }
+        if pool.generations[i] == pool_invalid_generation() { return false }
+        i = i + 1 as usize
+    }
+    return counted == pool.in_use
+}
+
+export function pool_capacity<T>(pool: *Pool<T>): usize {
+    if pool == null { return 0 as usize }
+    return pool.capacity
+}
+
+export function pool_length<T>(pool: *Pool<T>): usize {
+    if pool == null { return 0 as usize }
+    return pool.in_use
+}
+
+export function pool_free_count<T>(pool: *Pool<T>): usize {
+    if pool == null || pool.in_use >= pool.capacity { return 0 as usize }
+    return pool.capacity - pool.in_use
+}
+
+export function pool_empty<T>(pool: *Pool<T>): bool { return pool == null || pool.in_use == 0 as usize }
+export function pool_full<T>(pool: *Pool<T>): bool { return pool != null && pool.capacity > 0 as usize && pool.in_use >= pool.capacity }
+
+export function pool_high_watermark<T>(pool: *Pool<T>): usize {
+    if pool == null { return 0 as usize }
+    return pool.high_watermark
+}
+
+export function pool_allocation_count<T>(pool: *Pool<T>): u64 {
+    if pool == null { return 0 as u64 }
+    return pool.allocations
+}
+
+export function pool_release_count<T>(pool: *Pool<T>): u64 {
+    if pool == null { return 0 as u64 }
+    return pool.releases
+}
+
+export function pool_index_valid<T>(pool: *Pool<T>, index: usize): bool {
+    return pool != null && index < pool.capacity
+}
+
+export function pool_slot_used<T>(pool: *Pool<T>, index: usize): bool {
+    if !pool_index_valid(pool, index) || pool.used == null { return false }
+    return pool.used[index]
+}
+
+export function pool_generation<T>(pool: *Pool<T>, index: usize): u64 {
+    if !pool_index_valid(pool, index) || pool.generations == null { return pool_invalid_generation() }
+    return pool.generations[index]
+}
+
+function pool_next_generation(current: u64): u64 {
+    if current == pool_invalid_generation() || current >= pool_max_generation() { return pool_first_generation() }
+    return current + 1 as u64
+}
+
+function pool_find_free_from<T>(pool: *Pool<T>, start: usize): isize {
+    if pool == null || pool.capacity == 0 as usize || pool.used == null || pool.in_use >= pool.capacity { return -1 as isize }
+    let offset: usize = 0 as usize
+    while offset < pool.capacity {
+        let index: usize = (start + offset) % pool.capacity
+        if !pool.used[index] { return index as isize }
+        offset = offset + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function pool_next_free_index<T>(pool: *Pool<T>): isize {
+    if pool == null { return -1 as isize }
+    return pool_find_free_from(pool, pool.scan_hint)
+}
+
+export function pool_first_used_index<T>(pool: *Pool<T>): isize {
+    if pool == null || pool.used == null { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < pool.capacity {
+        if pool.used[i] { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function pool_next_used_index<T>(pool: *Pool<T>, after: usize): isize {
+    if pool == null || pool.used == null || after + 1 as usize >= pool.capacity { return -1 as isize }
+    let i: usize = after + 1 as usize
+    while i < pool.capacity {
+        if pool.used[i] { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function pool_acquire<T>(pool: *Pool<T>, handle: *PoolHandle): bool {
+    if pool == null || handle == null || pool_full(pool) { return false }
+    let found: isize = pool_find_free_from(pool, pool.scan_hint)
+    if found < 0 as isize { return false }
+    let index: usize = found as usize
+    pool.used[index] = true
+    pool.in_use = pool.in_use + 1 as usize
+    if pool.in_use > pool.high_watermark { pool.high_watermark = pool.in_use }
+    pool.allocations = pool.allocations + 1 as u64
+    handle.index = index
+    handle.generation = pool.generations[index]
+    if pool.capacity > 0 as usize { pool.scan_hint = (index + 1 as usize) % pool.capacity }
+    return true
+}
+
+export function pool_acquire_value<T: Copy>(pool: *Pool<T>, handle: *PoolHandle, value: T): bool {
+    if !pool_acquire(pool, handle) { return false }
+    pool.data[handle.index] = value
+    return true
+}
+
+export function pool_handle_valid<T>(pool: *Pool<T>, handle: *PoolHandle): bool {
+    if pool == null || handle == null { return false }
+    if !pool_index_valid(pool, handle.index) || !pool.used[handle.index] { return false }
+    return handle.generation != pool_invalid_generation() && pool.generations[handle.index] == handle.generation
+}
+
+export function pool_ref<T>(pool: *Pool<T>, handle: *PoolHandle): *T {
+    if !pool_handle_valid(pool, handle) || pool.data == null { return null as *T }
+    return &pool.data[handle.index]
+}
+
+export function pool_get_or<T: Copy>(pool: *Pool<T>, handle: *PoolHandle, fallback: T): T {
+    let value: *T = pool_ref(pool, handle)
+    if value == null { return fallback }
+    return *value
+}
+
+export function pool_set<T: Copy>(pool: *Pool<T>, handle: *PoolHandle, value: T): bool {
+    let target: *T = pool_ref(pool, handle)
+    if target == null { return false }
+    *target = value
+    return true
+}
+
+export function pool_release<T>(pool: *Pool<T>, handle: *PoolHandle): bool {
+    if !pool_handle_valid(pool, handle) { return false }
+    let index: usize = handle.index
+    pool.used[index] = false
+    pool.generations[index] = pool_next_generation(pool.generations[index])
+    if pool.in_use > 0 as usize { pool.in_use = pool.in_use - 1 as usize }
+    pool.releases = pool.releases + 1 as u64
+    pool.scan_hint = index
+    handle.generation = pool_invalid_generation()
+    return true
+}
+
+export function pool_release_index<T>(pool: *Pool<T>, index: usize): bool {
+    if !pool_slot_used(pool, index) { return false }
+    pool.used[index] = false
+    pool.generations[index] = pool_next_generation(pool.generations[index])
+    if pool.in_use > 0 as usize { pool.in_use = pool.in_use - 1 as usize }
+    pool.releases = pool.releases + 1 as u64
+    pool.scan_hint = index
+    return true
+}
+
+export function pool_release_all<T>(pool: *Pool<T>): usize {
+    if pool == null || pool.used == null || pool.generations == null { return 0 as usize }
+    let released: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < pool.capacity {
+        if pool.used[i] {
+            pool.used[i] = false
+            pool.generations[i] = pool_next_generation(pool.generations[i])
+            released = released + 1 as usize
+        }
+        i = i + 1 as usize
+    }
+    pool.in_use = 0 as usize
+    pool.scan_hint = 0 as usize
+    pool.releases = pool.releases + released as u64
+    return released
+}
+
+export function pool_reset_statistics<T>(pool: *Pool<T>): bool {
+    if pool == null { return false }
+    pool.high_watermark = pool.in_use
+    pool.allocations = 0 as u64
+    pool.releases = 0 as u64
+    return true
+}
+
+export function pool_utilization_per_mille<T>(pool: *Pool<T>): usize {
+    if pool == null || pool.capacity == 0 as usize { return 0 as usize }
+    return pool.in_use * 1000 as usize / pool.capacity
+}
+
+export function pool_free_per_mille<T>(pool: *Pool<T>): usize {
+    if pool == null || pool.capacity == 0 as usize { return 0 as usize }
+    return pool_free_count(pool) * 1000 as usize / pool.capacity
+}
+
+export function pool_copy_used_indices<T>(pool: *Pool<T>, output: []usize): usize {
+    if pool == null || pool.used == null { return 0 as usize }
+    let written: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < pool.capacity && written < len(output) {
+        if pool.used[i] { output[written] = i written = written + 1 as usize }
+        i = i + 1 as usize
+    }
+    return written
+}
+
+export function pool_copy_used_values<T: Copy>(pool: *Pool<T>, output: []T): usize {
+    if pool == null || pool.used == null || pool.data == null { return 0 as usize }
+    let written: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < pool.capacity && written < len(output) {
+        if pool.used[i] { output[written] = pool.data[i] written = written + 1 as usize }
+        i = i + 1 as usize
+    }
+    return written
+}
+
+export function pool_count_value<T: Eq + Copy>(pool: *Pool<T>, value: T): usize {
+    if pool == null || pool.used == null || pool.data == null { return 0 as usize }
+    let count: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < pool.capacity {
+        if pool.used[i] && pool.data[i] == value { count = count + 1 as usize }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function pool_find_value<T: Eq + Copy>(pool: *Pool<T>, value: T): isize {
+    if pool == null || pool.used == null || pool.data == null { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < pool.capacity {
+        if pool.used[i] && pool.data[i] == value { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function pool_largest_free_run<T>(pool: *Pool<T>): usize {
+    if pool == null || pool.used == null || pool.capacity == 0 as usize { return 0 as usize }
+    let maximum: usize = 0 as usize
+    let current: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < pool.capacity {
+        if !pool.used[i] {
+            current = current + 1 as usize
+            if current > maximum { maximum = current }
+        } else { current = 0 as usize }
+        i = i + 1 as usize
+    }
+    return maximum
+}
+
+export function pool_free_run_count<T>(pool: *Pool<T>): usize {
+    if pool == null || pool.used == null || pool.capacity == 0 as usize { return 0 as usize }
+    let runs: usize = 0 as usize
+    let inRun: bool = false
+    let i: usize = 0 as usize
+    while i < pool.capacity {
+        if !pool.used[i] && !inRun { runs = runs + 1 as usize inRun = true }
+        if pool.used[i] { inRun = false }
+        i = i + 1 as usize
+    }
+    return runs
+}
+
+export function pool_fragmentation_per_mille<T>(pool: *Pool<T>): usize {
+    let free: usize = pool_free_count(pool)
+    if free <= 1 as usize { return 0 as usize }
+    let largest: usize = pool_largest_free_run(pool)
+    if largest >= free { return 0 as usize }
+    return (free - largest) * 1000 as usize / free
+}
+
+export function pool_handle_copy(destination: *PoolHandle, source: *PoolHandle): bool {
+    if destination == null || source == null { return false }
+    destination.index = source.index
+    destination.generation = source.generation
+    return true
+}
+
+export function pool_handle_equal(left: *PoolHandle, right: *PoolHandle): bool {
+    if left == null || right == null { return false }
+    return left.index == right.index && left.generation == right.generation
+}
+
+export function pool_handle_invalidate(handle: *PoolHandle): bool {
+    if handle == null { return false }
+    handle.index = 0 as usize
+    handle.generation = pool_invalid_generation()
+    return true
+}
+
+// Compatibility helpers retained from the previous capacity-only module.
 export function pool_capacity_valid(length: usize, capacity: usize): bool { return length <= capacity }
 export function pool_remaining(length: usize, capacity: usize): usize { if length >= capacity { return 0 as usize } return capacity - length }
 export function pool_nonempty(length: usize): bool { return length > 0 as usize }

@@ -1,5 +1,73 @@
 module noqeri.std.url
 
-export function url_is_unreserved(c: u8): bool { return (c>=65 as u8&&c<=90 as u8)||(c>=97 as u8&&c<=122 as u8)||(c>=48 as u8&&c<=57 as u8)||c==45 as u8||c==46 as u8||c==95 as u8||c==126 as u8 }
-export function url_is_scheme_char(c: u8): bool { return (c>=65 as u8&&c<=90 as u8)||(c>=97 as u8&&c<=122 as u8)||(c>=48 as u8&&c<=57 as u8)||c==43 as u8||c==45 as u8||c==46 as u8 }
-export function url_hex_upper(n: u8): u8 { if n<10 as u8 { return 48 as u8+n } return 55 as u8+n }
+export function url_is_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
+export function url_is_unreserved(c: u8): bool { return url_is_alpha(c) || (c >= 48 as u8 && c <= 57 as u8) || c == 45 as u8 || c == 46 as u8 || c == 95 as u8 || c == 126 as u8 }
+export function url_is_scheme_char(c: u8): bool { return url_is_alpha(c) || (c >= 48 as u8 && c <= 57 as u8) || c == 43 as u8 || c == 45 as u8 || c == 46 as u8 }
+export function url_hex_upper(n: u8): u8 { if n < 10 as u8 { return 48 as u8 + n } return 55 as u8 + n }
+
+export function url_scheme_valid(value: []u8): bool {
+    if len(value) == 0 as usize || !url_is_alpha(value[0 as usize]) { return false }
+    let i: usize = 1 as usize
+    while i < len(value) { if !url_is_scheme_char(value[i]) { return false } i = i + 1 as usize }
+    return true
+}
+
+export function url_percent_encoded_len(value: []u8): usize {
+    let length: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(value) { if url_is_unreserved(value[i]) { length = length + 1 as usize } else { length = length + 3 as usize } i = i + 1 as usize }
+    return length
+}
+
+export function url_percent_encode(value: []u8, destination: []u8): isize {
+    let required: usize = url_percent_encoded_len(value)
+    if len(destination) < required { return -1 as isize }
+    let input: usize = 0 as usize
+    let output: usize = 0 as usize
+    while input < len(value) {
+        let c: u8 = value[input]
+        if url_is_unreserved(c) { destination[output] = c output = output + 1 as usize }
+        else { destination[output] = 37 as u8 destination[output + 1 as usize] = url_hex_upper(c / 16 as u8) destination[output + 2 as usize] = url_hex_upper(c % 16 as u8) output = output + 3 as usize }
+        input = input + 1 as usize
+    }
+    return output as isize
+}
+
+export function url_hex_value(c: u8): int { if c >= 48 as u8 && c <= 57 as u8 { return (c - 48 as u8) as int } if c >= 65 as u8 && c <= 70 as u8 { return (c - 55 as u8) as int } if c >= 97 as u8 && c <= 102 as u8 { return (c - 87 as u8) as int } return -1 }
+
+export function url_percent_decode(value: []u8, destination: []u8): isize {
+    let input: usize = 0 as usize
+    let output: usize = 0 as usize
+    while input < len(value) {
+        if output >= len(destination) { return -1 as isize }
+        if value[input] == 37 as u8 {
+            if input + 2 as usize >= len(value) { return -1 as isize }
+            let high: int = url_hex_value(value[input + 1 as usize])
+            let low: int = url_hex_value(value[input + 2 as usize])
+            if high < 0 || low < 0 { return -1 as isize }
+            destination[output] = (high * 16 + low) as u8
+            input = input + 3 as usize
+        } else { destination[output] = value[input] input = input + 1 as usize }
+        output = output + 1 as usize
+    }
+    return output as isize
+}
+
+export function url_has_scheme(value: []u8): bool {
+    let index: usize = 0 as usize
+    while index < len(value) && value[index] != 58 as u8 {
+        if !url_is_scheme_char(value[index]) { return false }
+        index = index + 1 as usize
+    }
+    if index == 0 as usize || index >= len(value) { return false }
+    let scheme: []u8 = slice(&value[0 as usize], index)
+    return url_scheme_valid(scheme)
+}
+
+export function url_is_http_scheme(value: []u8): bool {
+    let http: [u8; 4] = [104 as u8,116 as u8,116 as u8,112 as u8]
+    let https: [u8; 5] = [104 as u8,116 as u8,116 as u8,112 as u8,115 as u8]
+    if len(value) == 4 as usize { let i: usize=0 as usize while i<4 as usize { if value[i]!=http[i] { return false } i=i+1 as usize } return true }
+    if len(value) == 5 as usize { let i: usize=0 as usize while i<5 as usize { if value[i]!=https[i] { return false } i=i+1 as usize } return true }
+    return false
+}

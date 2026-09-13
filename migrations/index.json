@@ -1,0 +1,5 @@
+{
+  "schema": 1,
+  "migrations": [],
+  "policy": "Rules are added only for real deprecations. An empty index is intentional; the migration engine must not invent rewrites."
+}

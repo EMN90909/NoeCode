@@ -1,0 +1,84 @@
+import "../Lib/std/regex.nqr"
+import "../Lib/std/archive.nqr"
+import "../Lib/std/collections.nqr"
+import "../Lib/std/benchmark.nqr"
+import "../Lib/std/test.nqr"
+import "../Lib/std/profile.nqr"
+import "../Lib/std/debug.nqr"
+import "../Lib/std/reflect.nqr"
+import "../Lib/std/sql.nqr"
+import "../Lib/std/database.nqr"
+
+function main(): int {
+    let p1: [u8; 4] = [97 as u8,98 as u8,42 as u8,99 as u8]
+    let t1: [u8; 5] = [97 as u8,98 as u8,98 as u8,98 as u8,99 as u8]
+    if !regex_is_valid(slice(p1)) || !regex_full_match(slice(p1), slice(t1)) { return 1 }
+    let p2: [u8; 3] = [98 as u8,43 as u8,99 as u8]
+    let t2: [u8; 5] = [120 as u8,98 as u8,98 as u8,99 as u8,121 as u8]
+    if regex_search(slice(p2), slice(t2)) != 1 as isize { return 2 }
+    let badRegex: [u8; 2] = [42 as u8,97 as u8]
+    if regex_is_valid(slice(badRegex)) { return 3 }
+
+    if archive_tar_padding(513 as usize) != 511 as usize { return 4 }
+    let zip: [u8; 4] = [80 as u8,75 as u8,3 as u8,4 as u8]
+    if !archive_is_zip_local_header(slice(zip), 0 as usize) { return 5 }
+    let octal: [u8; 3] = [49 as u8,55 as u8,53 as u8]
+    let octalValue: u64 = 0 as u64
+    if !archive_parse_octal(slice(octal), &octalValue) || octalValue != 125 as u64 { return 6 }
+
+    let values: [i64; 5] = [1 as i64,2 as i64,2 as i64,3 as i64,3 as i64]
+    if count_value(slice(values), 2 as i64) != 2 as usize { return 7 }
+    if first_index(slice(values), 3 as i64) != 3 as isize || last_index(slice(values), 2 as i64) != 2 as isize { return 8 }
+    let reversed: [i64; 5] = [0 as i64,0 as i64,0 as i64,0 as i64,0 as i64]
+    if reverse_into(slice(reversed), slice(values)) != 5 as usize || reversed[0 as usize] != 3 as i64 { return 9 }
+    let deduped: [i64; 5] = [0 as i64,0 as i64,0 as i64,0 as i64,0 as i64]
+    if dedupe_adjacent_into(slice(deduped), slice(values)) != 3 as usize || deduped[2 as usize] != 3 as i64 { return 10 }
+
+    let statsStorage: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let stats: *BenchmarkStats = (&statsStorage[0 as usize]) as *BenchmarkStats
+    benchmark_stats_reset(stats)
+    benchmark_stats_add(stats, 10 as u64)
+    benchmark_stats_add(stats, 30 as u64)
+    if stats.samples != 2 as usize || benchmark_mean_ns(stats) != 20 as u64 || benchmark_range_ns(stats) != 20 as u64 { return 11 }
+    if benchmark_percentile_index(101 as usize, 95 as usize) != 95 as usize { return 12 }
+
+    let summaryStorage: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let summary: *TestSummary = (&summaryStorage[0 as usize]) as *TestSummary
+    test_summary_reset(summary)
+    test_record_case(summary, true)
+    test_record_case(summary, false)
+    test_record_skip(summary)
+    if test_total_cases(summary) != 3 as usize || test_pass_rate_per_mille(summary) != 500 as usize { return 13 }
+
+    let profileStorage: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let profile: *ProfileCounter = (&profileStorage[0 as usize]) as *ProfileCounter
+    profile_reset(profile)
+    profile_record(profile, 9 as u64)
+    profile_record(profile, 15 as u64)
+    if profile_mean_ns(profile) != 12 as u64 || profile.min_ns != 9 as u64 || profile.max_ns != 15 as u64 { return 14 }
+
+    let hexOut: [u8; 16] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    if debug_write_hex_u64(255 as u64, slice(hexOut)) != 16 as usize || hexOut[14 as usize] != 70 as u8 || hexOut[15 as usize] != 70 as u8 { return 15 }
+
+    let infoStorage: [u8; 64] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let info: *TypeInfo = (&infoStorage[0 as usize]) as *TypeInfo
+    reflect_type_info(info, "Pair", 16 as usize, 8 as usize, 2 as usize, 2 as usize)
+    if !reflect_is_aggregate(info) || !reflect_is_generic(info) || !reflect_alignment_valid(info) || reflect_storage_size(info, 3 as usize) != 48 as usize { return 16 }
+
+    let query: [u8; 25] = [83 as u8,69 as u8,76 as u8,69 as u8,67 as u8,84 as u8,32 as u8,63 as u8,32 as u8,70 as u8,82 as u8,79 as u8,77 as u8,32 as u8,116 as u8,32 as u8,87 as u8,72 as u8,69 as u8,82 as u8,69 as u8,32 as u8,120 as u8,61 as u8,63 as u8]
+    if sql_count_placeholders(slice(query)) != 2 as usize || sql_has_unterminated_quote(slice(query)) { return 17 }
+
+    let pageStorage: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let page: *DatabasePage = (&pageStorage[0 as usize]) as *DatabasePage
+    if !database_page_init(page, 2 as usize, 50 as usize) || page.offset != 100 as usize { return 18 }
+    database_page_next(page)
+    if page.index != 3 as usize || page.offset != 150 as usize { return 19 }
+    let retryStorage: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let retry: *DatabaseRetry = (&retryStorage[0 as usize]) as *DatabaseRetry
+    database_retry_init(retry, 4 as usize, 100 as u64, 1000 as u64)
+    database_retry_advance(retry)
+    database_retry_advance(retry)
+    if database_retry_delay_ms(retry) != 400 as u64 { return 20 }
+
+    return 0
+}

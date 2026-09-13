@@ -1,42 +1,52 @@
 module noqeri.std.memory
 
 export function nqMemoryFillU8(memory: *u8, count: usize, value: u8): void {
-    let index: usize = 0 as usize
-    while index < count {
-        memory[index] = value
-        index = index + 1
+    unsafe {
+        let index: usize = 0 as usize
+        while index < count {
+            memory[index] = value
+            index = index + 1
+        }
     }
 }
 
 export function nqMemoryCopyU8(source: *u8, destination: *u8, count: usize): void {
-    let index: usize = 0 as usize
-    while index < count {
-        destination[index] = source[index]
-        index = index + 1
+    unsafe {
+        let index: usize = 0 as usize
+        while index < count {
+            destination[index] = source[index]
+            index = index + 1
+        }
     }
 }
 
 export function nqMemoryEqualU8(left: *u8, right: *u8, count: usize): bool {
-    let index: usize = 0 as usize
-    while index < count {
-        if left[index] != right[index] { return false }
-        index = index + 1
+    unsafe {
+        let index: usize = 0 as usize
+        while index < count {
+            if left[index] != right[index] { return false }
+            index = index + 1
+        }
     }
     return true
 }
 
 export function nqMemoryFillI64(memory: *i64, count: usize, value: i64): void {
-    let index: usize = 0 as usize
-    while index < count {
-        memory[index] = value
-        index = index + 1
+    unsafe {
+        let index: usize = 0 as usize
+        while index < count {
+            memory[index] = value
+            index = index + 1
+        }
     }
 }
 
 export function nqMemoryCopyI64(source: *i64, destination: *i64, count: usize): void {
-    let index: usize = 0 as usize
-    while index < count {
-        destination[index] = source[index]
-        index = index + 1
+    unsafe {
+        let index: usize = 0 as usize
+        while index < count {
+            destination[index] = source[index]
+            index = index + 1
+        }
     }
 }

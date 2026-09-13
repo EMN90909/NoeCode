@@ -1,0 +1,62 @@
+module noqeri.compiler.selfhost.stage2
+
+// Stage 2 is a verified property, not a version label. Release tooling fills
+// this record from actual bootstrap/conformance runs. The compiler only reports
+// success when every gate is evidenced.
+record NqStage2Proof {
+    stage0BuiltStage1: bool
+    stage1BuiltStage2: bool
+    stage2RebuiltCompiler: bool
+    frontendPassed: bool
+    nirPassed: bool
+    optimizerPassed: bool
+    objectWritersPassed: bool
+    formatterPassed: bool
+    lspPassed: bool
+    packageManagerPassed: bool
+    releaseNeedsCpp: bool
+    stage1Fingerprint: u32
+    stage2Fingerprint: u32
+}
+
+export function nqStage2ProofInit(out: *NqStage2Proof): void {
+    out.stage0BuiltStage1 = false
+    out.stage1BuiltStage2 = false
+    out.stage2RebuiltCompiler = false
+    out.frontendPassed = false
+    out.nirPassed = false
+    out.optimizerPassed = false
+    out.objectWritersPassed = false
+    out.formatterPassed = false
+    out.lspPassed = false
+    out.packageManagerPassed = false
+    out.releaseNeedsCpp = true
+    out.stage1Fingerprint = 0 as u32
+    out.stage2Fingerprint = 0 as u32
+}
+
+export function nqStage2OutputsEquivalent(proof: *NqStage2Proof): bool {
+    return proof != null && proof.stage1Fingerprint != 0 as u32 && proof.stage1Fingerprint == proof.stage2Fingerprint
+}
+
+export function nqStage2ProofValid(proof: *NqStage2Proof): bool {
+    if proof == null { return false }
+    return proof.stage0BuiltStage1 && proof.stage1BuiltStage2 && proof.stage2RebuiltCompiler && proof.frontendPassed && proof.nirPassed && proof.optimizerPassed && proof.objectWritersPassed && proof.formatterPassed && proof.lspPassed && proof.packageManagerPassed && !proof.releaseNeedsCpp && nqStage2OutputsEquivalent(proof)
+}
+
+export function nqStage2GateStatus(proof: *NqStage2Proof): isize {
+    if proof == null { return -1 }
+    if !proof.stage0BuiltStage1 { return -2 }
+    if !proof.stage1BuiltStage2 { return -3 }
+    if !proof.stage2RebuiltCompiler { return -4 }
+    if !nqStage2OutputsEquivalent(proof) { return -5 }
+    if !proof.frontendPassed { return -6 }
+    if !proof.nirPassed { return -7 }
+    if !proof.optimizerPassed { return -8 }
+    if !proof.objectWritersPassed { return -9 }
+    if !proof.formatterPassed { return -10 }
+    if !proof.lspPassed { return -11 }
+    if !proof.packageManagerPassed { return -12 }
+    if proof.releaseNeedsCpp { return -13 }
+    return 0
+}

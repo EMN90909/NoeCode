@@ -1,6 +1,24 @@
 module noqeri.compiler.selfhost.nir
 
-// Small SSA-friendly NIR opcode model. Values are arena indexes rather than host pointers.
+// Stable, host-independent NIR. Registers are integer arena ids; -1 means
+// "no value". This representation is intentionally plain so Stage 2 does not
+// depend on C++ object layout or host allocation semantics.
+record NqNirInstruction {
+    opcode: int
+    dest: isize
+    left: isize
+    right: isize
+    immediate: i64
+    typeCode: int
+    flags: u32
+}
+
+export function nqNirNoValue(): isize { return -1 as isize }
+export function nqNirFlagVolatile(): u32 { return 1 as u32 }
+export function nqNirFlagChecked(): u32 { return 2 as u32 }
+export function nqNirFlagUnsigned(): u32 { return 4 as u32 }
+export function nqNirFlagUnsafe(): u32 { return 8 as u32 }
+
 export function nqNirNop(): int { return 0 }
 export function nqNirConstI64(): int { return 1 }
 export function nqNirConstF64(): int { return 2 }
@@ -34,7 +52,54 @@ export function nqNirCmpXchg(): int { return 29 }
 export function nqNirFence(): int { return 30 }
 export function nqNirIntrinsic(): int { return 31 }
 export function nqNirAsm(): int { return 32 }
+
 export function nqNirOpcodeValid(opcode: int): bool { return opcode >= nqNirNop() && opcode <= nqNirAsm() }
 export function nqNirHasSideEffect(opcode: int): bool { return opcode == nqNirStore() || opcode == nqNirCall() || opcode == nqNirReturn() || opcode == nqNirJump() || opcode == nqNirBranch() || opcode >= nqNirAtomicStore() }
 export function nqNirIsTerminator(opcode: int): bool { return opcode == nqNirJump() || opcode == nqNirBranch() || opcode == nqNirReturn() }
 export function nqNirIsPureArithmetic(opcode: int): bool { return opcode >= nqNirAdd() && opcode <= nqNirGe() }
+export function nqNirDefinesValue(opcode: int): bool { return opcode == nqNirConstI64() || opcode == nqNirConstF64() || opcode == nqNirMove() || opcode == nqNirLoad() || nqNirIsPureArithmetic(opcode) || opcode == nqNirNeg() || opcode == nqNirNot() || opcode == nqNirPhi() || opcode == nqNirAddr() || opcode == nqNirPtrAdd() || opcode == nqNirAtomicLoad() || opcode == nqNirAtomicExchange() || opcode == nqNirCmpXchg() || opcode == nqNirIntrinsic() }
+
+export function nqNirInstructionInit(out: *NqNirInstruction, opcode: int, dest: isize): void {
+    out.opcode = opcode
+    out.dest = dest
+    out.left = nqNirNoValue()
+    out.right = nqNirNoValue()
+    out.immediate = 0 as i64
+    out.typeCode = 0
+    out.flags = 0 as u32
+}
+
+export function nqNirInstructionValid(instruction: *NqNirInstruction): bool {
+    if instruction == null || !nqNirOpcodeValid(instruction.opcode) { return false }
+    if nqNirDefinesValue(instruction.opcode) && instruction.dest < 0 as isize { return false }
+    if instruction.opcode == nqNirMove() && instruction.left < 0 as isize { return false }
+    if nqNirIsPureArithmetic(instruction.opcode) && (instruction.left < 0 as isize || instruction.right < 0 as isize) { return false }
+    return true
+}
+
+export function nqNirInstructionUses(instruction: *NqNirInstruction, value: isize): bool {
+    if instruction == null || value < 0 as isize { return false }
+    return instruction.left == value || instruction.right == value
+}
+
+export function nqNirProgramValid(instructions: []NqNirInstruction): bool {
+    let index: usize = 0 as usize
+    while index < len(instructions) {
+        if !nqNirInstructionValid(&instructions[index]) { return false }
+        index = index + 1 as usize
+    }
+    return true
+}
+
+export function nqNirMakeConst(out: *NqNirInstruction, dest: isize, value: i64, typeCode: int): void {
+    nqNirInstructionInit(out, nqNirConstI64(), dest)
+    out.immediate = value
+    out.typeCode = typeCode
+}
+
+export function nqNirMakeBinary(out: *NqNirInstruction, opcode: int, dest: isize, left: isize, right: isize, typeCode: int): void {
+    nqNirInstructionInit(out, opcode, dest)
+    out.left = left
+    out.right = right
+    out.typeCode = typeCode
+}

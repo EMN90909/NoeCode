@@ -18,6 +18,8 @@ struct Type {
     std::shared_ptr<Type> pointee;
     std::shared_ptr<Type> element;
     std::size_t count=0;
+    std::size_t recordSize=0;
+    std::size_t recordAlignment=1;
     bool isVolatile=false;
     std::string name() const;
     bool isInteger() const;

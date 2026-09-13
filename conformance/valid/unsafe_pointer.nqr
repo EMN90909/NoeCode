@@ -1,0 +1,13 @@
+module conformance.unsafe_pointer
+
+function read_raw(value: *int): int {
+    unsafe {
+        return *value
+    }
+}
+
+function write_raw(value: *int, next: int): void {
+    unsafe {
+        *value = next
+    }
+}

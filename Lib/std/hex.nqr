@@ -1,5 +1,40 @@
 module noqeri.std.hex
 
-export function hex_value(c: u8): isize { if c>=48 as u8&&c<=57 as u8 { return (c-48 as u8) as isize } if c>=65 as u8&&c<=70 as u8 { return (c-55 as u8) as isize } if c>=97 as u8&&c<=102 as u8 { return (c-87 as u8) as isize } return -1 }
-export function hex_is_digit(c: u8): bool { return hex_value(c) >= 0 }
+export function hex_value(c: u8): isize { if c >= 48 as u8 && c <= 57 as u8 { return (c - 48 as u8) as isize } if c >= 65 as u8 && c <= 70 as u8 { return (c - 55 as u8) as isize } if c >= 97 as u8 && c <= 102 as u8 { return (c - 87 as u8) as isize } return -1 as isize }
+export function hex_is_digit(c: u8): bool { return hex_value(c) >= 0 as isize }
 export function hex_encoded_len(n: usize): usize { return n * 2 as usize }
+export function hex_decoded_len(n: usize): isize { if n % 2 as usize != 0 as usize { return -1 as isize } return (n / 2 as usize) as isize }
+export function hex_digit_lower(value: u8): u8 { if value < 10 as u8 { return 48 as u8 + value } if value < 16 as u8 { return 87 as u8 + value } return 63 as u8 }
+export function hex_digit_upper(value: u8): u8 { if value < 10 as u8 { return 48 as u8 + value } if value < 16 as u8 { return 55 as u8 + value } return 63 as u8 }
+
+export function hex_encode(source: []u8, destination: []u8, uppercase: bool): isize {
+    let required: usize = hex_encoded_len(len(source))
+    if len(destination) < required { return -1 as isize }
+    let index: usize = 0 as usize
+    while index < len(source) {
+        let high: u8 = source[index] / 16 as u8
+        let low: u8 = source[index] % 16 as u8
+        if uppercase { destination[index * 2 as usize] = hex_digit_upper(high) destination[index * 2 as usize + 1 as usize] = hex_digit_upper(low) }
+        else { destination[index * 2 as usize] = hex_digit_lower(high) destination[index * 2 as usize + 1 as usize] = hex_digit_lower(low) }
+        index = index + 1 as usize
+    }
+    return required as isize
+}
+
+export function hex_decode(source: []u8, destination: []u8): isize {
+    let required: isize = hex_decoded_len(len(source))
+    if required < 0 as isize || required as usize > len(destination) { return -1 as isize }
+    let input: usize = 0 as usize
+    let output: usize = 0 as usize
+    while input < len(source) {
+        let high: isize = hex_value(source[input])
+        let low: isize = hex_value(source[input + 1 as usize])
+        if high < 0 as isize || low < 0 as isize { return -1 as isize }
+        destination[output] = (high * 16 as isize + low) as u8
+        input = input + 2 as usize
+        output = output + 1 as usize
+    }
+    return output as isize
+}
+
+export function hex_valid(source: []u8): bool { if len(source) % 2 as usize != 0 as usize { return false } let i: usize = 0 as usize while i < len(source) { if !hex_is_digit(source[i]) { return false } i = i + 1 as usize } return true }

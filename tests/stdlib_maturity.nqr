@@ -1,7 +1,11 @@
 import "../Lib/std/math.nqr"
+import "../Lib/std/math/big.nqr"
 import "../Lib/std/path.nqr"
 import "../Lib/std/result.nqr"
 import "../Lib/std/random.nqr"
+import "../Lib/std/bytes.nqr"
+import "../Lib/std/time.nqr"
+import "../Lib/std/string.nqr"
 import "../Lib/std/list.nqr"
 import "../Lib/std/map.nqr"
 import "../Lib/std/set.nqr"
@@ -28,6 +32,24 @@ function main(): int {
     let seed: u64 = 12345 as u64
     if random_range(seed, 10 as u64, 20 as u64) < 10 as u64 { return 12 }
     if random_range(seed, 10 as u64, 20 as u64) >= 20 as u64 { return 13 }
+
+    let bytesA: [u8; 4] = [65 as u8,66 as u8,67 as u8,68 as u8]
+    let bytesB: [u8; 2] = [67 as u8,68 as u8]
+    if !nqBytesEndsWith(slice(bytesA), slice(bytesB)) { return 14 }
+    if nqBytesIndexOf(slice(bytesA), 67 as u8) != 2 as isize { return 15 }
+    if nqBytesCompare(slice(bytesA), slice(bytesA)) != 0 { return 16 }
+
+    let bigLeft: [u8; 3] = [9 as u8,9 as u8,9 as u8]
+    let bigRight: [u8; 1] = [1 as u8]
+    let bigOut: [u8; 4] = [0 as u8,0 as u8,0 as u8,0 as u8]
+    if big_add_into(slice(bigOut), slice(bigLeft), slice(bigRight)) != 4 as usize { return 17 }
+    if bigOut[0 as usize] != 0 as u8 || bigOut[1 as usize] != 0 as u8 || bigOut[2 as usize] != 0 as u8 || bigOut[3 as usize] != 1 as u8 { return 18 }
+
+    if time_hour_part(90061 as i64) != 1 as i64 { return 19 }
+    if time_minute_part(90061 as i64) != 1 as i64 { return 20 }
+    if time_second_part(90061 as i64) != 1 as i64 { return 21 }
+    if string_repeat("ab", 3 as usize) != "ababab" { return 22 }
+    if string_center("x", 3 as usize, "-") != "-x-" { return 23 }
 
     return 0
 }

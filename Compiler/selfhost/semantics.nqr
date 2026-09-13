@@ -1,0 +1,15 @@
+module noqeri.compiler.selfhost.semantics
+import "ast.nqr"
+import "types.nqr"
+
+export function nqSemanticOk(): isize { return 0 }
+export function nqSemanticTypeMismatch(): isize { return -200 }
+export function nqSemanticInvalidCondition(): isize { return -201 }
+export function nqSemanticInvalidReturn(): isize { return -202 }
+export function nqSemanticConstWrite(): isize { return -203 }
+export function nqSemanticInvalidPointer(): isize { return -204 }
+export function nqSemanticInvalidCast(): isize { return -205 }
+export function nqSemanticConditionTypeValid(typeCode: int): bool { return typeCode == nqAstTypeBool() }
+export function nqSemanticAssignable(fromCode: int, toCode: int): bool { if fromCode == toCode { return true } if nqAstTypeInteger(fromCode) && nqAstTypeInteger(toCode) { return nqCompilerCanImplicitWiden(fromCode, toCode) } return false }
+export function nqSemanticExplicitCastValid(fromCode: int, toCode: int): bool { if fromCode == toCode { return true } if nqAstTypeInteger(fromCode) && nqAstTypeInteger(toCode) { return true } if fromCode == nqAstTypePointer() && toCode == nqAstTypeUsize() { return true } if fromCode == nqAstTypeUsize() && toCode == nqAstTypePointer() { return true } return false }
+export function nqSemanticReturnValid(actual: int, expected: int): bool { return expected == nqAstTypeVoid() || nqSemanticAssignable(actual, expected) }

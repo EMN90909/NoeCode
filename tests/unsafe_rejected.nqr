@@ -1,0 +1,4 @@
+// This file is intentionally invalid and belongs to the negative conformance suite.
+function invalid(pointer: *i64): i64 {
+    return *pointer
+}

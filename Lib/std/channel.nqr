@@ -1,6 +1,63 @@
 module noqeri.std.channel
 
+unsafe extern function channelHostCreate(capacity: usize): isize
+unsafe extern function channelHostClose(handle: usize): bool
+unsafe extern function channelHostSendI64(handle: usize, value: i64, timeoutMillis: i64): isize
+unsafe extern function channelHostReceiveI64(handle: usize, target: *i64, timeoutMillis: i64): isize
+unsafe extern function channelHostLength(handle: usize): usize
+unsafe extern function channelHostCapacity(handle: usize): usize
+
+export function channel_open(): int { return 0 }
+export function channel_closing(): int { return 1 }
+export function channel_closed(): int { return 2 }
+export function channel_failed(): int { return 3 }
+export function channel_timed_out(): int { return 4 }
+
 export function channel_state_valid(state: int): bool { return state >= 0 && state <= 4 }
-export function channel_can_transition(current: int, next: int): bool { if current < 0 || next < 0 { return false } return next >= current || next == 0 }
+export function channel_can_transition(current: int, next: int): bool {
+    if current < 0 || next < 0 || !channel_state_valid(current) || !channel_state_valid(next) { return false }
+    if current == channel_closed() || current == channel_failed() { return false }
+    return next >= current
+}
 export function channel_default_spin_limit(): usize { return 64 as usize }
 export function channel_bounded_count(count: usize, limit: usize): usize { if count > limit { return limit } return count }
+
+export function channel_create(capacity: usize): isize {
+    if capacity == 0 as usize || capacity > 1048576 as usize { return -1 as isize }
+    unsafe { return channelHostCreate(capacity) }
+}
+
+export function channel_close(handle: usize): bool {
+    if handle == 0 as usize { return false }
+    unsafe { return channelHostClose(handle) }
+}
+
+export function channel_send_i64(handle: usize, value: i64): isize {
+    if handle == 0 as usize { return -1 as isize }
+    unsafe { return channelHostSendI64(handle,value,-1 as i64) }
+}
+
+export function channel_send_timeout_i64(handle: usize, value: i64, timeoutMillis: i64): isize {
+    if handle == 0 as usize || timeoutMillis < 0 as i64 { return -1 as isize }
+    unsafe { return channelHostSendI64(handle,value,timeoutMillis) }
+}
+
+export function channel_receive_i64(handle: usize, target: *i64): isize {
+    if handle == 0 as usize || target == null { return -1 as isize }
+    unsafe { return channelHostReceiveI64(handle,target,-1 as i64) }
+}
+
+export function channel_receive_timeout_i64(handle: usize, target: *i64, timeoutMillis: i64): isize {
+    if handle == 0 as usize || target == null || timeoutMillis < 0 as i64 { return -1 as isize }
+    unsafe { return channelHostReceiveI64(handle,target,timeoutMillis) }
+}
+
+export function channel_length(handle: usize): usize {
+    if handle == 0 as usize { return 0 as usize }
+    unsafe { return channelHostLength(handle) }
+}
+
+export function channel_capacity(handle: usize): usize {
+    if handle == 0 as usize { return 0 as usize }
+    unsafe { return channelHostCapacity(handle) }
+}

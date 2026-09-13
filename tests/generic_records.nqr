@@ -1,0 +1,38 @@
+record Box<T> {
+    value: T
+    generation: u64
+}
+
+record Pair<A, B> {
+    first: A
+    second: B
+}
+
+record Node<T> {
+    value: T
+    next: *Node<T>
+}
+
+function box_value<T>(box: *Box<T>): T {
+    return box.value
+}
+
+function pair_first<A, B>(pair: *Pair<A, B>): A {
+    return pair.first
+}
+
+function node_next<T>(node: *Node<T>): *Node<T> {
+    return node.next
+}
+
+export function generic_record_int(box: *Box<int>): int {
+    return box_value(box)
+}
+
+export function generic_record_string(pair: *Pair<string, int>): string {
+    return pair_first(pair)
+}
+
+export function generic_record_recursive(node: *Node<u32>): *Node<u32> {
+    return node_next(node)
+}

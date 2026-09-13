@@ -1,5 +1,34 @@
 module noqeri.std.websocket
 
-export function websocket_is_control_opcode(op:u8):bool{return op>=8 as u8}
-export function websocket_is_data_opcode(op:u8):bool{return op==0 as u8||op==1 as u8||op==2 as u8}
-export function websocket_valid_control_payload(n:usize):bool{return n<=125 as usize}
+extern function websocketOpen(url: string): isize
+extern function websocketSendText(socket: usize, text: string): isize
+extern function websocketSendBinary(socket: usize, data: []u8): isize
+extern function websocketReceiveText(socket: usize): string
+extern function websocketClose(socket: usize, code: int, reason: string): isize
+
+export function websocket_opcode_continuation(): u8 { return 0 as u8 }
+export function websocket_opcode_text(): u8 { return 1 as u8 }
+export function websocket_opcode_binary(): u8 { return 2 as u8 }
+export function websocket_opcode_close(): u8 { return 8 as u8 }
+export function websocket_opcode_ping(): u8 { return 9 as u8 }
+export function websocket_opcode_pong(): u8 { return 10 as u8 }
+
+export function websocket_is_control_opcode(op: u8): bool { return op == 8 as u8 || op == 9 as u8 || op == 10 as u8 }
+export function websocket_is_data_opcode(op: u8): bool { return op == 0 as u8 || op == 1 as u8 || op == 2 as u8 }
+export function websocket_opcode_valid(op: u8): bool { return websocket_is_data_opcode(op) || websocket_is_control_opcode(op) }
+export function websocket_valid_control_payload(n: usize): bool { return n <= 125 as usize }
+export function websocket_frame_valid(op: u8, finalFrame: bool, payloadLength: usize): bool { if !websocket_opcode_valid(op) { return false } if websocket_is_control_opcode(op) { return finalFrame && websocket_valid_control_payload(payloadLength) } return true }
+
+export function websocket_close_code_valid(code: int): bool {
+    if code < 1000 || code >= 5000 { return false }
+    if code == 1004 || code == 1005 || code == 1006 || code == 1015 { return false }
+    return true
+}
+
+export function websocket_handle_valid(handle: isize): bool { return handle >= 0 as isize }
+export function websocket_open(url: string): isize { if textLength(url) == 0 as usize { return -2 as isize } return websocketOpen(url) }
+export function websocket_send_text(socket: usize, text: string): isize { return websocketSendText(socket, text) }
+export function websocket_send_binary(socket: usize, data: []u8): isize { return websocketSendBinary(socket, data) }
+export function websocket_receive_text(socket: usize): string { return websocketReceiveText(socket) }
+export function websocket_close_normal(socket: usize): isize { return websocketClose(socket, 1000, "") }
+export function websocket_close_with(socket: usize, code: int, reason: string): isize { if !websocket_close_code_valid(code) { return -2 as isize } return websocketClose(socket, code, reason) }

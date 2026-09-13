@@ -1,5 +1,16 @@
 module noqeri.std.reflect
 
+// Noqeri deliberately keeps reflection compile-time/lightweight. This module
+// represents type metadata explicitly instead of exposing unrestricted runtime
+// object mutation.
+record TypeInfo { name: string size: usize alignment: usize fields: usize generic_args: usize }
+
+export function reflect_type_info(out: *TypeInfo, name: string, size: usize, alignment: usize, fields: usize, generic_args: usize): void { out.name = name out.size = size out.alignment = alignment out.fields = fields out.generic_args = generic_args }
+export function reflect_is_zero_sized(info: *TypeInfo): bool { return info.size == 0 as usize }
+export function reflect_is_aggregate(info: *TypeInfo): bool { return info.fields > 0 as usize }
+export function reflect_is_generic(info: *TypeInfo): bool { return info.generic_args > 0 as usize }
+export function reflect_storage_size(info: *TypeInfo, count: usize): usize { return info.size * count }
+export function reflect_alignment_valid(info: *TypeInfo): bool { if info.alignment == 0 as usize { return false } let value: usize = info.alignment while value > 1 as usize { if value % 2 as usize != 0 as usize { return false } value = value / 2 as usize } return true }
 export function reflect_clamp(value: int, low: int, high: int): int { if value < low { return low } if value > high { return high } return value }
 export function reflect_between(value: int, low: int, high: int): bool { return value >= low && value <= high }
 export function reflect_min(a: int, b: int): int { if a < b { return a } return b }

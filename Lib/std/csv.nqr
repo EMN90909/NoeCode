@@ -1,5 +1,104 @@
 module noqeri.std.csv
 
-export function csv_needs_quotes(value: []u8): bool { let i: usize=0 as usize while i<len(value) { let c:u8=value[i] if c==44 as u8||c==34 as u8||c==10 as u8||c==13 as u8 { return true } i=i+1 } return false }
-export function csv_count_columns(line: []u8): usize { let count:usize=1 as usize let quoted:bool=false let i:usize=0 as usize while i<len(line) { let c:u8=line[i] if c==34 as u8 { quoted=!quoted } if c==44 as u8&&!quoted { count=count+1 } i=i+1 } return count }
-export function csv_is_line_break(c:u8):bool{return c==10 as u8||c==13 as u8}
+export function csv_is_line_break(c: u8): bool { return c == 10 as u8 || c == 13 as u8 }
+export function csv_needs_quotes(value: []u8): bool { let i: usize = 0 as usize while i < len(value) { let c: u8 = value[i] if c == 44 as u8 || c == 34 as u8 || csv_is_line_break(c) { return true } i = i + 1 as usize } return false }
+
+export function csv_field_end(line: []u8, start: usize, nextOut: *usize): isize {
+    if nextOut == null || start > len(line) { return -1 as isize }
+    if start == len(line) { nextOut[0 as usize] = start return start as isize }
+    let index: usize = start
+    if line[index] == 34 as u8 {
+        index = index + 1 as usize
+        while index < len(line) {
+            if line[index] == 34 as u8 {
+                if index + 1 as usize < len(line) && line[index + 1 as usize] == 34 as u8 { index = index + 2 as usize }
+                else {
+                    index = index + 1 as usize
+                    if index < len(line) && line[index] != 44 as u8 { return -1 as isize }
+                    nextOut[0 as usize] = index
+                    return index as isize
+                }
+            } else { index = index + 1 as usize }
+        }
+        return -1 as isize
+    }
+    while index < len(line) && line[index] != 44 as u8 {
+        if line[index] == 34 as u8 || csv_is_line_break(line[index]) { return -1 as isize }
+        index = index + 1 as usize
+    }
+    nextOut[0 as usize] = index
+    return index as isize
+}
+
+export function csv_count_columns(line: []u8): usize {
+    if len(line) == 0 as usize { return 1 as usize }
+    let count: usize = 0 as usize
+    let start: usize = 0 as usize
+    while start <= len(line) {
+        let end: usize = start
+        if csv_field_end(line, start, &end) < 0 as isize { return 0 as usize }
+        count = count + 1 as usize
+        if end >= len(line) { return count }
+        start = end + 1 as usize
+        if start == len(line) { return count + 1 as usize }
+    }
+    return count
+}
+
+export function csv_valid_record(line: []u8): bool { return csv_count_columns(line) > 0 as usize }
+
+export function csv_unescaped_length(field: []u8): isize {
+    if len(field) == 0 as usize { return 0 as isize }
+    if field[0 as usize] != 34 as u8 { return len(field) as isize }
+    if len(field) < 2 as usize || field[len(field) - 1 as usize] != 34 as u8 { return -1 as isize }
+    let output: usize = 0 as usize
+    let index: usize = 1 as usize
+    while index + 1 as usize < len(field) {
+        if field[index] == 34 as u8 {
+            if index + 1 as usize >= len(field) - 1 as usize || field[index + 1 as usize] != 34 as u8 { return -1 as isize }
+            output = output + 1 as usize
+            index = index + 2 as usize
+        } else { output = output + 1 as usize index = index + 1 as usize }
+    }
+    return output as isize
+}
+
+export function csv_unescape_into(field: []u8, destination: []u8): isize {
+    let required: isize = csv_unescaped_length(field)
+    if required < 0 as isize || required as usize > len(destination) { return -1 as isize }
+    if len(field) == 0 as usize { return 0 as isize }
+    let input: usize = 0 as usize
+    let end: usize = len(field)
+    if field[0 as usize] == 34 as u8 { input = 1 as usize end = len(field) - 1 as usize }
+    let output: usize = 0 as usize
+    while input < end {
+        if field[input] == 34 as u8 && input + 1 as usize < end && field[input + 1 as usize] == 34 as u8 { destination[output] = 34 as u8 input = input + 2 as usize }
+        else { destination[output] = field[input] input = input + 1 as usize }
+        output = output + 1 as usize
+    }
+    return output as isize
+}
+
+export function csv_escaped_length(value: []u8): usize {
+    if !csv_needs_quotes(value) { return len(value) }
+    let length: usize = 2 as usize
+    let index: usize = 0 as usize
+    while index < len(value) { if value[index] == 34 as u8 { length = length + 2 as usize } else { length = length + 1 as usize } index = index + 1 as usize }
+    return length
+}
+
+export function csv_escape_into(value: []u8, destination: []u8): isize {
+    let required: usize = csv_escaped_length(value)
+    if len(destination) < required { return -1 as isize }
+    if !csv_needs_quotes(value) { let i: usize = 0 as usize while i < len(value) { destination[i] = value[i] i = i + 1 as usize } return len(value) as isize }
+    destination[0 as usize] = 34 as u8
+    let output: usize = 1 as usize
+    let input: usize = 0 as usize
+    while input < len(value) {
+        if value[input] == 34 as u8 { destination[output] = 34 as u8 destination[output + 1 as usize] = 34 as u8 output = output + 2 as usize }
+        else { destination[output] = value[input] output = output + 1 as usize }
+        input = input + 1 as usize
+    }
+    destination[output] = 34 as u8
+    return (output + 1 as usize) as isize
+}

@@ -31,7 +31,7 @@ void checkedAccess(std::uintptr_t address,std::size_t width,bool write,bool atom
         if(!valid)throw std::runtime_error("memory check: invalid "+std::string(write?"write":"read")+" at address "+std::to_string(address)+" width="+std::to_string(width));
     }
     if(!config.race)return;
-    if(atomicAccess){++epoch;accesses.erase(address);return;}
+    if(atomicAccess){++epoch;for(std::size_t n=0;n<width;++n)accesses.erase(address+n);return;}
     const auto current=std::this_thread::get_id();
     for(std::size_t n=0;n<width;++n){
         const auto key=address+n;
@@ -49,8 +49,14 @@ std::runtime_error overflow(const char*operation){return std::runtime_error(std:
 void runtimeConfigureChecks(RuntimeCheckConfig next){std::lock_guard<std::mutex>lock(stateMutex);config=next;}
 RuntimeCheckConfig runtimeCheckConfig(){std::lock_guard<std::mutex>lock(stateMutex);return config;}
 void runtimeResetChecks(){std::lock_guard<std::mutex>lock(stateMutex);regions.clear();accesses.clear();epoch=1;}
-void runtimeRegisterMemory(std::uintptr_t address,std::size_t size,const std::string&label){if(!address||!size)return;std::lock_guard<std::mutex>lock(stateMutex);regions.push_back({address,size,label});}
-void runtimeUnregisterMemory(std::uintptr_t address){std::lock_guard<std::mutex>lock(stateMutex);regions.erase(std::remove_if(regions.begin(),regions.end(),[&](const auto&r){return r.start==address;}),regions.end());for(auto it=accesses.begin();it!=accesses.end();){if(it->first>=address&&std::any_of(regions.begin(),regions.end(),[&](const auto&r){return contains(r,it->first,1);}))++it;else if(it->first>=address)it=accesses.erase(it);else ++it;}}
+void runtimeRegisterMemory(std::uintptr_t address,std::size_t size,const std::string&label){if(!address||!size)return;runtimeProfileAllocation(size);std::lock_guard<std::mutex>lock(stateMutex);regions.push_back({address,size,label});}
+void runtimeUnregisterMemory(std::uintptr_t address){
+    std::lock_guard<std::mutex>lock(stateMutex);
+    std::size_t removedSize=0;
+    for(const auto&r:regions)if(r.start==address){removedSize=r.size;break;}
+    regions.erase(std::remove_if(regions.begin(),regions.end(),[&](const auto&r){return r.start==address;}),regions.end());
+    if(removedSize){const auto end=address+removedSize;for(auto it=accesses.begin();it!=accesses.end();){if(it->first>=address&&it->first<end)it=accesses.erase(it);else ++it;}}
+}
 void runtimeCheckMemoryRead(std::uintptr_t address,std::size_t width,bool atomicAccess){checkedAccess(address,width,false,atomicAccess);}
 void runtimeCheckMemoryWrite(std::uintptr_t address,std::size_t width,bool atomicAccess){checkedAccess(address,width,true,atomicAccess);}
 void runtimeSynchronizationPoint(){std::lock_guard<std::mutex>lock(stateMutex);++epoch;accesses.clear();}

@@ -3,13 +3,40 @@ import "driver.nqr"
 import "types.nqr"
 import "imports.nqr"
 import "package_policy.nqr"
+import "ast.nqr"
+import "parser.nqr"
+import "semantics.nqr"
+import "nir.nqr"
+import "optimizer.nqr"
+import "targets.nqr"
+import "object_formats.nqr"
+import "backend.nqr"
+import "linker.nqr"
+import "formatter.nqr"
+import "lsp.nqr"
+import "pipeline.nqr"
+import "abi.nqr"
+import "coff_writer.nqr"
+import "elf_writer.nqr"
+import "macho_writer.nqr"
+import "profiles.nqr"
 
 export function stage1VersionMajor(): int { return nqCompilerVersionMajor() }
 export function stage1VersionMinor(): int { return nqCompilerVersionMinor() }
 export function stage1VersionPatch(): int { return nqCompilerVersionPatch() }
-export function stage1CheckSource(source: []u8): isize { return nqCompilerCheckSource(source) }
+export function stage1CheckSource(source: []u8): isize { return nqPipelineCheck(source) }
 export function stage1TokenCount(source: []u8): usize { return nqCompilerSourceTokenCount(source) }
 export function stage1Fingerprint(source: []u8): u32 { return nqCompilerSourceFingerprint(source) }
 export function stage1CanImplicitWiden(fromCode: int, toCode: int): bool { return nqCompilerCanImplicitWiden(fromCode, toCode) }
 export function stage1PackageCoordinateValid(value: []u8): bool { return nqPackageCoordinateValid(value) }
 export function stage1PackageArchiveLimitsValid(files: usize, bytes: usize): bool { return nqPackageArchiveLimitsValid(files, bytes) }
+export function stage1TargetValid(target: int): bool { return nqTargetValid(target) }
+export function stage1TargetObjectFormat(target: int): int { return nqTargetObjectFormat(target) }
+export function stage1TargetAbi(target: int): int { return nqTargetAbi(target) }
+export function stage1CompileReady(source: []u8, target: int): bool { return nqPipelineCompileReady(source, target) }
+export function stage1NirOpcodeValid(opcode: int): bool { return nqNirOpcodeValid(opcode) }
+export function stage1AbiIntegerArgRegisters(target: int): int { return nqAbiIntegerArgRegisters(target) }
+export function stage1ProfileOptimization(profile: int): int { return nqProfileOptimization(profile) }
+export function stage1CoffTargetValid(target: int): bool { return nqCoffTargetValid(target) }
+export function stage1ElfTargetValid(target: int): bool { return nqElfTargetValid(target) }
+export function stage1MachTargetValid(target: int): bool { return nqMachTargetValid(target) }

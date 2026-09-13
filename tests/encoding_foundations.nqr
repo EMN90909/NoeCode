@@ -35,7 +35,7 @@ function test_varint(): int {
     if varint_encode_u64(slice(output), 300 as u64) != 2 as usize { return 1 }
     if output[0 as usize] != 172 as u8 || output[1 as usize] != 2 as u8 { return 2 }
 
-    let resultBytes: [u8; 48] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let resultBytes: [u8; 48] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
     let result: *VarintResult = (&resultBytes[0 as usize]) as *VarintResult
     if !varint_decode_u64(slice(output), result) || result.value != 300 as u64 || result.bytes != 2 as usize { return 3 }
     if !varint_is_canonical_u64(slice(output), 0 as usize) { return 4 }
@@ -83,14 +83,15 @@ function test_encoding(): int {
 
     let latin1: [u8; 2] = [65 as u8,233 as u8]
     let utf8out: [u8; 8] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
-    let transcodeBytes: [u8; 48] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let transcodeBytes: [u8; 48] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
     let transcode: *TranscodeResult = (&transcodeBytes[0 as usize]) as *TranscodeResult
     if !encoding_latin1_to_utf8(slice(latin1), slice(utf8out), transcode) { return 4 }
     if transcode.written != 3 as usize || utf8out[0 as usize] != 65 as u8 || utf8out[1 as usize] != 195 as u8 || utf8out[2 as usize] != 169 as u8 { return 5 }
 
-    let latinBack: [u8; 4] = [0 as u8,0 as u8,0 as u8,0 as u8]
-    if !encoding_utf8_to_latin1(slice(utf8out), slice(latinBack), transcode) { return 6 }
-    if transcode.written != 3 as usize { return 7 }
+    let utf8Latin: [u8; 3] = [65 as u8,195 as u8,169 as u8]
+    let latinBack: [u8; 2] = [0 as u8,0 as u8]
+    if !encoding_utf8_to_latin1(slice(utf8Latin), slice(latinBack), transcode) { return 6 }
+    if transcode.written != 2 as usize || latinBack[0 as usize] != 65 as u8 || latinBack[1 as usize] != 233 as u8 { return 7 }
 
     let utf16le: [u8; 8] = [255 as u8,254 as u8,65 as u8,0 as u8,61 as u8,216 as u8,0 as u8,222 as u8]
     if !encoding_detect(slice(utf16le), detection) || detection.kind != encoding_utf16_le() || detection.bom_bytes != 2 as usize || !detection.valid { return 8 }
@@ -99,8 +100,9 @@ function test_encoding(): int {
     if transcode.written != 5 as usize { return 10 }
     if utf8emoji[0 as usize] != 65 as u8 || utf8emoji[1 as usize] != 240 as u8 || utf8emoji[2 as usize] != 159 as u8 || utf8emoji[3 as usize] != 152 as u8 || utf8emoji[4 as usize] != 128 as u8 { return 11 }
 
+    let utf8EmojiExact: [u8; 5] = [65 as u8,240 as u8,159 as u8,152 as u8,128 as u8]
     let utf16roundtrip: [u8; 8] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
-    if !encoding_utf8_to_utf16(slice(utf8emoji), true, slice(utf16roundtrip), transcode) { return 12 }
+    if !encoding_utf8_to_utf16(slice(utf8EmojiExact), true, slice(utf16roundtrip), transcode) { return 12 }
     if transcode.written != 6 as usize { return 13 }
     if utf16roundtrip[0 as usize] != 65 as u8 || utf16roundtrip[1 as usize] != 0 as u8 || utf16roundtrip[2 as usize] != 61 as u8 || utf16roundtrip[3 as usize] != 216 as u8 || utf16roundtrip[4 as usize] != 0 as u8 || utf16roundtrip[5 as usize] != 222 as u8 { return 14 }
     return 0

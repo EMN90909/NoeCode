@@ -17,8 +17,7 @@ set(NOQERI_FRONTEND_SOURCES
  Compiler/bootstrap/noqeridb_host.cpp)
 set(NOQERI_SOURCES ${NOQERI_FRONTEND_SOURCES}
  Compiler/native_backend.cpp Compiler/web_backend.cpp Compiler/linker.cpp
- Compiler/bootstrap/cli_host.cpp Compiler/bootstrap/formatter_host.cpp Compiler/bootstrap/package_host.cpp
- Compiler/bootstrap/lsp_host.cpp
+ Compiler/bootstrap/cli_host.cpp Compiler/bootstrap/formatter_host.cpp Compiler/bootstrap/package_host.cpp Compiler/bootstrap/lsp_host.cpp
  Compiler/bootstrap/test_runner_host.cpp Compiler/bootstrap/production_doctor_host.cpp
  Compiler/bootstrap/security_audit_host.cpp)
 add_executable(noqeri ${NOQERI_SOURCES})
@@ -68,6 +67,7 @@ if(BUILD_TESTING)
  add_test(NAME noqeri-general-native COMMAND noqeri build ${CMAKE_SOURCE_DIR}/examples/general_systems.nqr ${CMAKE_BINARY_DIR}/general_systems.s)
  add_test(NAME noqeri-freestanding-build COMMAND noqeri build ${CMAKE_SOURCE_DIR}/examples/native_hello.nqr ${CMAKE_BINARY_DIR}/native_hello.s)
  add_test(NAME noqeri-noqeridb COMMAND noqeri db ${CMAKE_SOURCE_DIR}/tests/noqeridb.nqd ${CMAKE_BINARY_DIR}/noqeridb-test.nqdb)
+ add_test(NAME noqeri-stress COMMAND noqeri stress ${CMAKE_SOURCE_DIR})
  add_test(NAME noqeri-doctor COMMAND noqeri doctor ${CMAKE_SOURCE_DIR})
  add_test(NAME noqeri-audit COMMAND noqeri audit ${CMAKE_SOURCE_DIR})
 endif()

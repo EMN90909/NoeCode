@@ -1,0 +1,8 @@
+project {
+    name: "corpus/tcp-service"
+    version: "0.1.0"
+    edition: "2026"
+    entry: "src/main.nqr"
+    profile: "server"
+    target: "x86_64-unknown-linux"
+}

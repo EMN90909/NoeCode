@@ -1,6 +1,7 @@
 module noqeri.std.queue
 
-// Queue<T> is a bounded caller-owned ring buffer.
+// Queue<T> is a bounded caller-owned ring buffer. Aggregate elements are
+// addressable by reference; value-copy operations are restricted to Copy types.
 record Queue<T> {
     data: *T
     capacity: usize
@@ -15,7 +16,15 @@ export function queue_full<T>(queue: *Queue<T>): bool { return queue.length >= q
 export function queue_invariant<T>(queue: *Queue<T>): bool { if queue.length > queue.capacity { return false } if queue.capacity == 0 as usize { return queue.length == 0 as usize } return queue.data != null && queue.head < queue.capacity }
 export function queue_physical_index<T>(queue: *Queue<T>, logical: usize): usize { if queue.capacity == 0 as usize { return 0 as usize } return (queue.head + logical) % queue.capacity }
 
-export function queue_push<T>(queue: *Queue<T>, value: T): bool {
+export function queue_ref<T>(queue: *Queue<T>, logical: usize): *T {
+    if queue.data == null || logical >= queue.length || queue.capacity == 0 as usize { return null as *T }
+    return &queue.data[queue_physical_index(queue, logical)]
+}
+
+export function queue_front_ref<T>(queue: *Queue<T>): *T { return queue_ref(queue, 0 as usize) }
+export function queue_back_ref<T>(queue: *Queue<T>): *T { if queue.length == 0 as usize { return null as *T } return queue_ref(queue, queue.length - 1 as usize) }
+
+export function queue_push<T: Copy>(queue: *Queue<T>, value: T): bool {
     if queue.data == null || queue.capacity == 0 as usize || queue.length >= queue.capacity { return false }
     let index: usize = queue_physical_index(queue, queue.length)
     queue.data[index] = value
@@ -23,17 +32,19 @@ export function queue_push<T>(queue: *Queue<T>, value: T): bool {
     return true
 }
 
-export function queue_front_or<T>(queue: *Queue<T>, fallback: T): T {
-    if queue.data == null || queue.length == 0 as usize { return fallback }
-    return queue.data[queue.head]
+export function queue_front_or<T: Copy>(queue: *Queue<T>, fallback: T): T {
+    let value: *T = queue_front_ref(queue)
+    if value == null { return fallback }
+    return *value
 }
 
-export function queue_back_or<T>(queue: *Queue<T>, fallback: T): T {
-    if queue.data == null || queue.length == 0 as usize { return fallback }
-    return queue.data[queue_physical_index(queue, queue.length - 1 as usize)]
+export function queue_back_or<T: Copy>(queue: *Queue<T>, fallback: T): T {
+    let value: *T = queue_back_ref(queue)
+    if value == null { return fallback }
+    return *value
 }
 
-export function queue_pop_or<T>(queue: *Queue<T>, fallback: T): T {
+export function queue_pop_or<T: Copy>(queue: *Queue<T>, fallback: T): T {
     if queue.data == null || queue.length == 0 as usize || queue.capacity == 0 as usize { return fallback }
     let value: T = queue.data[queue.head]
     queue.head = (queue.head + 1 as usize) % queue.capacity
@@ -41,10 +52,17 @@ export function queue_pop_or<T>(queue: *Queue<T>, fallback: T): T {
     return value
 }
 
+export function queue_drop_front<T>(queue: *Queue<T>): bool {
+    if queue.length == 0 as usize || queue.capacity == 0 as usize { return false }
+    queue.head = (queue.head + 1 as usize) % queue.capacity
+    queue.length = queue.length - 1 as usize
+    return true
+}
+
 export function queue_clear<T>(queue: *Queue<T>): void { queue.head = 0 as usize queue.length = 0 as usize }
 
 // Slice compatibility helpers.
 export function queue_len<T>(items: []T): usize { return len(items) }
 export function queue_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
-export function queue_front<T>(items: []T): T { return items[0 as usize] }
-export function queue_back<T>(items: []T): T { return items[len(items)-1 as usize] }
+export function queue_front<T: Copy>(items: []T): T { return items[0 as usize] }
+export function queue_back<T: Copy>(items: []T): T { return items[len(items)-1 as usize] }

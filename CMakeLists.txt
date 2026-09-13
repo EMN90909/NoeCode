@@ -2,19 +2,19 @@ cmake_minimum_required(VERSION 3.16)
 project(noqeri VERSION 1.0.0 LANGUAGES CXX)
 include(GNUInstallDirs)
 option(NOQERI_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(NOQERI_ENABLE_THREAD_SANITIZER "Enable ThreadSanitizer on supported compilers" OFF)
 option(NOQERI_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+if(NOQERI_ENABLE_SANITIZERS AND NOQERI_ENABLE_THREAD_SANITIZER)
+ message(FATAL_ERROR "Address/UB sanitizers and ThreadSanitizer must use separate builds")
+endif()
 if(DEFINED CMAKE_BUILD_TYPE AND CMAKE_CONFIGURATION_TYPES)
  message(STATUS "Multi-config generator detected; cmake --build --config selects the active configuration (${CMAKE_BUILD_TYPE}).")
 endif()
-# C++ is restricted to the compiler/bootstrap and public embedding ABI layer.
-# Reusable language-facing modules, parser helpers, runtime helpers, platform
-# policy, security and data structures live in .nqr. Bootstrap C++ remains until
-# the Noqeri compiler can compile the corresponding compiler/toolchain pieces.
 set(NOQERI_FRONTEND_SOURCES
  Compiler/core.cpp Compiler/modules.cpp Compiler/workspace.cpp Compiler/type_checker.cpp
  Compiler/lifetime.cpp Compiler/safety.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp Compiler/register_alloc.cpp Compiler/optimizer.cpp
  Compiler/bootstrap/lexer_host.cpp Compiler/bootstrap/parser_host.cpp Compiler/bootstrap/abi_runtime_host.cpp Compiler/bootstrap/interpreter_host.cpp
- Compiler/bootstrap/noqeridb_host.cpp)
+ Compiler/bootstrap/runtime_checks_host.cpp Compiler/bootstrap/noqeridb_host.cpp)
 set(NOQERI_SOURCES ${NOQERI_FRONTEND_SOURCES}
  Compiler/native_backend.cpp Compiler/web_backend.cpp Compiler/linker.cpp
  Compiler/bootstrap/cli_host.cpp Compiler/bootstrap/formatter_host.cpp Compiler/bootstrap/package_host.cpp Compiler/bootstrap/lsp_host.cpp
@@ -46,6 +46,10 @@ function(noqeri_apply_warnings target)
    target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
    target_link_options(${target} PRIVATE -fsanitize=address,undefined)
   endif()
+  if(NOQERI_ENABLE_THREAD_SANITIZER)
+   target_compile_options(${target} PRIVATE -fsanitize=thread -fno-omit-frame-pointer)
+   target_link_options(${target} PRIVATE -fsanitize=thread)
+  endif()
  endif()
 endfunction()
 noqeri_apply_warnings(noqeri)
@@ -70,16 +74,14 @@ if(BUILD_TESTING)
  add_test(NAME noqeri-stress COMMAND noqeri stress ${CMAKE_SOURCE_DIR})
  add_test(NAME noqeri-doctor COMMAND noqeri doctor ${CMAKE_SOURCE_DIR})
  add_test(NAME noqeri-audit COMMAND noqeri audit ${CMAKE_SOURCE_DIR})
-
- # The language conformance and backend differential suites are local tests.
- # They never depend on GitHub Actions. If Node is available, CTest includes
- # them automatically and points the scripts at the just-built compiler.
  find_program(NOQERI_NODE_EXECUTABLE NAMES node nodejs)
  if(NOQERI_NODE_EXECUTABLE)
   add_test(NAME noqeri-conformance COMMAND ${NOQERI_NODE_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/conformance.mjs)
   set_tests_properties(noqeri-conformance PROPERTIES ENVIRONMENT "NOQERI_BIN=$<TARGET_FILE:noqeri>;NOQERI_OFFLINE=1")
   add_test(NAME noqeri-differential COMMAND ${NOQERI_NODE_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/differential-test.mjs)
   set_tests_properties(noqeri-differential PROPERTIES ENVIRONMENT "NOQERI_BIN=$<TARGET_FILE:noqeri>;NOQERI_OFFLINE=1")
+  add_test(NAME noqeri-fuzz-smoke COMMAND ${NOQERI_NODE_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/fuzz.mjs --cases 25 --seed 1314014546)
+  set_tests_properties(noqeri-fuzz-smoke PROPERTIES ENVIRONMENT "NOQERI_BIN=$<TARGET_FILE:noqeri>;NOQERI_OFFLINE=1")
  endif()
 endif()
 install(TARGETS noqeri noqeri_abi RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})

@@ -6,6 +6,7 @@ extern function taskHostJoin(task: usize, timeoutMillis: i64): isize
 extern function taskHostCancel(task: usize): bool
 extern function taskHostDestroy(task: usize): bool
 extern function taskHostCancelled(task: usize): bool
+extern function taskHostCurrentCancelled(): bool
 
 export function task_pending(): int { return 0 }
 export function task_running(): int { return 1 }
@@ -43,6 +44,12 @@ export function task_cancel(task: usize): bool {
 export function task_is_cancelled(task: usize): bool {
     if !task_handle_valid(task) { return true }
     unsafe { return taskHostCancelled(task) }
+}
+
+// Cooperative cancellation inside the currently executing task. Long-running
+// task functions should poll this at safe interruption points.
+export function task_cancelled_current(): bool {
+    unsafe { return taskHostCurrentCancelled() }
 }
 
 export function task_destroy(task: usize): bool {

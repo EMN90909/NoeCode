@@ -1,6 +1,445 @@
 module noqeri.std.duration
 
-export function duration_seconds_to_millis(value:i64):i64{return value*1000 as i64}
-export function duration_minutes_to_seconds(value:i64):i64{return value*60 as i64}
-export function duration_hours_to_seconds(value:i64):i64{return value*3600 as i64}
-export function duration_nonnegative(value:i64):bool{return value>=0 as i64}
+// Duration represents an amount of elapsed time, not a wall-clock timestamp.
+// The canonical representation keeps nanoseconds in the range 0..999,999,999.
+// A negative duration therefore uses a negative seconds field and a positive
+// nanosecond remainder, for example -0.25 seconds is (-1, 750_000_000).
+record Duration {
+    seconds: i64
+    nanoseconds: i64
+}
+
+export function duration_nanos_per_micro(): i64 { return 1000 as i64 }
+export function duration_nanos_per_milli(): i64 { return 1000000 as i64 }
+export function duration_nanos_per_second(): i64 { return 1000000000 as i64 }
+export function duration_millis_per_second(): i64 { return 1000 as i64 }
+export function duration_seconds_per_minute(): i64 { return 60 as i64 }
+export function duration_seconds_per_hour(): i64 { return 3600 as i64 }
+export function duration_seconds_per_day(): i64 { return 86400 as i64 }
+export function duration_seconds_per_week(): i64 { return 604800 as i64 }
+export function duration_i64_max(): i64 { return 9223372036854775807 as i64 }
+export function duration_i64_min(): i64 { return -9223372036854775807 as i64 - 1 as i64 }
+
+function duration_clamp_i64(value: i64, minimum: i64, maximum: i64): i64 {
+    if value < minimum { return minimum }
+    if value > maximum { return maximum }
+    return value
+}
+
+function duration_add_saturating_i64(left: i64, right: i64): i64 {
+    let maximum: i64 = duration_i64_max()
+    let minimum: i64 = duration_i64_min()
+    if right > 0 as i64 && left > maximum - right { return maximum }
+    if right < 0 as i64 && left < minimum - right { return minimum }
+    return left + right
+}
+
+function duration_sub_saturating_i64(left: i64, right: i64): i64 {
+    let maximum: i64 = duration_i64_max()
+    let minimum: i64 = duration_i64_min()
+    if right < 0 as i64 && left > maximum + right { return maximum }
+    if right > 0 as i64 && left < minimum + right { return minimum }
+    return left - right
+}
+
+function duration_mul_saturating_i64(value: i64, factor: i64): i64 {
+    if value == 0 as i64 || factor == 0 as i64 { return 0 as i64 }
+    let maximum: i64 = duration_i64_max()
+    let minimum: i64 = duration_i64_min()
+    if value == -1 as i64 && factor == minimum { return maximum }
+    if factor == -1 as i64 && value == minimum { return maximum }
+    if value > 0 as i64 {
+        if factor > 0 as i64 && value > maximum / factor { return maximum }
+        if factor < 0 as i64 && factor < minimum / value { return minimum }
+    } else {
+        if factor > 0 as i64 && value < minimum / factor { return minimum }
+        if factor < 0 as i64 && value < maximum / factor { return maximum }
+    }
+    return value * factor
+}
+
+function duration_floor_div(value: i64, divisor: i64): i64 {
+    let quotient: i64 = value / divisor
+    let remainder: i64 = value % divisor
+    if remainder != 0 as i64 && ((remainder < 0 as i64) != (divisor < 0 as i64)) {
+        quotient = quotient - 1 as i64
+    }
+    return quotient
+}
+
+function duration_positive_mod(value: i64, divisor: i64): i64 {
+    let result: i64 = value % divisor
+    if result < 0 as i64 { result = result + divisor }
+    return result
+}
+
+export function duration_parts_valid(value: *Duration): bool {
+    if value == null { return false }
+    return value.nanoseconds >= 0 as i64 && value.nanoseconds < duration_nanos_per_second()
+}
+
+export function duration_is_zero(value: *Duration): bool {
+    if value == null { return true }
+    return value.seconds == 0 as i64 && value.nanoseconds == 0 as i64
+}
+
+export function duration_is_negative(value: *Duration): bool {
+    if value == null { return false }
+    return value.seconds < 0 as i64
+}
+
+export function duration_is_positive(value: *Duration): bool {
+    if value == null { return false }
+    return value.seconds > 0 as i64 || (value.seconds == 0 as i64 && value.nanoseconds > 0 as i64)
+}
+
+export function duration_set_zero(value: *Duration): bool {
+    if value == null { return false }
+    value.seconds = 0 as i64
+    value.nanoseconds = 0 as i64
+    return true
+}
+
+export function duration_set_parts(value: *Duration, seconds: i64, nanoseconds: i64): bool {
+    if value == null { return false }
+    let base: i64 = duration_nanos_per_second()
+    let carry: i64 = duration_floor_div(nanoseconds, base)
+    value.seconds = duration_add_saturating_i64(seconds, carry)
+    value.nanoseconds = duration_positive_mod(nanoseconds, base)
+    return true
+}
+
+export function duration_copy(destination: *Duration, source: *Duration): bool {
+    if destination == null || source == null { return false }
+    destination.seconds = source.seconds
+    destination.nanoseconds = source.nanoseconds
+    return true
+}
+
+export function duration_from_seconds(value: *Duration, seconds: i64): bool {
+    return duration_set_parts(value, seconds, 0 as i64)
+}
+
+export function duration_from_millis(value: *Duration, milliseconds: i64): bool {
+    if value == null { return false }
+    let seconds: i64 = duration_floor_div(milliseconds, duration_millis_per_second())
+    let millis: i64 = duration_positive_mod(milliseconds, duration_millis_per_second())
+    return duration_set_parts(value, seconds, millis * duration_nanos_per_milli())
+}
+
+export function duration_from_micros(value: *Duration, microseconds: i64): bool {
+    if value == null { return false }
+    let perSecond: i64 = 1000000 as i64
+    let seconds: i64 = duration_floor_div(microseconds, perSecond)
+    let micros: i64 = duration_positive_mod(microseconds, perSecond)
+    return duration_set_parts(value, seconds, micros * duration_nanos_per_micro())
+}
+
+export function duration_from_minutes(value: *Duration, minutes: i64): bool {
+    return duration_from_seconds(value, duration_mul_saturating_i64(minutes, duration_seconds_per_minute()))
+}
+
+export function duration_from_hours(value: *Duration, hours: i64): bool {
+    return duration_from_seconds(value, duration_mul_saturating_i64(hours, duration_seconds_per_hour()))
+}
+
+export function duration_from_days(value: *Duration, days: i64): bool {
+    return duration_from_seconds(value, duration_mul_saturating_i64(days, duration_seconds_per_day()))
+}
+
+export function duration_from_weeks(value: *Duration, weeks: i64): bool {
+    return duration_from_seconds(value, duration_mul_saturating_i64(weeks, duration_seconds_per_week()))
+}
+
+export function duration_compare(left: *Duration, right: *Duration): int {
+    if left == null && right == null { return 0 }
+    if left == null { return -1 }
+    if right == null { return 1 }
+    if left.seconds < right.seconds { return -1 }
+    if left.seconds > right.seconds { return 1 }
+    if left.nanoseconds < right.nanoseconds { return -1 }
+    if left.nanoseconds > right.nanoseconds { return 1 }
+    return 0
+}
+
+export function duration_equal(left: *Duration, right: *Duration): bool {
+    return duration_compare(left, right) == 0
+}
+
+export function duration_less(left: *Duration, right: *Duration): bool {
+    return duration_compare(left, right) < 0
+}
+
+export function duration_less_or_equal(left: *Duration, right: *Duration): bool {
+    return duration_compare(left, right) <= 0
+}
+
+export function duration_greater(left: *Duration, right: *Duration): bool {
+    return duration_compare(left, right) > 0
+}
+
+export function duration_greater_or_equal(left: *Duration, right: *Duration): bool {
+    return duration_compare(left, right) >= 0
+}
+
+export function duration_add_into(destination: *Duration, left: *Duration, right: *Duration): bool {
+    if destination == null || left == null || right == null { return false }
+    let seconds: i64 = duration_add_saturating_i64(left.seconds, right.seconds)
+    let nanos: i64 = left.nanoseconds + right.nanoseconds
+    return duration_set_parts(destination, seconds, nanos)
+}
+
+export function duration_sub_into(destination: *Duration, left: *Duration, right: *Duration): bool {
+    if destination == null || left == null || right == null { return false }
+    let seconds: i64 = duration_sub_saturating_i64(left.seconds, right.seconds)
+    let nanos: i64 = left.nanoseconds - right.nanoseconds
+    return duration_set_parts(destination, seconds, nanos)
+}
+
+export function duration_add_in_place(value: *Duration, other: *Duration): bool {
+    if value == null || other == null { return false }
+    let seconds: i64 = duration_add_saturating_i64(value.seconds, other.seconds)
+    let nanos: i64 = value.nanoseconds + other.nanoseconds
+    return duration_set_parts(value, seconds, nanos)
+}
+
+export function duration_sub_in_place(value: *Duration, other: *Duration): bool {
+    if value == null || other == null { return false }
+    let seconds: i64 = duration_sub_saturating_i64(value.seconds, other.seconds)
+    let nanos: i64 = value.nanoseconds - other.nanoseconds
+    return duration_set_parts(value, seconds, nanos)
+}
+
+export function duration_negate_into(destination: *Duration, source: *Duration): bool {
+    if destination == null || source == null { return false }
+    if source.seconds == 0 as i64 && source.nanoseconds == 0 as i64 {
+        return duration_set_zero(destination)
+    }
+    if source.nanoseconds == 0 as i64 {
+        if source.seconds == duration_i64_min() {
+            destination.seconds = duration_i64_max()
+            destination.nanoseconds = duration_nanos_per_second() - 1 as i64
+            return true
+        }
+        return duration_set_parts(destination, -source.seconds, 0 as i64)
+    }
+    let seconds: i64 = duration_sub_saturating_i64(-source.seconds, 1 as i64)
+    let nanos: i64 = duration_nanos_per_second() - source.nanoseconds
+    return duration_set_parts(destination, seconds, nanos)
+}
+
+export function duration_abs_into(destination: *Duration, source: *Duration): bool {
+    if destination == null || source == null { return false }
+    if duration_is_negative(source) { return duration_negate_into(destination, source) }
+    return duration_copy(destination, source)
+}
+
+export function duration_whole_seconds(value: *Duration): i64 {
+    if value == null { return 0 as i64 }
+    if value.seconds < 0 as i64 && value.nanoseconds > 0 as i64 { return value.seconds + 1 as i64 }
+    return value.seconds
+}
+
+export function duration_floor_seconds(value: *Duration): i64 {
+    if value == null { return 0 as i64 }
+    return value.seconds
+}
+
+export function duration_whole_millis(value: *Duration): i64 {
+    if value == null { return 0 as i64 }
+    let base: i64 = duration_mul_saturating_i64(value.seconds, duration_millis_per_second())
+    let fraction: i64 = value.nanoseconds / duration_nanos_per_milli()
+    return duration_add_saturating_i64(base, fraction)
+}
+
+export function duration_whole_micros(value: *Duration): i64 {
+    if value == null { return 0 as i64 }
+    let base: i64 = duration_mul_saturating_i64(value.seconds, 1000000 as i64)
+    let fraction: i64 = value.nanoseconds / duration_nanos_per_micro()
+    return duration_add_saturating_i64(base, fraction)
+}
+
+export function duration_whole_minutes(value: *Duration): i64 {
+    return duration_whole_seconds(value) / duration_seconds_per_minute()
+}
+
+export function duration_whole_hours(value: *Duration): i64 {
+    return duration_whole_seconds(value) / duration_seconds_per_hour()
+}
+
+export function duration_whole_days(value: *Duration): i64 {
+    return duration_whole_seconds(value) / duration_seconds_per_day()
+}
+
+export function duration_whole_weeks(value: *Duration): i64 {
+    return duration_whole_seconds(value) / duration_seconds_per_week()
+}
+
+export function duration_subsecond_nanos(value: *Duration): i64 {
+    if value == null { return 0 as i64 }
+    return value.nanoseconds
+}
+
+export function duration_subsecond_millis(value: *Duration): i64 {
+    return duration_subsecond_nanos(value) / duration_nanos_per_milli()
+}
+
+export function duration_subsecond_micros(value: *Duration): i64 {
+    return duration_subsecond_nanos(value) / duration_nanos_per_micro()
+}
+
+export function duration_second_part(value: *Duration): i64 {
+    let total: i64 = duration_whole_seconds(value)
+    let part: i64 = total % duration_seconds_per_minute()
+    if part < 0 as i64 { part = -part }
+    return part
+}
+
+export function duration_minute_part(value: *Duration): i64 {
+    let total: i64 = duration_whole_seconds(value)
+    let part: i64 = (total / duration_seconds_per_minute()) % 60 as i64
+    if part < 0 as i64 { part = -part }
+    return part
+}
+
+export function duration_hour_part(value: *Duration): i64 {
+    let total: i64 = duration_whole_seconds(value)
+    let part: i64 = (total / duration_seconds_per_hour()) % 24 as i64
+    if part < 0 as i64 { part = -part }
+    return part
+}
+
+export function duration_day_part(value: *Duration): i64 {
+    let total: i64 = duration_whole_seconds(value)
+    let part: i64 = total / duration_seconds_per_day()
+    if part < 0 as i64 { part = -part }
+    return part
+}
+
+export function duration_fraction_per_mille(value: *Duration): i64 {
+    if value == null { return 0 as i64 }
+    return value.nanoseconds / 1000000 as i64
+}
+
+export function duration_round_to_millis(value: *Duration): i64 {
+    if value == null { return 0 as i64 }
+    let millis: i64 = duration_whole_millis(value)
+    let remainder: i64 = value.nanoseconds % duration_nanos_per_milli()
+    if remainder >= duration_nanos_per_milli() / 2 as i64 {
+        if duration_is_negative(value) { return millis - 1 as i64 }
+        return duration_add_saturating_i64(millis, 1 as i64)
+    }
+    return millis
+}
+
+export function duration_round_to_seconds(value: *Duration): i64 {
+    if value == null { return 0 as i64 }
+    let seconds: i64 = duration_whole_seconds(value)
+    if value.nanoseconds >= duration_nanos_per_second() / 2 as i64 {
+        if duration_is_negative(value) { return seconds - 1 as i64 }
+        return duration_add_saturating_i64(seconds, 1 as i64)
+    }
+    return seconds
+}
+
+export function duration_clamp_into(destination: *Duration, value: *Duration, minimum: *Duration, maximum: *Duration): bool {
+    if destination == null || value == null || minimum == null || maximum == null { return false }
+    if duration_compare(minimum, maximum) > 0 { return false }
+    if duration_compare(value, minimum) < 0 { return duration_copy(destination, minimum) }
+    if duration_compare(value, maximum) > 0 { return duration_copy(destination, maximum) }
+    return duration_copy(destination, value)
+}
+
+export function duration_min_into(destination: *Duration, left: *Duration, right: *Duration): bool {
+    if duration_compare(left, right) <= 0 { return duration_copy(destination, left) }
+    return duration_copy(destination, right)
+}
+
+export function duration_max_into(destination: *Duration, left: *Duration, right: *Duration): bool {
+    if duration_compare(left, right) >= 0 { return duration_copy(destination, left) }
+    return duration_copy(destination, right)
+}
+
+export function duration_ratio_per_mille(part: *Duration, whole: *Duration): i64 {
+    if part == null || whole == null { return 0 as i64 }
+    let denominator: i64 = duration_whole_millis(whole)
+    if denominator == 0 as i64 { return 0 as i64 }
+    let numerator: i64 = duration_whole_millis(part)
+    let scaled: i64 = duration_mul_saturating_i64(numerator, 1000 as i64)
+    return scaled / denominator
+}
+
+export function duration_lerp_millis(start: *Duration, finish: *Duration, per_mille: i64): i64 {
+    if start == null || finish == null { return 0 as i64 }
+    let amount: i64 = duration_clamp_i64(per_mille, 0 as i64, 1000 as i64)
+    let left: i64 = duration_whole_millis(start)
+    let right: i64 = duration_whole_millis(finish)
+    let delta: i64 = duration_sub_saturating_i64(right, left)
+    let scaled: i64 = duration_mul_saturating_i64(delta, amount)
+    return duration_add_saturating_i64(left, scaled / 1000 as i64)
+}
+
+export function duration_seconds_to_millis(value: i64): i64 {
+    return duration_mul_saturating_i64(value, duration_millis_per_second())
+}
+
+export function duration_millis_to_seconds(value: i64): i64 {
+    return value / duration_millis_per_second()
+}
+
+export function duration_minutes_to_seconds(value: i64): i64 {
+    return duration_mul_saturating_i64(value, duration_seconds_per_minute())
+}
+
+export function duration_hours_to_seconds(value: i64): i64 {
+    return duration_mul_saturating_i64(value, duration_seconds_per_hour())
+}
+
+export function duration_days_to_seconds(value: i64): i64 {
+    return duration_mul_saturating_i64(value, duration_seconds_per_day())
+}
+
+export function duration_weeks_to_seconds(value: i64): i64 {
+    return duration_mul_saturating_i64(value, duration_seconds_per_week())
+}
+
+export function duration_seconds_to_minutes_floor(value: i64): i64 {
+    return duration_floor_div(value, duration_seconds_per_minute())
+}
+
+export function duration_seconds_to_hours_floor(value: i64): i64 {
+    return duration_floor_div(value, duration_seconds_per_hour())
+}
+
+export function duration_seconds_to_days_floor(value: i64): i64 {
+    return duration_floor_div(value, duration_seconds_per_day())
+}
+
+export function duration_nonnegative(value: i64): bool { return value >= 0 as i64 }
+export function duration_positive(value: i64): bool { return value > 0 as i64 }
+export function duration_zero(value: i64): bool { return value == 0 as i64 }
+export function duration_negative(value: i64): bool { return value < 0 as i64 }
+
+export function duration_between_millis(value: i64, minimum: i64, maximum: i64): bool {
+    if minimum > maximum { return false }
+    return value >= minimum && value <= maximum
+}
+
+export function duration_clamp_millis(value: i64, minimum: i64, maximum: i64): i64 {
+    if minimum > maximum { return minimum }
+    return duration_clamp_i64(value, minimum, maximum)
+}
+
+export function duration_elapsed_millis(start: i64, finish: i64): i64 {
+    if finish <= start { return 0 as i64 }
+    return duration_sub_saturating_i64(finish, start)
+}
+
+export function duration_deadline_remaining_millis(now: i64, deadline: i64): i64 {
+    if now >= deadline { return 0 as i64 }
+    return duration_sub_saturating_i64(deadline, now)
+}
+
+export function duration_deadline_reached(now: i64, deadline: i64): bool {
+    return now >= deadline
+}

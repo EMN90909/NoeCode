@@ -328,8 +328,11 @@ int main(int argc, char** argv) {
     if (cmd == "db") {
         if (argc < 3) { std::cerr << "NQR-D8041: db requires a .nqd or .sql script\n"; return 1; }
         Diagnostics d;
+        const std::filesystem::path script=argv[2];
         std::filesystem::path overridePath = argc >= 4 ? std::filesystem::path(argv[3]) : std::filesystem::path{};
-        if (!NoqeriDatabase{}.execute(argv[2], overridePath, std::cout, d)) { d.print(argv[2]); return 1; }
+        NoqeriDatabase database;
+        const bool ok=script.extension()==".sql" ? database.executeSql(script,overridePath,std::cout,d) : database.execute(script,overridePath,std::cout,d);
+        if (!ok) { d.print(script.string()); return 1; }
         return 0;
     }
     try {

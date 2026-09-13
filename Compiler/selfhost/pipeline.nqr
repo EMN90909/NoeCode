@@ -34,15 +34,21 @@ export function nqPipelineWorkspaceNirMinimum(): usize { return 8192 as usize }
 export function nqPipelineWorkspaceFunctionMinimum(): usize { return 512 as usize }
 
 export function nqPipelineSyntaxCheck(source: []u8): isize {
+    let policy: NqSecurityPolicy
+    nqSecurityProductionPolicy(&policy)
+    if !nqSecuritySourceAllowed(&policy, len(source)) { return nqSecurityLimitExceeded() }
     let nodes: [NqAstNode; 4096]
     let count: usize = 0 as usize
     let first: isize = nqAstNoNode()
     return nqParserParseProgram(source, slice(nodes), &count, &first)
 }
 
-// Full check owns language semantics in Noqeri. It is intentionally stronger
-// than the historical delimiter/token sanity check.
-export function nqPipelineCheck(source: []u8): isize {
+// `check` is source-local and therefore performs the complete grammar pass.
+// Semantic compilation is intentionally done after imports are dependency-first
+// merged, matching the seed's ModuleGraph::mergedProgram contract.
+export function nqPipelineCheck(source: []u8): isize { return nqPipelineSyntaxCheck(source) }
+
+export function nqPipelineSemanticCheckMerged(source: []u8, unsafeAllowed: bool): isize {
     let policy: NqSecurityPolicy
     nqSecurityProductionPolicy(&policy)
     if !nqSecuritySourceAllowed(&policy, len(source)) { return nqSecurityLimitExceeded() }
@@ -51,7 +57,7 @@ export function nqPipelineCheck(source: []u8): isize {
     let first: isize = nqAstNoNode()
     let parseStatus: isize = nqParserParseProgram(source, slice(nodes), &count, &first)
     if parseStatus < 0 as isize { return parseStatus }
-    return nqSemanticAnalyzeProgram(source, slice(nodes), &count, first, false)
+    return nqSemanticAnalyzeProgram(source, slice(nodes), &count, first, unsafeAllowed)
 }
 
 export function nqPipelineTargetCheck(target: int): isize { if !nqBackendTargetReady(target) { return nqBackendUnsupportedTarget() } return 0 }

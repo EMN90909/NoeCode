@@ -1,6 +1,26 @@
 module noqeri.std.os
 
-export function os_capacity_valid(length: usize, capacity: usize): bool { return length <= capacity }
-export function os_remaining(length: usize, capacity: usize): usize { if length >= capacity { return 0 as usize } return capacity - length }
-export function os_nonempty(length: usize): bool { return length > 0 as usize }
-export function os_checked_end(offset: usize, length: usize, capacity: usize): bool { if offset > capacity { return false } return length <= capacity - offset }
+extern function osName(): string
+extern function osArchitecture(): string
+extern function osHostname(): string
+extern function osCpuCount(): usize
+extern function osPageSize(): usize
+extern function osTempDirectory(): string
+extern function osHomeDirectory(): string
+extern function osUserName(): string
+
+export function os_name(): string { return osName() }
+export function os_architecture(): string { return osArchitecture() }
+export function os_hostname(): string { return osHostname() }
+export function os_cpu_count(): usize { let count: usize = osCpuCount() if count == 0 as usize { return 1 as usize } return count }
+export function os_page_size(): usize { return osPageSize() }
+export function os_temp_directory(): string { return osTempDirectory() }
+export function os_home_directory(): string { return osHomeDirectory() }
+export function os_user_name(): string { return osUserName() }
+
+export function os_is_windows(): bool { return osName() == "windows" }
+export function os_is_linux(): bool { return osName() == "linux" }
+export function os_is_macos(): bool { return osName() == "macos" }
+export function os_is_unix_like(): bool { return os_is_linux() || os_is_macos() }
+export function os_has_home_directory(): bool { return textLength(osHomeDirectory()) > 0 as usize }
+export function os_has_temp_directory(): bool { return textLength(osTempDirectory()) > 0 as usize }

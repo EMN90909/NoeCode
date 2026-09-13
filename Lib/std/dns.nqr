@@ -1,5 +1,44 @@
 module noqeri.std.dns
 
-export function dns_valid_label_length(n:usize):bool{return n>0 as usize&&n<=63 as usize}
-export function dns_valid_name_length(n:usize):bool{return n>0 as usize&&n<=253 as usize}
-export function dns_is_label_char(c:u8):bool{return (c>=65 as u8&&c<=90 as u8)||(c>=97 as u8&&c<=122 as u8)||(c>=48 as u8&&c<=57 as u8)||c==45 as u8}
+extern function dnsResolveFirst(host: string, family: int): string
+
+export function dns_family_any(): int { return 0 }
+export function dns_family_ipv4(): int { return 4 }
+export function dns_family_ipv6(): int { return 6 }
+export function dns_valid_label_length(n: usize): bool { return n > 0 as usize && n <= 63 as usize }
+export function dns_valid_name_length(n: usize): bool { return n > 0 as usize && n <= 253 as usize }
+export function dns_is_label_char(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) || (c >= 48 as u8 && c <= 57 as u8) || c == 45 as u8 }
+export function dns_is_alnum(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) || (c >= 48 as u8 && c <= 57 as u8) }
+
+export function dns_label_valid(label: []u8): bool {
+    if !dns_valid_label_length(len(label)) { return false }
+    if !dns_is_alnum(label[0 as usize]) || !dns_is_alnum(label[len(label) - 1 as usize]) { return false }
+    let index: usize = 1 as usize
+    while index + 1 as usize < len(label) { if !dns_is_label_char(label[index]) { return false } index = index + 1 as usize }
+    return true
+}
+
+export function dns_name_valid(name: []u8): bool {
+    if !dns_valid_name_length(len(name)) { return false }
+    let labelStart: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index <= len(name) {
+        if index == len(name) || name[index] == 46 as u8 {
+            let length: usize = index - labelStart
+            if !dns_valid_label_length(length) { return false }
+            let local: usize = labelStart
+            if !dns_is_alnum(name[local]) || !dns_is_alnum(name[index - 1 as usize]) { return false }
+            let scan: usize = local
+            while scan < index { if !dns_is_label_char(name[scan]) { return false } scan = scan + 1 as usize }
+            labelStart = index + 1 as usize
+        }
+        index = index + 1 as usize
+    }
+    return true
+}
+
+export function dns_resolve(host: string, family: int): string {
+    if family != dns_family_any() && family != dns_family_ipv4() && family != dns_family_ipv6() { return "" }
+    if textLength(host) == 0 as usize { return "" }
+    return dnsResolveFirst(host, family)
+}

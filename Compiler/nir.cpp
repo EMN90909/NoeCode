@@ -33,13 +33,23 @@ void Lowerer::lowerStmt(NirFunction&fn,const StmtPtr&stmt){
 }
 Reg Lowerer::lowerAddress(NirFunction&fn,const ExprPtr&expr){
     if(auto n=std::dynamic_pointer_cast<NameExpr>(expr)){NirInstruction i;i.op=NirOp::AddressOf;i.dest=fn.nextReg++;i.text=n->name;emit(fn,i);return*i.dest;}
-    if(auto u=std::dynamic_pointer_cast<UnaryExpr>(expr);u&&u->op==TokenKind::Star)return lowerExpr(fn,u->operand);
+    if(auto u=std::dynamic_pointer_cast<UnaryExpr>(expr);u&&u->op==TokenKind::Star){Reg base=lowerExpr(fn,u->operand);NirInstruction check;check.op=NirOp::CheckNonNull;check.args={base};emit(fn,check);return base;}
     if(auto x=std::dynamic_pointer_cast<IndexExpr>(expr)){
         Reg base=lowerExpr(fn,x->object);
-        if(x->baseIsSlice){NirInstruction d;d.op=NirOp::SliceData;d.dest=fn.nextReg++;d.args={base};emit(fn,d);base=*d.dest;}
-        Reg idx=lowerExpr(fn,x->index);NirInstruction i;i.op=NirOp::PtrOffset;i.dest=fn.nextReg++;i.args={base,idx};i.width=x->elementSize;emit(fn,i);return*i.dest;
+        Reg idx=lowerExpr(fn,x->index);
+        if(x->baseIsSlice){
+            NirInstruction nonnull;nonnull.op=NirOp::CheckNonNull;nonnull.args={base};emit(fn,nonnull);
+            NirInstruction length;length.op=NirOp::SliceLen;length.dest=fn.nextReg++;length.args={base};emit(fn,length);
+            NirInstruction bounds;bounds.op=NirOp::CheckBounds;bounds.args={idx,*length.dest};emit(fn,bounds);
+            NirInstruction data;data.op=NirOp::SliceData;data.dest=fn.nextReg++;data.args={base};emit(fn,data);base=*data.dest;
+            NirInstruction dataNonNull;dataNonNull.op=NirOp::CheckNonNull;dataNonNull.args={base};emit(fn,dataNonNull);
+        }else{
+            if(x->fixedBound>0){NirInstruction length;length.op=NirOp::Const;length.dest=fn.nextReg++;length.literal=static_cast<std::int64_t>(x->fixedBound);emit(fn,length);NirInstruction bounds;bounds.op=NirOp::CheckBounds;bounds.args={idx,*length.dest};emit(fn,bounds);}
+            if(x->fixedBound==0){NirInstruction nonnull;nonnull.op=NirOp::CheckNonNull;nonnull.args={base};emit(fn,nonnull);}
+        }
+        NirInstruction i;i.op=NirOp::PtrOffset;i.dest=fn.nextReg++;i.args={base,idx};i.width=x->elementSize;emit(fn,i);return*i.dest;
     }
-    if(auto m=std::dynamic_pointer_cast<MemberExpr>(expr)){Reg base=m->baseIsPointer?lowerExpr(fn,m->object):lowerAddress(fn,m->object);NirInstruction i;i.op=NirOp::PtrOffset;i.dest=fn.nextReg++;i.args={base};i.target=m->offset;i.width=1;emit(fn,i);return*i.dest;}
+    if(auto m=std::dynamic_pointer_cast<MemberExpr>(expr)){Reg base=m->baseIsPointer?lowerExpr(fn,m->object):lowerAddress(fn,m->object);if(m->baseIsPointer){NirInstruction check;check.op=NirOp::CheckNonNull;check.args={base};emit(fn,check);}NirInstruction i;i.op=NirOp::PtrOffset;i.dest=fn.nextReg++;i.args={base};i.target=m->offset;i.width=1;emit(fn,i);return*i.dest;}
     NirInstruction z;z.op=NirOp::Const;z.dest=fn.nextReg++;z.literal=std::int64_t(0);emit(fn,z);return*z.dest;
 }
 Reg Lowerer::lowerExpr(NirFunction&fn,const ExprPtr&expr){
@@ -51,7 +61,7 @@ Reg Lowerer::lowerExpr(NirFunction&fn,const ExprPtr&expr){
     if(auto e=std::dynamic_pointer_cast<NameExpr>(expr)){NirInstruction i;i.op=NirOp::Load;i.dest=fn.nextReg++;i.text=e->name;emit(fn,i);return*i.dest;}
     if(auto e=std::dynamic_pointer_cast<UnaryExpr>(expr)){
         if(e->op==TokenKind::Ampersand)return lowerAddress(fn,e->operand);
-        if(e->op==TokenKind::Star){Reg a=lowerExpr(fn,e->operand);NirInstruction i;i.op=NirOp::LoadMemory;i.dest=fn.nextReg++;i.args={a};i.width=e->memoryWidth;i.isVolatile=e->volatileAccess;emit(fn,i);return*i.dest;}
+        if(e->op==TokenKind::Star){Reg a=lowerExpr(fn,e->operand);NirInstruction check;check.op=NirOp::CheckNonNull;check.args={a};emit(fn,check);NirInstruction i;i.op=NirOp::LoadMemory;i.dest=fn.nextReg++;i.args={a};i.width=e->memoryWidth;i.isVolatile=e->volatileAccess;emit(fn,i);return*i.dest;}
         if(e->op==TokenKind::Try){Reg a=lowerExpr(fn,e->operand);NirInstruction i;i.op=NirOp::Try;i.dest=fn.nextReg++;i.args={a};emit(fn,i);return*i.dest;}
         Reg a=lowerExpr(fn,e->operand);NirInstruction i;i.op=NirOp::Unary;i.dest=fn.nextReg++;i.text=opText(e->op);i.args={a};emit(fn,i);return*i.dest;
     }
@@ -65,11 +75,8 @@ Reg Lowerer::lowerExpr(NirFunction&fn,const ExprPtr&expr){
             const std::string temp="$noqeri.logic."+std::to_string(fn.code.size())+"."+std::to_string(fn.nextReg);
             NirInstruction saveLeft;saveLeft.op=NirOp::Store;saveLeft.text=temp;saveLeft.args={left};emit(fn,std::move(saveLeft));
             NirInstruction test;test.op=NirOp::JumpIfFalse;test.args={left};const auto testPos=fn.code.size();emit(fn,std::move(test));
-            if(e->op==TokenKind::AndAnd){
-                Reg right=lowerExpr(fn,e->right);NirInstruction saveRight;saveRight.op=NirOp::Store;saveRight.text=temp;saveRight.args={right};emit(fn,std::move(saveRight));fn.code[testPos].target=fn.code.size();
-            }else{
-                NirInstruction skipRight;skipRight.op=NirOp::Jump;const auto skipPos=fn.code.size();emit(fn,std::move(skipRight));fn.code[testPos].target=fn.code.size();Reg right=lowerExpr(fn,e->right);NirInstruction saveRight;saveRight.op=NirOp::Store;saveRight.text=temp;saveRight.args={right};emit(fn,std::move(saveRight));fn.code[skipPos].target=fn.code.size();
-            }
+            if(e->op==TokenKind::AndAnd){Reg right=lowerExpr(fn,e->right);NirInstruction saveRight;saveRight.op=NirOp::Store;saveRight.text=temp;saveRight.args={right};emit(fn,std::move(saveRight));fn.code[testPos].target=fn.code.size();}
+            else{NirInstruction skipRight;skipRight.op=NirOp::Jump;const auto skipPos=fn.code.size();emit(fn,std::move(skipRight));fn.code[testPos].target=fn.code.size();Reg right=lowerExpr(fn,e->right);NirInstruction saveRight;saveRight.op=NirOp::Store;saveRight.text=temp;saveRight.args={right};emit(fn,std::move(saveRight));fn.code[skipPos].target=fn.code.size();}
             NirInstruction result;result.op=NirOp::Load;result.dest=fn.nextReg++;result.text=temp;emit(fn,result);return*result.dest;
         }
         Reg l=lowerExpr(fn,e->left),r=lowerExpr(fn,e->right);NirInstruction i;i.op=NirOp::Binary;i.dest=fn.nextReg++;i.text=opText(e->op);i.args={l,r};emit(fn,i);return*i.dest;
@@ -78,7 +85,7 @@ Reg Lowerer::lowerExpr(NirFunction&fn,const ExprPtr&expr){
         std::string name=calleeName(e->callee);
         if(name=="len"){
             if(e->builtinCount){NirInstruction i;i.op=NirOp::Const;i.dest=fn.nextReg++;i.literal=static_cast<std::int64_t>(e->builtinCount);emit(fn,i);return*i.dest;}
-            Reg slice=lowerExpr(fn,e->args[0]);NirInstruction i;i.op=NirOp::SliceLen;i.dest=fn.nextReg++;i.args={slice};emit(fn,i);return*i.dest;
+            Reg slice=lowerExpr(fn,e->args[0]);NirInstruction check;check.op=NirOp::CheckNonNull;check.args={slice};emit(fn,check);NirInstruction i;i.op=NirOp::SliceLen;i.dest=fn.nextReg++;i.args={slice};emit(fn,i);return*i.dest;
         }
         if(name=="slice"){
             Reg data=lowerExpr(fn,e->args[0]);Reg length=0;
@@ -103,7 +110,7 @@ std::string printNir(const NirProgram&p){
         for(std::size_t pc=0;pc<f.code.size();++pc){const auto&i=f.code[pc];out<<"  "<<pc<<": ";if(i.dest)out<<'%'<<*i.dest<<" = ";switch(i.op){
             case NirOp::Const:out<<"const "<<literalText(i.literal);break;case NirOp::Load:out<<"load "<<i.text;break;case NirOp::Store:out<<"store "<<i.text<<", %"<<i.args[0];break;case NirOp::Unary:out<<"unary "<<i.text<<" %"<<i.args[0];break;case NirOp::Binary:out<<"binary "<<i.text<<" %"<<i.args[0]<<", %"<<i.args[1];break;case NirOp::Cast:out<<"cast "<<i.text<<" %"<<i.args[0];break;case NirOp::AddressOf:out<<"address_of "<<i.text;break;
             case NirOp::LoadMemory:out<<(i.isVolatile?"volatile_":"")<<"load_memory."<<i.width<<" %"<<i.args[0];break;case NirOp::StoreMemory:out<<(i.isVolatile?"volatile_":"")<<"store_memory."<<i.width<<" %"<<i.args[0]<<", %"<<i.args[1];break;case NirOp::PtrOffset:out<<"ptr_offset %"<<i.args[0];if(i.args.size()>1)out<<", %"<<i.args[1]<<" * "<<i.width;else out<<", +"<<i.target;break;case NirOp::StackAlloc:out<<"stack_alloc "<<i.width;break;
-            case NirOp::MakeSlice:out<<"make_slice %"<<i.args[0]<<", %"<<i.args[1];break;case NirOp::SliceData:out<<"slice_data %"<<i.args[0];break;case NirOp::SliceLen:out<<"slice_len %"<<i.args[0];break;
+            case NirOp::MakeSlice:out<<"make_slice %"<<i.args[0]<<", %"<<i.args[1];break;case NirOp::SliceData:out<<"slice_data %"<<i.args[0];break;case NirOp::SliceLen:out<<"slice_len %"<<i.args[0];break;case NirOp::CheckNonNull:out<<"check_non_null %"<<i.args[0];break;case NirOp::CheckBounds:out<<"check_bounds %"<<i.args[0]<<", %"<<i.args[1];break;
             case NirOp::AtomicLoad:out<<"atomic_load."<<i.width<<" %"<<i.args[0];break;case NirOp::AtomicStore:out<<"atomic_store."<<i.width<<" %"<<i.args[0]<<", %"<<i.args[1];break;case NirOp::AtomicExchange:out<<"atomic_exchange."<<i.width<<" %"<<i.args[0]<<", %"<<i.args[1];break;case NirOp::AtomicCompareExchange:out<<"atomic_compare_exchange."<<i.width<<" %"<<i.args[0]<<", %"<<i.args[1]<<", %"<<i.args[2];break;case NirOp::AtomicFence:out<<"atomic_fence";break;
             case NirOp::Intrinsic:out<<"intrinsic \""<<i.text<<"\"";break;case NirOp::InlineAsm:out<<"asm \""<<i.text<<"\"";break;case NirOp::Try:out<<"try %"<<i.args[0];break;case NirOp::Throw:out<<"throw %"<<i.args[0];break;
             case NirOp::Call:out<<"call "<<i.text<<'(';for(std::size_t a=0;a<i.args.size();++a){if(a)out<<", ";out<<'%'<<i.args[a];}out<<')';break;case NirOp::Jump:out<<"jump "<<i.target;break;case NirOp::JumpIfFalse:out<<"jump_if_false %"<<i.args[0]<<", "<<i.target;break;case NirOp::Return:out<<"return"<<(i.args.empty()?"":" %"+std::to_string(i.args[0]));break;case NirOp::Nop:out<<"nop";break;

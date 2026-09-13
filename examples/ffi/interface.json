@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "module": "demo.host",
+  "imports": [
+    {"name":"host_now_ms","params":[],"returns":"i64"}
+  ],
+  "exports": [
+    {"name":"demo_add","params":[{"name":"a","type":"int"},{"name":"b","type":"int"}],"returns":"int"}
+  ]
+}

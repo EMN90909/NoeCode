@@ -1,6 +1,311 @@
 module noqeri.std.clock
 
-export function clock_seconds_to_millis(value:i64):i64{return value*1000 as i64}
-export function clock_minutes_to_seconds(value:i64):i64{return value*60 as i64}
-export function clock_hours_to_seconds(value:i64):i64{return value*3600 as i64}
-export function clock_nonnegative(value:i64):bool{return value>=0 as i64}
+// ClockTime is a civil time-of-day. It has no date or timezone attached.
+// Arithmetic that crosses midnight wraps within one 24-hour day and helpers
+// return the number of crossed days when the caller needs that information.
+record ClockTime {
+    hour: int
+    minute: int
+    second: int
+    millisecond: int
+}
+
+export function clock_hours_per_day(): int { return 24 }
+export function clock_minutes_per_hour(): int { return 60 }
+export function clock_seconds_per_minute(): int { return 60 }
+export function clock_millis_per_second(): int { return 1000 }
+export function clock_seconds_per_hour(): i64 { return 3600 as i64 }
+export function clock_seconds_per_day(): i64 { return 86400 as i64 }
+export function clock_millis_per_minute(): i64 { return 60000 as i64 }
+export function clock_millis_per_hour(): i64 { return 3600000 as i64 }
+export function clock_millis_per_day(): i64 { return 86400000 as i64 }
+
+export function clock_hour_valid(hour: int): bool { return hour >= 0 && hour < 24 }
+export function clock_minute_valid(minute: int): bool { return minute >= 0 && minute < 60 }
+export function clock_second_valid(second: int): bool { return second >= 0 && second < 60 }
+export function clock_millisecond_valid(millisecond: int): bool { return millisecond >= 0 && millisecond < 1000 }
+
+export function clock_parts_valid(hour: int, minute: int, second: int, millisecond: int): bool {
+    return clock_hour_valid(hour) && clock_minute_valid(minute) && clock_second_valid(second) && clock_millisecond_valid(millisecond)
+}
+
+export function clock_value_valid(value: *ClockTime): bool {
+    if value == null { return false }
+    return clock_parts_valid(value.hour, value.minute, value.second, value.millisecond)
+}
+
+export function clock_set(value: *ClockTime, hour: int, minute: int, second: int, millisecond: int): bool {
+    if value == null || !clock_parts_valid(hour, minute, second, millisecond) { return false }
+    value.hour = hour
+    value.minute = minute
+    value.second = second
+    value.millisecond = millisecond
+    return true
+}
+
+export function clock_midnight(value: *ClockTime): bool {
+    return clock_set(value, 0, 0, 0, 0)
+}
+
+export function clock_noon(value: *ClockTime): bool {
+    return clock_set(value, 12, 0, 0, 0)
+}
+
+export function clock_copy(destination: *ClockTime, source: *ClockTime): bool {
+    if destination == null || source == null { return false }
+    destination.hour = source.hour
+    destination.minute = source.minute
+    destination.second = source.second
+    destination.millisecond = source.millisecond
+    return true
+}
+
+export function clock_is_midnight(value: *ClockTime): bool {
+    if !clock_value_valid(value) { return false }
+    return value.hour == 0 && value.minute == 0 && value.second == 0 && value.millisecond == 0
+}
+
+export function clock_is_noon(value: *ClockTime): bool {
+    if !clock_value_valid(value) { return false }
+    return value.hour == 12 && value.minute == 0 && value.second == 0 && value.millisecond == 0
+}
+
+export function clock_is_am(value: *ClockTime): bool {
+    if !clock_value_valid(value) { return false }
+    return value.hour < 12
+}
+
+export function clock_is_pm(value: *ClockTime): bool {
+    if !clock_value_valid(value) { return false }
+    return value.hour >= 12
+}
+
+export function clock_hour_12(value: *ClockTime): int {
+    if !clock_value_valid(value) { return 0 }
+    let hour: int = value.hour % 12
+    if hour == 0 { return 12 }
+    return hour
+}
+
+export function clock_to_seconds(value: *ClockTime): i64 {
+    if !clock_value_valid(value) { return -1 as i64 }
+    return value.hour as i64 * clock_seconds_per_hour() + value.minute as i64 * 60 as i64 + value.second as i64
+}
+
+export function clock_to_millis(value: *ClockTime): i64 {
+    let seconds: i64 = clock_to_seconds(value)
+    if seconds < 0 as i64 { return -1 as i64 }
+    return seconds * 1000 as i64 + value.millisecond as i64
+}
+
+function clock_positive_mod(value: i64, divisor: i64): i64 {
+    let result: i64 = value % divisor
+    if result < 0 as i64 { result = result + divisor }
+    return result
+}
+
+function clock_floor_div(value: i64, divisor: i64): i64 {
+    let quotient: i64 = value / divisor
+    let remainder: i64 = value % divisor
+    if remainder < 0 as i64 { quotient = quotient - 1 as i64 }
+    return quotient
+}
+
+export function clock_from_millis(value: *ClockTime, milliseconds: i64): bool {
+    if value == null { return false }
+    let dayMillis: i64 = clock_millis_per_day()
+    let normalized: i64 = clock_positive_mod(milliseconds, dayMillis)
+    value.hour = (normalized / clock_millis_per_hour()) as int
+    let afterHour: i64 = normalized % clock_millis_per_hour()
+    value.minute = (afterHour / clock_millis_per_minute()) as int
+    let afterMinute: i64 = afterHour % clock_millis_per_minute()
+    value.second = (afterMinute / 1000 as i64) as int
+    value.millisecond = (afterMinute % 1000 as i64) as int
+    return true
+}
+
+export function clock_from_seconds(value: *ClockTime, seconds: i64): bool {
+    return clock_from_millis(value, seconds * 1000 as i64)
+}
+
+export function clock_compare(left: *ClockTime, right: *ClockTime): int {
+    let leftMillis: i64 = clock_to_millis(left)
+    let rightMillis: i64 = clock_to_millis(right)
+    if leftMillis < rightMillis { return -1 }
+    if leftMillis > rightMillis { return 1 }
+    return 0
+}
+
+export function clock_equal(left: *ClockTime, right: *ClockTime): bool { return clock_compare(left, right) == 0 }
+export function clock_before(left: *ClockTime, right: *ClockTime): bool { return clock_compare(left, right) < 0 }
+export function clock_after(left: *ClockTime, right: *ClockTime): bool { return clock_compare(left, right) > 0 }
+
+export function clock_add_millis_in_place(value: *ClockTime, delta: i64): i64 {
+    if !clock_value_valid(value) { return 0 as i64 }
+    let current: i64 = clock_to_millis(value)
+    let total: i64 = current + delta
+    let crossedDays: i64 = clock_floor_div(total, clock_millis_per_day())
+    clock_from_millis(value, total)
+    return crossedDays
+}
+
+export function clock_add_seconds_in_place(value: *ClockTime, delta: i64): i64 {
+    return clock_add_millis_in_place(value, delta * 1000 as i64)
+}
+
+export function clock_add_minutes_in_place(value: *ClockTime, delta: i64): i64 {
+    return clock_add_millis_in_place(value, delta * clock_millis_per_minute())
+}
+
+export function clock_add_hours_in_place(value: *ClockTime, delta: i64): i64 {
+    return clock_add_millis_in_place(value, delta * clock_millis_per_hour())
+}
+
+export function clock_forward_elapsed_millis(start: *ClockTime, finish: *ClockTime): i64 {
+    let left: i64 = clock_to_millis(start)
+    let right: i64 = clock_to_millis(finish)
+    if left < 0 as i64 || right < 0 as i64 { return 0 as i64 }
+    if right >= left { return right - left }
+    return clock_millis_per_day() - left + right
+}
+
+export function clock_signed_difference_millis(left: *ClockTime, right: *ClockTime): i64 {
+    let a: i64 = clock_to_millis(left)
+    let b: i64 = clock_to_millis(right)
+    if a < 0 as i64 || b < 0 as i64 { return 0 as i64 }
+    return a - b
+}
+
+export function clock_shortest_difference_millis(left: *ClockTime, right: *ClockTime): i64 {
+    let difference: i64 = clock_signed_difference_millis(left, right)
+    let halfDay: i64 = clock_millis_per_day() / 2 as i64
+    if difference > halfDay { return difference - clock_millis_per_day() }
+    if difference < -halfDay { return difference + clock_millis_per_day() }
+    return difference
+}
+
+export function clock_between(value: *ClockTime, start: *ClockTime, finish: *ClockTime): bool {
+    let current: i64 = clock_to_millis(value)
+    let first: i64 = clock_to_millis(start)
+    let last: i64 = clock_to_millis(finish)
+    if current < 0 as i64 || first < 0 as i64 || last < 0 as i64 { return false }
+    if first <= last { return current >= first && current <= last }
+    return current >= first || current <= last
+}
+
+export function clock_between_exclusive(value: *ClockTime, start: *ClockTime, finish: *ClockTime): bool {
+    let current: i64 = clock_to_millis(value)
+    let first: i64 = clock_to_millis(start)
+    let last: i64 = clock_to_millis(finish)
+    if current < 0 as i64 || first < 0 as i64 || last < 0 as i64 { return false }
+    if first < last { return current > first && current < last }
+    if first > last { return current > first || current < last }
+    return false
+}
+
+export function clock_round_down_to_minute(value: *ClockTime): bool {
+    if !clock_value_valid(value) { return false }
+    value.second = 0
+    value.millisecond = 0
+    return true
+}
+
+export function clock_round_down_to_hour(value: *ClockTime): bool {
+    if !clock_value_valid(value) { return false }
+    value.minute = 0
+    value.second = 0
+    value.millisecond = 0
+    return true
+}
+
+export function clock_round_nearest_minute(value: *ClockTime): i64 {
+    if !clock_value_valid(value) { return 0 as i64 }
+    if value.second > 30 || (value.second == 30 && value.millisecond >= 500) {
+        value.second = 0
+        value.millisecond = 0
+        return clock_add_minutes_in_place(value, 1 as i64)
+    }
+    value.second = 0
+    value.millisecond = 0
+    return 0 as i64
+}
+
+export function clock_round_nearest_hour(value: *ClockTime): i64 {
+    if !clock_value_valid(value) { return 0 as i64 }
+    let shouldAdvance: bool = value.minute > 30 || (value.minute == 30 && (value.second > 0 || value.millisecond > 0))
+    value.minute = 0
+    value.second = 0
+    value.millisecond = 0
+    if shouldAdvance { return clock_add_hours_in_place(value, 1 as i64) }
+    return 0 as i64
+}
+
+export function clock_minute_of_day(value: *ClockTime): int {
+    if !clock_value_valid(value) { return -1 }
+    return value.hour * 60 + value.minute
+}
+
+export function clock_second_of_day(value: *ClockTime): int {
+    if !clock_value_valid(value) { return -1 }
+    return value.hour * 3600 + value.minute * 60 + value.second
+}
+
+export function clock_millisecond_of_day(value: *ClockTime): i64 {
+    return clock_to_millis(value)
+}
+
+export function clock_quarter_hour(value: *ClockTime): int {
+    if !clock_value_valid(value) { return -1 }
+    return value.minute / 15
+}
+
+export function clock_minutes_until_next_hour(value: *ClockTime): int {
+    if !clock_value_valid(value) { return 0 }
+    if value.minute == 0 && value.second == 0 && value.millisecond == 0 { return 0 }
+    return 60 - value.minute
+}
+
+export function clock_seconds_until_next_minute(value: *ClockTime): int {
+    if !clock_value_valid(value) { return 0 }
+    if value.second == 0 && value.millisecond == 0 { return 0 }
+    return 60 - value.second
+}
+
+export function clock_progress_hour_per_mille(value: *ClockTime): int {
+    if !clock_value_valid(value) { return 0 }
+    let elapsedMillis: i64 = value.minute as i64 * 60000 as i64 + value.second as i64 * 1000 as i64 + value.millisecond as i64
+    return (elapsedMillis * 1000 as i64 / clock_millis_per_hour()) as int
+}
+
+export function clock_progress_day_per_mille(value: *ClockTime): int {
+    let elapsed: i64 = clock_to_millis(value)
+    if elapsed < 0 as i64 { return 0 }
+    return (elapsed * 1000 as i64 / clock_millis_per_day()) as int
+}
+
+export function clock_interval_contains_millis(current: i64, start: i64, finish: i64): bool {
+    let day: i64 = clock_millis_per_day()
+    let c: i64 = clock_positive_mod(current, day)
+    let s: i64 = clock_positive_mod(start, day)
+    let f: i64 = clock_positive_mod(finish, day)
+    if s <= f { return c >= s && c <= f }
+    return c >= s || c <= f
+}
+
+export function clock_normalize_hour(hour: i64): int {
+    return clock_positive_mod(hour, 24 as i64) as int
+}
+
+export function clock_normalize_minute(minute: i64): int {
+    return clock_positive_mod(minute, 60 as i64) as int
+}
+
+export function clock_normalize_second(second: i64): int {
+    return clock_positive_mod(second, 60 as i64) as int
+}
+
+// Compatibility helpers retained for code written against the former tiny file.
+export function clock_seconds_to_millis(value: i64): i64 { return value * 1000 as i64 }
+export function clock_minutes_to_seconds(value: i64): i64 { return value * 60 as i64 }
+export function clock_hours_to_seconds(value: i64): i64 { return value * 3600 as i64 }
+export function clock_nonnegative(value: i64): bool { return value >= 0 as i64 }

@@ -1,0 +1,15 @@
+module noqeri.database.concurrency
+
+export function dbLockNone(): int { return 0 }
+export function dbLockShared(): int { return 1 }
+export function dbLockExclusive(): int { return 2 }
+
+export function dbReaderCanEnter(lockMode: int): bool { return lockMode == dbLockNone() || lockMode == dbLockShared() }
+export function dbWriterCanEnter(lockMode: int, activeReaders: usize, activeWriters: usize): bool {
+    return lockMode == dbLockNone() && activeReaders == 0 as usize && activeWriters == 0 as usize
+}
+export function dbWriterCountValid(activeWriters: usize): bool { return activeWriters <= 1 as usize }
+export function dbSnapshotVisible(rowCreatedTx: u64, rowDeletedTx: u64, snapshotTx: u64): bool {
+    if rowCreatedTx == 0 as u64 || rowCreatedTx > snapshotTx { return false }
+    return rowDeletedTx == 0 as u64 || rowDeletedTx > snapshotTx
+}

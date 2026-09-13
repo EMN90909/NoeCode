@@ -1,0 +1,15 @@
+module noqeri.std.http_client
+
+// High-level HTTP client/server façade. Hosted runtimes implement the externs.
+extern function httpGet(url: string): string
+extern function httpPost(url: string, body: string, contentType: string): string
+extern function httpRequest(method: string, url: string, body: string, contentType: string, timeoutMillis: i64): string
+extern function httpServe(address: string, handler: string): isize
+extern function httpStop(server: isize): isize
+
+export function get(url: string): string { return httpGet(url) }
+export function post(url: string, body: string, content_type: string): string { return httpPost(url, body, content_type) }
+export function request(method: string, url: string, body: string, content_type: string, timeout_millis: i64): string { return httpRequest(method, url, body, content_type, timeout_millis) }
+export function serve(address: string, handler: string): isize { return httpServe(address, handler) }
+export function stop(server: isize): isize { return httpStop(server) }
+export function default_timeout_millis(): i64 { return 30000 as i64 }

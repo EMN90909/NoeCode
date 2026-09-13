@@ -1,27 +1,25 @@
-record Actor {
-    x: int,
-    y: int,
-    vx: int,
-    vy: int,
-    health: int
-}
-
-function step(actor: Actor): Actor {
-    let next: Actor = actor
-    next.x = next.x + next.vx
-    next.y = next.y + next.vy
-    if next.x < 0 || next.x > 1000 { next.vx = -next.vx }
-    if next.y < 0 || next.y > 1000 { next.vy = -next.vy }
-    return next
+function reflect(position: int, velocity: int): int {
+    if position < 0 || position > 1000 { return -velocity }
+    return velocity
 }
 
 function main(): int {
-    let actor: Actor = Actor { x: 10, y: 20, vx: 3, vy: 2, health: 100 }
+    let x: int = 10
+    let y: int = 20
+    let vx: int = 3
+    let vy: int = 2
+    let health: int = 100
     let frame: int = 0
+
     while frame < 10000 {
-        actor = step(actor)
+        x = x + vx
+        y = y + vy
+        vx = reflect(x, vx)
+        vy = reflect(y, vy)
         frame = frame + 1
     }
-    if actor.health != 100 { return 1 }
+
+    if health != 100 { return 1 }
+    if frame != 10000 { return 2 }
     return 0
 }

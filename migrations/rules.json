@@ -1,0 +1,16 @@
+{
+  "format": "noqeri-migrations-v1",
+  "rules": [
+    {
+      "id": "example-legacy-format-command",
+      "from": ">=0.0.0",
+      "to": "2026",
+      "kind": "literal",
+      "search": "noqeri format ",
+      "replace": "noqeri fmt ",
+      "scope": "documentation",
+      "enabled": false,
+      "note": "Disabled example demonstrating the migration schema; source migrations must be explicitly reviewed before enablement."
+    }
+  ]
+}

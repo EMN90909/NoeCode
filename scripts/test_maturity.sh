@@ -18,6 +18,10 @@ reject() {
 "$NQ" check tests/stdlib_catalog.nqr >/dev/null
 "$NQ" check tests/stdlib_maturity.nqr >/dev/null
 "$NQ" run tests/stdlib_maturity.nqr >/dev/null
+"$NQ" check tests/stdlib_structures.nqr >/dev/null
+"$NQ" run tests/stdlib_structures.nqr >/dev/null
+"$NQ" check tests/storage_structures.nqr >/dev/null
+"$NQ" run tests/storage_structures.nqr >/dev/null
 "$NQ" check tests/time_modules.nqr >/dev/null
 "$NQ" run tests/time_modules.nqr >/dev/null
 "$NQ" check tests/data_integrity.nqr >/dev/null

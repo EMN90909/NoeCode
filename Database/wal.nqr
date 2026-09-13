@@ -1,5 +1,10 @@
 module noqeri.database.wal
 
+export function dbWalFramePage():u8{return 1 as u8}
+export function dbWalFrameCommit():u8{return 2 as u8}
+export function dbWalFrameRollback():u8{return 3 as u8}
+export function dbWalFormatVersion():u32{return 1 as u32}
+
 export function dbWalChecksum(bytes: []u8): u32 {
     let a: u32 = 1 as u32
     let b: u32 = 0 as u32
@@ -17,6 +22,43 @@ export function dbWalFrameValid(pageId: u64, payload: []u8, expected: u32): bool
     return dbWalChecksum(payload) == expected
 }
 
+export function dbWalControlFrameValid(kind:u8,transactionId:u64,sequence:u64):bool{
+    if transactionId==0 as u64||sequence==0 as u64{return false}
+    return kind==dbWalFrameCommit()||kind==dbWalFrameRollback()
+}
+
+export function dbWalPageFrameValid(transactionId:u64,sequence:u64,pageId:u64,payload:[]u8,expected:u32):bool{
+    if transactionId==0 as u64||sequence==0 as u64{return false}
+    return dbWalFrameValid(pageId,payload,expected)
+}
+
+export function dbWalSequenceValid(previous:u64,next:u64):bool{
+    if previous==0 as u64{return next==1 as u64}
+    return next==previous+1 as u64
+}
+
 export function dbWalCanCheckpoint(activeWriters: usize, committedFrames: usize): bool {
     return activeWriters == 0 as usize && committedFrames > 0 as usize
+}
+
+export function dbWalRecoveryApply(kind:u8,committed:bool):bool{
+    if kind==dbWalFramePage(){return committed}
+    if kind==dbWalFrameCommit(){return true}
+    return false
+}
+
+export function dbWalTransactionComplete(commitSeen:bool,rollbackSeen:bool):bool{
+    return commitSeen!=rollbackSeen
+}
+
+export function dbWalTransactionCommitted(commitSeen:bool,rollbackSeen:bool):bool{
+    return commitSeen&&!rollbackSeen
+}
+
+export function dbWalCrashAction(mainValid:bool,framesValid:bool,commitSeen:bool,rollbackSeen:bool):int{
+    if !framesValid{return 3}
+    if rollbackSeen{return 2}
+    if commitSeen{return 1}
+    if mainValid{return 2}
+    return 3
 }

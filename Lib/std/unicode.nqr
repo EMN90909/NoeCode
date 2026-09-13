@@ -1,6 +1,74 @@
 module noqeri.std.unicode
 
 export function unicode_is_ascii(codepoint: u32): bool { return codepoint <= 127 as u32 }
-export function unicode_is_scalar(codepoint: u32): bool { if codepoint > 1114111 as u32 { return false } return codepoint < 55296 as u32 || codepoint > 57343 as u32 }
 export function unicode_is_surrogate(codepoint: u32): bool { return codepoint >= 55296 as u32 && codepoint <= 57343 as u32 }
-export function unicode_utf8_width(codepoint: u32): usize { if codepoint <= 127 as u32 { return 1 as usize } if codepoint <= 2047 as u32 { return 2 as usize } if codepoint <= 65535 as u32 { return 3 as usize } if codepoint <= 1114111 as u32 { return 4 as usize } return 0 as usize }
+export function unicode_is_scalar(codepoint: u32): bool { return codepoint <= 1114111 as u32 && !unicode_is_surrogate(codepoint) }
+export function unicode_is_bmp(codepoint: u32): bool { return unicode_is_scalar(codepoint) && codepoint <= 65535 as u32 }
+export function unicode_plane(codepoint: u32): int { if !unicode_is_scalar(codepoint) { return -1 } return (codepoint / 65536 as u32) as int }
+export function unicode_utf8_width(codepoint: u32): usize { if !unicode_is_scalar(codepoint) { return 0 as usize } if codepoint <= 127 as u32 { return 1 as usize } if codepoint <= 2047 as u32 { return 2 as usize } if codepoint <= 65535 as u32 { return 3 as usize } return 4 as usize }
+export function unicode_utf16_width(codepoint: u32): usize { if !unicode_is_scalar(codepoint) { return 0 as usize } if codepoint <= 65535 as u32 { return 1 as usize } return 2 as usize }
+
+export function unicode_is_control(codepoint: u32): bool { return codepoint <= 31 as u32 || (codepoint >= 127 as u32 && codepoint <= 159 as u32) }
+export function unicode_is_line_break(codepoint: u32): bool { return codepoint == 10 as u32 || codepoint == 13 as u32 || codepoint == 133 as u32 || codepoint == 8232 as u32 || codepoint == 8233 as u32 }
+export function unicode_is_whitespace(codepoint: u32): bool {
+    if codepoint >= 9 as u32 && codepoint <= 13 as u32 { return true }
+    if codepoint == 32 as u32 || codepoint == 133 as u32 || codepoint == 160 as u32 || codepoint == 5760 as u32 { return true }
+    if codepoint >= 8192 as u32 && codepoint <= 8202 as u32 { return true }
+    return codepoint == 8232 as u32 || codepoint == 8233 as u32 || codepoint == 8239 as u32 || codepoint == 8287 as u32 || codepoint == 12288 as u32
+}
+
+export function unicode_is_ascii_digit(codepoint: u32): bool { return codepoint >= 48 as u32 && codepoint <= 57 as u32 }
+export function unicode_is_decimal_digit(codepoint: u32): bool {
+    if unicode_is_ascii_digit(codepoint) { return true }
+    if codepoint >= 1632 as u32 && codepoint <= 1641 as u32 { return true }
+    if codepoint >= 1776 as u32 && codepoint <= 1785 as u32 { return true }
+    if codepoint >= 2406 as u32 && codepoint <= 2415 as u32 { return true }
+    if codepoint >= 2534 as u32 && codepoint <= 2543 as u32 { return true }
+    return false
+}
+
+export function unicode_decimal_value(codepoint: u32): int {
+    if codepoint >= 48 as u32 && codepoint <= 57 as u32 { return (codepoint - 48 as u32) as int }
+    if codepoint >= 1632 as u32 && codepoint <= 1641 as u32 { return (codepoint - 1632 as u32) as int }
+    if codepoint >= 1776 as u32 && codepoint <= 1785 as u32 { return (codepoint - 1776 as u32) as int }
+    if codepoint >= 2406 as u32 && codepoint <= 2415 as u32 { return (codepoint - 2406 as u32) as int }
+    if codepoint >= 2534 as u32 && codepoint <= 2543 as u32 { return (codepoint - 2534 as u32) as int }
+    return -1
+}
+
+export function unicode_is_ascii_upper(codepoint: u32): bool { return codepoint >= 65 as u32 && codepoint <= 90 as u32 }
+export function unicode_is_ascii_lower(codepoint: u32): bool { return codepoint >= 97 as u32 && codepoint <= 122 as u32 }
+export function unicode_is_ascii_alpha(codepoint: u32): bool { return unicode_is_ascii_upper(codepoint) || unicode_is_ascii_lower(codepoint) }
+export function unicode_ascii_to_lower(codepoint: u32): u32 { if unicode_is_ascii_upper(codepoint) { return codepoint + 32 as u32 } return codepoint }
+export function unicode_ascii_to_upper(codepoint: u32): u32 { if unicode_is_ascii_lower(codepoint) { return codepoint - 32 as u32 } return codepoint }
+
+// Simple one-codepoint Latin-1 mappings. Full locale-sensitive and expanding
+// Unicode case conversion belongs in a table-driven higher-level package.
+export function unicode_simple_to_lower(codepoint: u32): u32 {
+    if unicode_is_ascii_upper(codepoint) { return codepoint + 32 as u32 }
+    if codepoint >= 192 as u32 && codepoint <= 214 as u32 { return codepoint + 32 as u32 }
+    if codepoint >= 216 as u32 && codepoint <= 222 as u32 { return codepoint + 32 as u32 }
+    return codepoint
+}
+
+export function unicode_simple_to_upper(codepoint: u32): u32 {
+    if unicode_is_ascii_lower(codepoint) { return codepoint - 32 as u32 }
+    if codepoint >= 224 as u32 && codepoint <= 246 as u32 { return codepoint - 32 as u32 }
+    if codepoint >= 248 as u32 && codepoint <= 254 as u32 { return codepoint - 32 as u32 }
+    return codepoint
+}
+
+export function unicode_is_private_use(codepoint: u32): bool {
+    if codepoint >= 57344 as u32 && codepoint <= 63743 as u32 { return true }
+    if codepoint >= 983040 as u32 && codepoint <= 1048573 as u32 { return true }
+    return codepoint >= 1048576 as u32 && codepoint <= 1114109 as u32
+}
+
+export function unicode_is_noncharacter(codepoint: u32): bool {
+    if codepoint >= 64976 as u32 && codepoint <= 65007 as u32 { return true }
+    if !unicode_is_scalar(codepoint) { return false }
+    let low: u32 = codepoint % 65536 as u32
+    return low == 65534 as u32 || low == 65535 as u32
+}
+
+export function unicode_replacement_character(): u32 { return 65533 as u32 }

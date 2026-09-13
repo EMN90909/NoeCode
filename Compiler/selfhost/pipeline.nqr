@@ -1,13 +1,31 @@
 module noqeri.compiler.selfhost.pipeline
 import "parser.nqr"
+import "unsafe.nqr"
 import "semantics.nqr"
 import "nir.nqr"
 import "optimizer.nqr"
 import "targets.nqr"
 import "backend.nqr"
 import "linker.nqr"
-export function nqPipelineCheck(source: []u8): isize { return nqParserCheck(source) }
-export function nqPipelineTargetCheck(target: int): isize { if !nqBackendTargetReady(target) { return nqBackendUnsupportedTarget() } return 0 }
-export function nqPipelineCompileReady(source: []u8, target: int): bool { return nqPipelineCheck(source) == 0 && nqPipelineTargetCheck(target) == 0 }
-export function nqPipelineDefaultOptimization(debug: bool): int { if debug { return nqOptLevelNone() } return nqOptLevelSpeed() }
+
+export function nqPipelineCheck(source: []u8): isize {
+    let parsed: isize = nqParserCheck(source)
+    if parsed < 0 { return parsed }
+    return nqUnsafeBoundaryCheck(source)
+}
+
+export function nqPipelineTargetCheck(target: int): isize {
+    if !nqBackendTargetReady(target) { return nqBackendUnsupportedTarget() }
+    return 0
+}
+
+export function nqPipelineCompileReady(source: []u8, target: int): bool {
+    return nqPipelineCheck(source) == 0 && nqPipelineTargetCheck(target) == 0
+}
+
+export function nqPipelineDefaultOptimization(debug: bool): int {
+    if debug { return nqOptLevelNone() }
+    return nqOptLevelSpeed()
+}
+
 export function nqPipelineDefaultLinkKind(): int { return nqLinkExecutable() }

@@ -3,10 +3,47 @@ module noqeri.std.http.server
 extern function httpServerListen(address: string, port: u32): isize
 extern function httpServerAccept(server: usize): isize
 extern function httpServerRespond(client: usize, status: int, body: string): isize
+extern function httpServerRespondTyped(client: usize, status: int, contentType: string, body: string): isize
+extern function httpServerRequestMethod(client: usize): string
+extern function httpServerRequestPath(client: usize): string
+extern function httpServerRequestBody(client: usize): string
+extern function httpServerRequestHeader(client: usize, name: string): string
 extern function httpServerClose(handle: usize): void
 
-export function http_server_listen(address: string, port: u32): isize { if port == 0 as u32 || port > 65535 as u32 { throw 2 } return httpServerListen(address,port) }
-export function http_server_accept(server: usize): isize { return httpServerAccept(server) }
-export function http_server_respond(client: usize, status: int, body: string): isize { if status < 100 || status > 599 { throw 2 } return httpServerRespond(client,status,body) }
-export function http_server_close(handle: usize): void { httpServerClose(handle) }
 export function http_server_status_valid(status: int): bool { return status >= 100 && status <= 599 }
+export function http_server_port_valid(port: u32): bool { return port > 0 as u32 && port <= 65535 as u32 }
+export function http_server_handle_valid(handle: isize): bool { return handle >= 0 as isize }
+
+export function http_server_listen(address: string, port: u32): isize {
+    if !http_server_port_valid(port) { return -2 as isize }
+    return httpServerListen(address, port)
+}
+
+export function http_server_accept(server: usize): isize { return httpServerAccept(server) }
+export function http_server_method(client: usize): string { return httpServerRequestMethod(client) }
+export function http_server_path(client: usize): string { return httpServerRequestPath(client) }
+export function http_server_body(client: usize): string { return httpServerRequestBody(client) }
+export function http_server_header(client: usize, name: string): string { return httpServerRequestHeader(client, name) }
+
+export function http_server_respond(client: usize, status: int, body: string): isize {
+    if !http_server_status_valid(status) { return -2 as isize }
+    return httpServerRespond(client, status, body)
+}
+
+export function http_server_respond_text(client: usize, status: int, body: string): isize {
+    if !http_server_status_valid(status) { return -2 as isize }
+    return httpServerRespondTyped(client, status, "text/plain; charset=utf-8", body)
+}
+
+export function http_server_respond_json(client: usize, status: int, body: string): isize {
+    if !http_server_status_valid(status) { return -2 as isize }
+    return httpServerRespondTyped(client, status, "application/json", body)
+}
+
+export function http_server_ok(client: usize, body: string): isize { return http_server_respond(client, 200, body) }
+export function http_server_created(client: usize, body: string): isize { return http_server_respond(client, 201, body) }
+export function http_server_no_content(client: usize): isize { return http_server_respond(client, 204, "") }
+export function http_server_bad_request(client: usize, body: string): isize { return http_server_respond(client, 400, body) }
+export function http_server_not_found(client: usize, body: string): isize { return http_server_respond(client, 404, body) }
+export function http_server_internal_error(client: usize, body: string): isize { return http_server_respond(client, 500, body) }
+export function http_server_close(handle: usize): void { httpServerClose(handle) }

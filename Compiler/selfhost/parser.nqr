@@ -1,0 +1,40 @@
+module noqeri.compiler.selfhost.parser
+import "lexer.nqr"
+import "syntax.nqr"
+import "imports.nqr"
+import "ast.nqr"
+
+export function nqParseOk(): isize { return 0 }
+export function nqParseUnexpected(): isize { return -100 }
+export function nqParseBadImport(): isize { return -101 }
+export function nqParseBadDeclaration(): isize { return -102 }
+export function nqParseEmpty(): isize { return -103 }
+
+export function nqParserKeywordAt(source: []u8, start: usize, word: []u8): bool {
+    if start + len(word) > len(source) { return false }
+    let index: usize = 0 as usize
+    while index < len(word) { if source[start + index] != word[index] { return false } index = index + 1 as usize }
+    if start > 0 as usize && nqCompilerIsIdentifierContinue(source[start - 1 as usize]) { return false }
+    if start + len(word) < len(source) && nqCompilerIsIdentifierContinue(source[start + len(word)]) { return false }
+    return true
+}
+export function nqParserFindStringEnd(source: []u8, quote: usize): usize { if quote >= len(source) || source[quote] != 34 as u8 { return quote } return nqCompilerScanString(source, quote) }
+export function nqParserPackageImportValid(source: []u8, start: usize): bool {
+    let index: usize = nqCompilerSkipTrivia(source, start)
+    if !nqParserKeywordAt(source, index, slice([105 as u8,109 as u8,112 as u8,111 as u8,114 as u8,116 as u8])) { return false }
+    index = nqCompilerSkipTrivia(source, index + 6 as usize)
+    if !nqParserKeywordAt(source, index, slice([112 as u8,97 as u8,99 as u8,107 as u8,97 as u8,103 as u8,101 as u8])) { return false }
+    index = nqCompilerSkipTrivia(source, index + 7 as usize)
+    if index >= len(source) || source[index] != 34 as u8 { return false }
+    let end: usize = nqParserFindStringEnd(source, index)
+    return end > index + 2 as usize && end <= len(source)
+}
+export function nqParserTopLevelSanity(source: []u8): isize {
+    let structure: isize = nqCompilerSyntaxCheck(source)
+    if structure < 0 { return structure }
+    if nqCompilerTokenCount(source) == 0 as usize { return nqParseEmpty() }
+    let index: usize = nqCompilerSkipTrivia(source, 0 as usize)
+    if index >= len(source) { return nqParseEmpty() }
+    return nqParseOk()
+}
+export function nqParserCheck(source: []u8): isize { return nqParserTopLevelSanity(source) }

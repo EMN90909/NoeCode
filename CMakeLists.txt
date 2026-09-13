@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(noqeri VERSION 1.0.0 LANGUAGES CXX)
 include(GNUInstallDirs)
+find_package(Threads REQUIRED)
 option(NOQERI_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(NOQERI_ENABLE_THREAD_SANITIZER "Enable ThreadSanitizer on supported compilers" OFF)
 option(NOQERI_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
@@ -14,7 +15,8 @@ set(NOQERI_FRONTEND_SOURCES
  Compiler/core.cpp Compiler/modules.cpp Compiler/workspace.cpp Compiler/type_checker.cpp
  Compiler/lifetime.cpp Compiler/safety.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp Compiler/register_alloc.cpp Compiler/optimizer.cpp
  Compiler/bootstrap/lexer_host.cpp Compiler/bootstrap/parser_host.cpp Compiler/bootstrap/abi_runtime_host.cpp Compiler/bootstrap/interpreter_host.cpp
- Compiler/bootstrap/runtime_checks_host.cpp Compiler/bootstrap/profile_host.cpp Compiler/bootstrap/noqeridb_host.cpp)
+ Compiler/bootstrap/runtime_checks_host.cpp Compiler/bootstrap/task_scheduler_host.cpp Compiler/bootstrap/profile_host.cpp Compiler/bootstrap/profile_runner_host.cpp
+ Compiler/bootstrap/noqeridb_host.cpp)
 set(NOQERI_SOURCES ${NOQERI_FRONTEND_SOURCES}
  Compiler/native_backend.cpp Compiler/web_backend.cpp Compiler/linker.cpp Compiler/object_loader.cpp
  Compiler/bootstrap/cli_host.cpp Compiler/bootstrap/formatter_host.cpp Compiler/bootstrap/package_host.cpp Compiler/bootstrap/lsp_host.cpp
@@ -24,10 +26,12 @@ add_executable(noqeri ${NOQERI_SOURCES})
 target_include_directories(noqeri PRIVATE Include/noqeri Compiler/bootstrap)
 target_compile_features(noqeri PRIVATE cxx_std_17)
 target_compile_definitions(noqeri PRIVATE NOQERI_BOOTSTRAP=1)
+target_link_libraries(noqeri PRIVATE Threads::Threads)
 add_library(noqeri_abi SHARED ${NOQERI_FRONTEND_SOURCES})
 target_include_directories(noqeri_abi PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Include/noqeri> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/noqeri> PRIVATE Compiler/bootstrap)
 target_compile_features(noqeri_abi PUBLIC cxx_std_17)
 target_compile_definitions(noqeri_abi PRIVATE NOQERI_BOOTSTRAP=1)
+target_link_libraries(noqeri_abi PRIVATE Threads::Threads)
 set_source_files_properties(Compiler/bootstrap/noqeridb_host.cpp PROPERTIES COMPILE_DEFINITIONS NOQERI_DATABASE_SOURCE=1)
 set_target_properties(noqeri_abi PROPERTIES OUTPUT_NAME noqeri-abi WINDOWS_EXPORT_ALL_SYMBOLS ON)
 function(noqeri_apply_warnings target)
@@ -56,13 +60,27 @@ noqeri_apply_warnings(noqeri)
 noqeri_apply_warnings(noqeri_abi)
 include(CTest)
 if(BUILD_TESTING)
- find_package(Threads REQUIRED)
- add_executable(noqeri-runtime-checks-test tests/runtime_checks_host_test.cpp Compiler/bootstrap/runtime_checks_host.cpp)
+ add_executable(noqeri-runtime-checks-test tests/runtime_checks_host_test.cpp Compiler/bootstrap/runtime_checks_host.cpp Compiler/bootstrap/profile_host.cpp)
  target_include_directories(noqeri-runtime-checks-test PRIVATE Include/noqeri Compiler/bootstrap)
  target_compile_features(noqeri-runtime-checks-test PRIVATE cxx_std_17)
  target_link_libraries(noqeri-runtime-checks-test PRIVATE Threads::Threads)
  noqeri_apply_warnings(noqeri-runtime-checks-test)
  add_test(NAME noqeri-runtime-checks COMMAND noqeri-runtime-checks-test)
+
+ add_executable(noqeri-task-scheduler-test tests/task_scheduler_host_test.cpp Compiler/bootstrap/task_scheduler_host.cpp Compiler/bootstrap/runtime_checks_host.cpp Compiler/bootstrap/profile_host.cpp)
+ target_include_directories(noqeri-task-scheduler-test PRIVATE Include/noqeri Compiler/bootstrap)
+ target_compile_features(noqeri-task-scheduler-test PRIVATE cxx_std_17)
+ target_link_libraries(noqeri-task-scheduler-test PRIVATE Threads::Threads)
+ noqeri_apply_warnings(noqeri-task-scheduler-test)
+ add_test(NAME noqeri-task-scheduler COMMAND noqeri-task-scheduler-test)
+
+ add_executable(noqeri-build-tags-test tests/build_tags_host_test.cpp)
+ target_include_directories(noqeri-build-tags-test PRIVATE Include/noqeri Compiler/bootstrap)
+ target_compile_features(noqeri-build-tags-test PRIVATE cxx_std_17)
+ target_link_libraries(noqeri-build-tags-test PRIVATE noqeri_abi Threads::Threads)
+ noqeri_apply_warnings(noqeri-build-tags-test)
+ add_test(NAME noqeri-build-tags COMMAND noqeri-build-tags-test)
+
  add_test(NAME noqeri-version COMMAND noqeri --version)
  add_test(NAME noqeri-check-hello COMMAND noqeri check ${CMAKE_SOURCE_DIR}/examples/hello.nqr)
  add_test(NAME noqeri-tests COMMAND noqeri test ${CMAKE_SOURCE_DIR}/tests)

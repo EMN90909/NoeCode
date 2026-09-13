@@ -1,11 +1,92 @@
 module noqeri.std.task
 
+unsafe extern function taskHostSpawn(entry: string, context: usize): isize
+unsafe extern function taskHostJoin(handle: usize, timeoutMillis: i64): isize
+unsafe extern function taskHostCancel(handle: usize): bool
+unsafe extern function taskHostState(handle: usize): int
+unsafe extern function taskHostNowMillis(): i64
+unsafe extern function taskHostSleepMillis(millis: i64): isize
+
 export function task_pending(): int { return 0 }
 export function task_running(): int { return 1 }
 export function task_ready(): int { return 2 }
 export function task_failed(): int { return 3 }
 export function task_cancelled(): int { return 4 }
-export function task_state_valid(state:int):bool{return state>=0&&state<=4}
-export function task_terminal(state:int):bool{return state==task_ready()||state==task_failed()||state==task_cancelled()}
+export function task_timed_out(): int { return 5 }
+
+export function task_state_valid(state:int):bool{return state>=0&&state<=5}
+export function task_terminal(state:int):bool{return state==task_ready()||state==task_failed()||state==task_cancelled()||state==task_timed_out()}
 export function task_can_start(state:int):bool{return state==task_pending()}
 export function task_can_cancel(state:int):bool{return state==task_pending()||state==task_running()}
+
+export function task_spawn(entry: string, context: usize): isize {
+    if len(entry)==0 as usize { return -1 as isize }
+    unsafe { return taskHostSpawn(entry,context) }
+}
+
+export function task_state(handle: usize): int {
+    if handle==0 as usize { return task_failed() }
+    unsafe { return taskHostState(handle) }
+}
+
+export function task_cancel(handle: usize): bool {
+    if handle==0 as usize { return false }
+    unsafe { return taskHostCancel(handle) }
+}
+
+export function task_await(handle: usize): isize {
+    if handle==0 as usize { return -1 as isize }
+    unsafe { return taskHostJoin(handle,-1 as i64) }
+}
+
+export function task_await_timeout(handle: usize, timeoutMillis: i64): isize {
+    if handle==0 as usize || timeoutMillis<0 as i64 { return -1 as isize }
+    unsafe { return taskHostJoin(handle,timeoutMillis) }
+}
+
+export function task_now_millis(): i64 { unsafe { return taskHostNowMillis() } }
+export function task_sleep(millis: i64): isize { if millis<0 as i64{return -1 as isize} unsafe{return taskHostSleepMillis(millis)} }
+
+record CancellationToken {
+    cancelled: *u64
+    deadlineMillis: i64
+}
+
+export function cancellation_requested(token: CancellationToken): bool {
+    unsafe {
+        if token.cancelled!=null && atomic.load(token.cancelled)!=0 as u64 { return true }
+    }
+    return token.deadlineMillis>=0 as i64 && task_now_millis()>=token.deadlineMillis
+}
+
+export function cancellation_cancel(token: CancellationToken): void {
+    if token.cancelled!=null { unsafe { atomic.store(token.cancelled,1 as u64) } }
+}
+
+export function cancellation_with_timeout(flag: *u64, timeoutMillis: i64): CancellationToken {
+    let deadline:i64=-1 as i64
+    if timeoutMillis>=0 as i64 { deadline=task_now_millis()+timeoutMillis }
+    return CancellationToken { cancelled: flag, deadlineMillis: deadline }
+}
+
+// Structured scopes use a caller-owned handle array. Closing a scope joins every child.
+export function task_scope_join(handles: *usize, count: usize, timeoutMillis: i64): isize {
+    let index:usize=0 as usize
+    let started:i64=task_now_millis()
+    while index<count {
+        let remaining:i64=timeoutMillis
+        if timeoutMillis>=0 as i64 {
+            remaining=timeoutMillis-(task_now_millis()-started)
+            if remaining<0 as i64 { return -2 as isize }
+        }
+        let status:isize=task_await_timeout(handles[index],remaining)
+        if status<0 as isize { return status }
+        index=index+1 as usize
+    }
+    return 0 as isize
+}
+
+export function task_scope_cancel(handles: *usize, count: usize): void {
+    let index:usize=0 as usize
+    while index<count { task_cancel(handles[index]); index=index+1 as usize }
+}

@@ -8,6 +8,7 @@ record NqRaceSlot {
     size: usize
     task: u64
     epoch: u64
+    syncEpoch: u64
     source: u64
     write: bool
     atomicAccess: bool
@@ -28,6 +29,7 @@ record NqRaceReport {
 record NqRaceClock {
     task: u64
     epoch: u64
+    syncEpoch: u64
 }
 
 export function nqRaceOk(): isize { return 0 as isize }
@@ -39,6 +41,7 @@ export function nqRaceClockInit(clock: *NqRaceClock, task: u64): void {
     if clock == null { return }
     clock.task = task
     clock.epoch = 1 as u64
+    clock.syncEpoch = 0 as u64
 }
 
 export function nqRaceClockTick(clock: *NqRaceClock): u64 {
@@ -47,16 +50,18 @@ export function nqRaceClockTick(clock: *NqRaceClock): u64 {
     return clock.epoch
 }
 
-// A synchronization operation publishes the larger epoch to both participants.
-// Callers use this for task join, channel hand-off, mutex unlock/lock and other
-// happens-before edges. Atomics are marked separately on individual accesses.
+// A synchronization operation creates a shared happens-before generation. Local
+// task progress never changes syncEpoch, so ordinary computation cannot hide a
+// race. Task join, channel hand-off and lock release/acquire call this routine.
 export function nqRaceSynchronize(left: *NqRaceClock, right: *NqRaceClock): u64 {
     if left == null || right == null { return 0 as u64 }
-    let next: u64 = left.epoch
-    if right.epoch > next { next = right.epoch }
+    let next: u64 = left.syncEpoch
+    if right.syncEpoch > next { next = right.syncEpoch }
     if next < 18446744073709551614 as u64 { next = next + 1 as u64 }
-    left.epoch = next
-    right.epoch = next
+    left.syncEpoch = next
+    right.syncEpoch = next
+    nqRaceClockTick(left)
+    nqRaceClockTick(right)
     return next
 }
 
@@ -67,6 +72,7 @@ export function nqRaceSlotsClear(slots: []NqRaceSlot): void {
         slots[index].size = 0 as usize
         slots[index].task = 0 as u64
         slots[index].epoch = 0 as u64
+        slots[index].syncEpoch = 0 as u64
         slots[index].source = 0 as u64
         slots[index].write = false
         slots[index].atomicAccess = false
@@ -89,15 +95,13 @@ export function nqRaceRangesOverlap(a: u64, aSize: usize, b: u64, bSize: usize):
     return a <= bEnd && b <= aEnd
 }
 
-export function nqRaceConflicts(previous: *NqRaceSlot, address: u64, size: usize, task: u64, epoch: u64, write: bool, atomicAccess: bool): bool {
+export function nqRaceConflicts(previous: *NqRaceSlot, address: u64, size: usize, task: u64, syncEpoch: u64, write: bool, atomicAccess: bool): bool {
     if previous == null || !previous.occupied { return false }
     if !nqRaceRangesOverlap(previous.address, previous.size, address, size) { return false }
     if previous.task == task { return false }
     if previous.atomicAccess || atomicAccess { return false }
     if !previous.write && !write { return false }
-    // An equal or older epoch is concurrent from the detector's perspective.
-    // A strictly newer synchronized epoch establishes happens-before.
-    if epoch > previous.epoch { return false }
+    if syncEpoch > previous.syncEpoch { return false }
     return true
 }
 
@@ -123,18 +127,17 @@ function nqRaceChooseSlot(slots: []NqRaceSlot, address: u64): isize {
         index = index + 1 as usize
     }
     if empty >= 0 as isize { return empty }
-    // Deterministic replacement keeps the detector bounded and reproducible.
     return (address % len(slots) as u64) as isize
 }
 
 // Records an access and reports a conflict against any overlapping tracked
-// access. The detector is intentionally conservative: bounded storage can evict
-// old events, but it never turns an observed conflicting pair into success.
+// access. Bounded storage may evict old history but observed conflicting pairs
+// are never converted into success.
 export function nqRaceAccess(slots: []NqRaceSlot, clock: *NqRaceClock, address: u64, size: usize, write: bool, atomicAccess: bool, source: u64, report: *NqRaceReport): isize {
     if clock == null || clock.task == 0 as u64 || address == 0 as u64 || size == 0 as usize { return nqRaceInvalid() }
     let index: usize = 0 as usize
     while index < len(slots) {
-        if nqRaceConflicts(&slots[index], address, size, clock.task, clock.epoch, write, atomicAccess) {
+        if nqRaceConflicts(&slots[index], address, size, clock.task, clock.syncEpoch, write, atomicAccess) {
             nqRaceFillReport(&slots[index], address, size, clock.task, source, write, report)
             return nqRaceDetected()
         }
@@ -147,10 +150,12 @@ export function nqRaceAccess(slots: []NqRaceSlot, clock: *NqRaceClock, address: 
     slot.size = size
     slot.task = clock.task
     slot.epoch = clock.epoch
+    slot.syncEpoch = clock.syncEpoch
     slot.source = source
     slot.write = write
     slot.atomicAccess = atomicAccess
     slot.occupied = true
+    nqRaceClockTick(clock)
     return nqRaceOk()
 }
 

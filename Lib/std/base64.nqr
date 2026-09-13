@@ -2,4 +2,91 @@ module noqeri.std.base64
 
 export function base64_encoded_len(n: usize): usize { return ((n + 2 as usize) / 3 as usize) * 4 as usize }
 export function base64_decoded_max_len(n: usize): usize { return (n / 4 as usize) * 3 as usize }
-export function base64_is_char(c: u8): bool { return (c>=65 as u8&&c<=90 as u8)||(c>=97 as u8&&c<=122 as u8)||(c>=48 as u8&&c<=57 as u8)||c==43 as u8||c==47 as u8||c==61 as u8 }
+export function base64_is_char(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) || (c >= 48 as u8 && c <= 57 as u8) || c == 43 as u8 || c == 47 as u8 || c == 61 as u8 }
+
+export function base64_value(c: u8): int {
+    if c >= 65 as u8 && c <= 90 as u8 { return (c - 65 as u8) as int }
+    if c >= 97 as u8 && c <= 122 as u8 { return (c - 97 as u8) as int + 26 }
+    if c >= 48 as u8 && c <= 57 as u8 { return (c - 48 as u8) as int + 52 }
+    if c == 43 as u8 { return 62 }
+    if c == 47 as u8 { return 63 }
+    return -1
+}
+
+export function base64_digit(value: u8): u8 {
+    if value < 26 as u8 { return 65 as u8 + value }
+    if value < 52 as u8 { return 97 as u8 + (value - 26 as u8) }
+    if value < 62 as u8 { return 48 as u8 + (value - 52 as u8) }
+    if value == 62 as u8 { return 43 as u8 }
+    if value == 63 as u8 { return 47 as u8 }
+    return 63 as u8
+}
+
+export function base64_valid(value: []u8): bool {
+    if len(value) == 0 as usize { return true }
+    if len(value) % 4 as usize != 0 as usize { return false }
+    let index: usize = 0 as usize
+    while index < len(value) {
+        let c: u8 = value[index]
+        if !base64_is_char(c) { return false }
+        if c == 61 as u8 && index + 2 as usize < len(value) { return false }
+        index = index + 1 as usize
+    }
+    if len(value) >= 2 as usize && value[len(value) - 2 as usize] == 61 as u8 && value[len(value) - 1 as usize] != 61 as u8 { return false }
+    return true
+}
+
+export function base64_decoded_len(value: []u8): isize {
+    if !base64_valid(value) { return -1 as isize }
+    if len(value) == 0 as usize { return 0 as isize }
+    let padding: usize = 0 as usize
+    if value[len(value) - 1 as usize] == 61 as u8 { padding = padding + 1 as usize }
+    if value[len(value) - 2 as usize] == 61 as u8 { padding = padding + 1 as usize }
+    return ((len(value) / 4 as usize) * 3 as usize - padding) as isize
+}
+
+export function base64_encode(source: []u8, destination: []u8): isize {
+    let required: usize = base64_encoded_len(len(source))
+    if len(destination) < required { return -1 as isize }
+    let input: usize = 0 as usize
+    let output: usize = 0 as usize
+    while input < len(source) {
+        let remaining: usize = len(source) - input
+        let first: u32 = source[input] as u32
+        let second: u32 = 0 as u32
+        let third: u32 = 0 as u32
+        if remaining > 1 as usize { second = source[input + 1 as usize] as u32 }
+        if remaining > 2 as usize { third = source[input + 2 as usize] as u32 }
+        let combined: u32 = first * 65536 as u32 + second * 256 as u32 + third
+        destination[output] = base64_digit((combined / 262144 as u32) as u8)
+        destination[output + 1 as usize] = base64_digit(((combined / 4096 as u32) % 64 as u32) as u8)
+        if remaining > 1 as usize { destination[output + 2 as usize] = base64_digit(((combined / 64 as u32) % 64 as u32) as u8) } else { destination[output + 2 as usize] = 61 as u8 }
+        if remaining > 2 as usize { destination[output + 3 as usize] = base64_digit((combined % 64 as u32) as u8) } else { destination[output + 3 as usize] = 61 as u8 }
+        input = input + 3 as usize
+        output = output + 4 as usize
+    }
+    return output as isize
+}
+
+export function base64_decode(source: []u8, destination: []u8): isize {
+    let required: isize = base64_decoded_len(source)
+    if required < 0 as isize || required as usize > len(destination) { return -1 as isize }
+    let input: usize = 0 as usize
+    let output: usize = 0 as usize
+    while input < len(source) {
+        let a: int = base64_value(source[input])
+        let b: int = base64_value(source[input + 1 as usize])
+        let c: int = 0
+        let d: int = 0
+        if source[input + 2 as usize] != 61 as u8 { c = base64_value(source[input + 2 as usize]) }
+        if source[input + 3 as usize] != 61 as u8 { d = base64_value(source[input + 3 as usize]) }
+        if a < 0 || b < 0 || c < 0 || d < 0 { return -1 as isize }
+        let combined: u32 = a as u32 * 262144 as u32 + b as u32 * 4096 as u32 + c as u32 * 64 as u32 + d as u32
+        destination[output] = (combined / 65536 as u32) as u8
+        output = output + 1 as usize
+        if source[input + 2 as usize] != 61 as u8 { destination[output] = ((combined / 256 as u32) % 256 as u32) as u8 output = output + 1 as usize }
+        if source[input + 3 as usize] != 61 as u8 { destination[output] = (combined % 256 as u32) as u8 output = output + 1 as usize }
+        input = input + 4 as usize
+    }
+    return output as isize
+}

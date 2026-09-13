@@ -3,6 +3,10 @@ module noqeri.compiler.selfhost.ast
 record NqAstNode {
     tag: int
     typeCode: int
+    typeSymbol: u64
+    elementTypeCode: int
+    elementTypeSymbol: u64
+    arrayLength: usize
     start: usize
     end: usize
     left: isize
@@ -83,6 +87,10 @@ export function nqAstTypeAggregate(code: int): bool { return code == nqAstTypeSl
 export function nqAstNodeInit(out: *NqAstNode, tag: int, start: usize, end: usize): void {
     out.tag = tag
     out.typeCode = nqAstTypeUnknown()
+    out.typeSymbol = 0 as u64
+    out.elementTypeCode = nqAstTypeUnknown()
+    out.elementTypeSymbol = 0 as u64
+    out.arrayLength = 0 as usize
     out.start = start
     out.end = end
     out.left = nqAstNoNode()
@@ -104,6 +112,15 @@ export function nqAstArenaPush(nodes: []NqAstNode, count: *usize, tag: int, star
     nqAstNodeInit(&nodes[index], tag, start, end)
     count[0] = index + 1 as usize
     return index as isize
+}
+
+export function nqAstApplyType(out: *NqAstNode, code: int, symbol: u64, elementCode: int, elementSymbol: u64, arrayLength: usize): void {
+    if out == null { return }
+    out.typeCode = code
+    out.typeSymbol = symbol
+    out.elementTypeCode = elementCode
+    out.elementTypeSymbol = elementSymbol
+    out.arrayLength = arrayLength
 }
 
 export function nqAstAppend(nodes: []NqAstNode, first: *isize, last: *isize, node: isize): bool {

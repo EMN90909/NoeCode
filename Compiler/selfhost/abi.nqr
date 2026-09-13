@@ -1,6 +1,19 @@
 module noqeri.compiler.selfhost.abi
 import "targets.nqr"
 
+record NqAbiInfo {
+    target: int
+    abi: int
+    integerArgRegisters: int
+    floatArgRegisters: int
+    returnRegisters: int
+    stackAlignment: usize
+    shadowSpaceBytes: usize
+    redZoneBytes: usize
+    sretThresholdBytes: usize
+    calleeSavedIntegerCount: int
+}
+
 export function nqAbiIntegerArgRegisters(target: int): int { if target == nqTargetWindowsX64() { return 4 } if target == nqTargetWindowsArm64() { return 8 } if target == nqTargetLinuxX64() || target == nqTargetMacX64() { return 6 } if target == nqTargetLinuxArm64() || target == nqTargetMacArm64() { return 8 } return 0 }
 export function nqAbiFloatArgRegisters(target: int): int { if target == nqTargetWindowsX64() { return 4 } if target == nqTargetWindowsArm64() { return 8 } if target == nqTargetLinuxX64() || target == nqTargetMacX64() { return 8 } if target == nqTargetLinuxArm64() || target == nqTargetMacArm64() { return 8 } return 0 }
 export function nqAbiReturnRegisters(target: int): int { if nqTargetValid(target) { return 2 } return 0 }
@@ -9,3 +22,32 @@ export function nqAbiWindowsShadowBytes(target: int): usize { if target == nqTar
 export function nqAbiRedZoneBytes(target: int): usize { if target == nqTargetLinuxX64() || target == nqTargetMacX64() { return 128 as usize } return 0 as usize }
 export function nqAbiSretThresholdBytes(target: int): usize { if nqTargetValid(target) { return 16 as usize } return 0 as usize }
 export function nqAbiCalleeSavedIntegerCount(target: int): int { if target == nqTargetWindowsX64() { return 8 } if target == nqTargetLinuxX64() || target == nqTargetMacX64() { return 6 } if nqTargetArchitecture(target) == nqArchArm64() { return 11 } return 0 }
+
+// Preferred API for compiler/backend code. It turns ABI knowledge into one
+// validated value and keeps platform trivia out of normal lowering code.
+export function nqAbiDescribe(target: int, out: *NqAbiInfo): bool {
+    if out == null || !nqTargetValid(target) { return false }
+    out.target = target
+    out.abi = nqTargetAbi(target)
+    out.integerArgRegisters = nqAbiIntegerArgRegisters(target)
+    out.floatArgRegisters = nqAbiFloatArgRegisters(target)
+    out.returnRegisters = nqAbiReturnRegisters(target)
+    out.stackAlignment = nqAbiStackAlignmentBytes(target)
+    out.shadowSpaceBytes = nqAbiWindowsShadowBytes(target)
+    out.redZoneBytes = nqAbiRedZoneBytes(target)
+    out.sretThresholdBytes = nqAbiSretThresholdBytes(target)
+    out.calleeSavedIntegerCount = nqAbiCalleeSavedIntegerCount(target)
+    return true
+}
+
+export function nqAbiPassAggregateIndirect(target: int, bytes: usize): bool {
+    if !nqTargetValid(target) { return false }
+    return bytes > nqAbiSretThresholdBytes(target)
+}
+export function nqAbiArgumentFitsRegisters(target: int, integerArgs: int, floatArgs: int): bool {
+    return integerArgs <= nqAbiIntegerArgRegisters(target) && floatArgs <= nqAbiFloatArgRegisters(target)
+}
+export function nqAbiInfoValid(info: *NqAbiInfo): bool {
+    if info == null || !nqTargetValid(info.target) { return false }
+    return info.abi == nqTargetAbi(info.target) && info.stackAlignment == nqTargetStackAlignment(info.target) && info.integerArgRegisters > 0 && info.returnRegisters > 0
+}

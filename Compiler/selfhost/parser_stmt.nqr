@@ -228,6 +228,13 @@ function nqStmtParseFunction(source: []u8, start: usize, nodes: []NqAstNode, cou
             cursor = generic.end
             let separator: NqToken
             nqCompilerNextToken(source, cursor, &separator)
+            if separator.kind == nqTokenPunctuation() && separator.first == 58 as u8 {
+                let constraint: NqToken
+                nqCompilerNextToken(source, separator.end, &constraint)
+                if constraint.kind != nqTokenIdentifier() { return nqAstNoNode() }
+                cursor = constraint.end
+                nqCompilerNextToken(source, cursor, &separator)
+            }
             if separator.kind == nqTokenOperator() && separator.first == 62 as u8 { cursor = separator.end break }
             if separator.kind != nqTokenPunctuation() || separator.first != 44 as u8 { return nqAstNoNode() }
             cursor = separator.end

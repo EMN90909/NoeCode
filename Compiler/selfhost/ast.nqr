@@ -1,0 +1,58 @@
+module noqeri.compiler.selfhost.ast
+
+// Compact stable node/type tags. The self-hosted frontend uses index-based
+// arenas in host memory so the compiler never depends on host object layout.
+export function nqAstInvalid(): int { return 0 }
+export function nqAstModule(): int { return 1 }
+export function nqAstImport(): int { return 2 }
+export function nqAstFunction(): int { return 3 }
+export function nqAstRecord(): int { return 4 }
+export function nqAstBinding(): int { return 5 }
+export function nqAstBlock(): int { return 6 }
+export function nqAstIf(): int { return 7 }
+export function nqAstWhile(): int { return 8 }
+export function nqAstReturn(): int { return 9 }
+export function nqAstThrow(): int { return 10 }
+export function nqAstAssign(): int { return 11 }
+export function nqAstCall(): int { return 12 }
+export function nqAstBinary(): int { return 13 }
+export function nqAstUnary(): int { return 14 }
+export function nqAstCast(): int { return 15 }
+export function nqAstIndex(): int { return 16 }
+export function nqAstMember(): int { return 17 }
+export function nqAstName(): int { return 18 }
+export function nqAstInteger(): int { return 19 }
+export function nqAstFloat(): int { return 20 }
+export function nqAstString(): int { return 21 }
+export function nqAstBool(): int { return 22 }
+export function nqAstArray(): int { return 23 }
+
+export function nqAstNodeTagValid(tag: int): bool { return tag >= nqAstModule() && tag <= nqAstArray() }
+export function nqAstIsStatement(tag: int): bool { return tag == nqAstBinding() || tag == nqAstBlock() || tag == nqAstIf() || tag == nqAstWhile() || tag == nqAstReturn() || tag == nqAstThrow() || tag == nqAstAssign() || tag == nqAstCall() }
+export function nqAstIsExpression(tag: int): bool { return tag >= nqAstAssign() && tag <= nqAstArray() }
+export function nqAstIsLiteral(tag: int): bool { return tag >= nqAstInteger() && tag <= nqAstArray() }
+
+export function nqAstTypeUnknown(): int { return 0 }
+export function nqAstTypeVoid(): int { return 1 }
+export function nqAstTypeBool(): int { return 2 }
+export function nqAstTypeInt(): int { return 3 }
+export function nqAstTypeFloat(): int { return 4 }
+export function nqAstTypeString(): int { return 5 }
+export function nqAstTypeI8(): int { return 6 }
+export function nqAstTypeU8(): int { return 7 }
+export function nqAstTypeI16(): int { return 8 }
+export function nqAstTypeU16(): int { return 9 }
+export function nqAstTypeI32(): int { return 10 }
+export function nqAstTypeU32(): int { return 11 }
+export function nqAstTypeI64(): int { return 12 }
+export function nqAstTypeU64(): int { return 13 }
+export function nqAstTypeIsize(): int { return 14 }
+export function nqAstTypeUsize(): int { return 15 }
+export function nqAstTypePointer(): int { return 16 }
+export function nqAstTypeSlice(): int { return 17 }
+export function nqAstTypeArray(): int { return 18 }
+export function nqAstTypeRecord(): int { return 19 }
+
+export function nqAstTypeScalar(code: int): bool { return code >= nqAstTypeBool() && code <= nqAstTypeUsize() }
+export function nqAstTypeInteger(code: int): bool { return code == nqAstTypeInt() || (code >= nqAstTypeI8() && code <= nqAstTypeUsize()) }
+export function nqAstTypeAggregate(code: int): bool { return code == nqAstTypeSlice() || code == nqAstTypeArray() || code == nqAstTypeRecord() }

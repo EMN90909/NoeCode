@@ -13,11 +13,11 @@ try{compiler=await import(pathToFileURL(modulePath).href)}catch(error){console.e
 const args=process.argv.slice(2)
 const command=args[0]||'--help'
 if(command==='--help'||command==='help'){usage();process.exit(0)}
-if(command==='--version'){console.log(`Noqeri ${compiler.nqCompilerVersionMajor?.()??1}.${compiler.nqCompilerVersionMinor?.()??0}.${compiler.nqCompilerVersionPatch?.()??0} stage1`);process.exit(0)}
+if(command==='--version'){console.log(`Noqeri ${compiler.stage1VersionMajor?.()??1}.${compiler.stage1VersionMinor?.()??0}.${compiler.stage1VersionPatch?.()??0} stage1`);process.exit(0)}
 if(command==='selftest'){
   const sample=new TextEncoder().encode('function main(): int { return 0 }')
-  const status=compiler.nqCompilerCheckSource(sample)
-  const tokens=compiler.nqCompilerSourceTokenCount(sample)
+  const status=compiler.stage1CheckSource(sample)
+  const tokens=compiler.stage1TokenCount(sample)
   if(status!==0||tokens<6){console.error(`stage-1 selftest failed: status=${status} tokens=${tokens}`);process.exit(1)}
   console.log(`stage-1 selftest passed (${tokens} tokens)`);process.exit(0)
 }
@@ -25,9 +25,9 @@ if(!['check','lex-count','fingerprint'].includes(command)){usage();process.exit(
 if(!args[1]){console.error(`noqeri: ${command} needs a source file`);process.exit(2)}
 const source=new Uint8Array(await readFile(args[1]))
 if(command==='check'){
-  const status=Number(compiler.nqCompilerCheckSource(source))
+  const status=Number(compiler.stage1CheckSource(source))
   if(status===0){console.log(`${args[1]}: syntax/token check OK`);process.exit(0)}
   console.error(`${args[1]}: stage-1 check failed (${status})`);process.exit(1)
 }
-if(command==='lex-count'){console.log(String(compiler.nqCompilerSourceTokenCount(source)));process.exit(0)}
-console.log(String(compiler.nqCompilerSourceFingerprint(source)));process.exit(0)
+if(command==='lex-count'){console.log(String(compiler.stage1TokenCount(source)));process.exit(0)}
+console.log(String(compiler.stage1Fingerprint(source)));process.exit(0)

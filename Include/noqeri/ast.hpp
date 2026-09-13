@@ -36,7 +36,7 @@ struct UnaryExpr final : Expr { TokenKind op; ExprPtr operand; std::size_t memor
 struct BinaryExpr final : Expr { ExprPtr left; TokenKind op; ExprPtr right; };
 struct CallExpr final : Expr { ExprPtr callee; std::vector<ExprPtr> args; std::size_t builtinWidth=8; std::size_t builtinCount=0; std::string builtinText; };
 struct CastExpr final : Expr { ExprPtr value; std::string typeName; };
-struct IndexExpr final : Expr { ExprPtr object,index; std::size_t elementSize=1; bool volatileAccess=false; bool baseIsSlice=false; };
+struct IndexExpr final : Expr { ExprPtr object,index; std::size_t elementSize=1; bool volatileAccess=false; bool baseIsSlice=false; std::size_t fixedBound=0; };
 struct MemberExpr final : Expr { ExprPtr object; std::string member; std::size_t offset=0; std::size_t fieldSize=0; bool volatileAccess=false; bool baseIsPointer=false; };
 struct ArrayExpr final : Expr { std::vector<ExprPtr> elements; std::size_t elementSize=0; };
 

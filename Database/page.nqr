@@ -3,6 +3,8 @@ module noqeri.database.page
 export function dbPageMagic(): u32 { return 1312900162 as u32 }
 export function dbPageFormatVersion(): u32 { return 1 as u32 }
 export function dbPageHeaderBytes(): usize { return 32 as usize }
+export function dbPageMinSize():usize{return 512 as usize}
+export function dbPageMaxSize():usize{return 65536 as usize}
 
 export function dbPageChecksum(bytes: []u8): u32 {
     let hash: u32 = 2166136261 as u32
@@ -15,13 +17,37 @@ export function dbPageChecksum(bytes: []u8): u32 {
     return hash
 }
 
+export function dbPageSizeValid(pageSize:usize):bool{
+    if pageSize<dbPageMinSize()||pageSize>dbPageMaxSize(){return false}
+    let value:usize=pageSize
+    while value>1 as usize{
+        if value%2 as usize!=0 as usize{return false}
+        value=value/2 as usize
+    }
+    return true
+}
+
 export function dbPageHeaderValid(magic: u32, version: u32, pageId: u64, payloadBytes: usize, pageSize: usize): bool {
     if magic != dbPageMagic() || version != dbPageFormatVersion() { return false }
-    if pageId == 0 as u64 || pageSize < dbPageHeaderBytes() { return false }
+    if pageId == 0 as u64 || !dbPageSizeValid(pageSize) || pageSize < dbPageHeaderBytes() { return false }
     return payloadBytes <= pageSize - dbPageHeaderBytes()
 }
 
 export function dbPageSlotFits(offset: usize, length: usize, pageSize: usize): bool {
-    if offset < dbPageHeaderBytes() || offset > pageSize { return false }
+    if !dbPageSizeValid(pageSize)||offset < dbPageHeaderBytes() || offset > pageSize { return false }
     return length <= pageSize - offset
+}
+
+export function dbPagePayloadValid(payload:[]u8,expectedChecksum:u32,pageSize:usize):bool{
+    if !dbPageSizeValid(pageSize)||len(payload)>pageSize-dbPageHeaderBytes(){return false}
+    return dbPageChecksum(payload)==expectedChecksum
+}
+
+export function dbPageImageValid(magic:u32,version:u32,pageId:u64,payload:[]u8,pageSize:usize,expectedChecksum:u32):bool{
+    if !dbPageHeaderValid(magic,version,pageId,len(payload),pageSize){return false}
+    return dbPagePayloadValid(payload,expectedChecksum,pageSize)
+}
+
+export function dbPageCorrupt(magic:u32,version:u32,pageId:u64,payload:[]u8,pageSize:usize,expectedChecksum:u32):bool{
+    return !dbPageImageValid(magic,version,pageId,payload,pageSize,expectedChecksum)
 }

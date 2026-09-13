@@ -5,14 +5,16 @@ record Pair<A, B> {
     second: B
 }
 
-export function pair_first_ref<A,B>(pair: *Pair<A,B>): A { return pair.first }
-export function pair_second_ref<A,B>(pair: *Pair<A,B>): B { return pair.second }
-export function pair_set_first<A,B>(pair: *Pair<A,B>, value: A): void { pair.first = value }
-export function pair_set_second<A,B>(pair: *Pair<A,B>, value: B): void { pair.second = value }
-export function pair_equal<A: Eq,B: Eq>(left: *Pair<A,B>, right: *Pair<A,B>): bool { return left.first == right.first && left.second == right.second }
+export function pair_first_ref<A,B>(pair: *Pair<A,B>): *A { return &pair.first }
+export function pair_second_ref<A,B>(pair: *Pair<A,B>): *B { return &pair.second }
+export function pair_first_or<A: Copy,B>(pair: *Pair<A,B>, fallback: A): A { if pair == null { return fallback } return pair.first }
+export function pair_second_or<A,B: Copy>(pair: *Pair<A,B>, fallback: B): B { if pair == null { return fallback } return pair.second }
+export function pair_set_first<A: Copy,B>(pair: *Pair<A,B>, value: A): void { pair.first = value }
+export function pair_set_second<A,B: Copy>(pair: *Pair<A,B>, value: B): void { pair.second = value }
+export function pair_equal<A: Eq + Copy,B: Eq + Copy>(left: *Pair<A,B>, right: *Pair<A,B>): bool { return left.first == right.first && left.second == right.second }
 
 // Legacy two-item slice helpers retained for source compatibility.
 export function pair_len<T>(items: []T): usize { return len(items) }
 export function pair_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
-export function pair_first<T>(items: []T): T { return items[0 as usize] }
-export function pair_last<T>(items: []T): T { return items[len(items)-1 as usize] }
+export function pair_first<T: Copy>(items: []T): T { return items[0 as usize] }
+export function pair_last<T: Copy>(items: []T): T { return items[len(items)-1 as usize] }

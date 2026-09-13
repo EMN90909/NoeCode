@@ -38,6 +38,7 @@ class TypeChecker { public: explicit TypeChecker(Diagnostics& diagnostics); bool
 
 class BorrowChecker { public: bool check(const Program& program,Diagnostics& diagnostics) const; };
 class SafetyAnnotator { public: void annotate(const Program& program) const; };
+class UnsafeChecker { public: bool check(const Program& program,Diagnostics& diagnostics) const; };
 class Lowerer { public: NirProgram lower(const Program& program); private: void lowerStmt(NirFunction& fn,const StmtPtr& stmt); Reg lowerExpr(NirFunction& fn,const ExprPtr& expr); Reg lowerAddress(NirFunction& fn,const ExprPtr& expr); Reg emit(NirFunction& fn,NirInstruction instruction); };
 enum class OptimizationLevel { O0, O1, O2, O3, Os, Oz };
 class OptimizationPass { public: virtual ~OptimizationPass()=default; virtual const char* name() const=0; virtual bool run(NirFunction& function) const=0; };

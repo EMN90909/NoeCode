@@ -1,6 +1,277 @@
 module noqeri.std.hash
 
-export function hash_byte_sum(data: []u8): u64 { let sum: u64 = 0 as u64 let i: usize = 0 as usize while i < len(data) { sum = sum + data[i] as u64 i = i + 1 } return sum }
-export function hash_all_zero(data: []u8): bool { let i: usize = 0 as usize while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 } return true }
+// Deterministic, portable non-cryptographic hashes for maps, caches, checksums
+// and stable identifiers. These functions are not suitable for passwords,
+// signatures or adversarial cryptographic use; use std/crypto for those jobs.
+record Hash32State {
+    value: u64
+    bytes: usize
+}
+
+export function hash_u32_modulus(): u64 { return 4294967296 as u64 }
+export function hash_fnv1a32_offset(): u64 { return 2166136261 as u64 }
+export function hash_fnv32_prime(): u64 { return 16777619 as u64 }
+export function hash_djb2_seed(): u64 { return 5381 as u64 }
+export function hash_sdbm_seed(): u64 { return 0 as u64 }
+
+function hash_xor32(left: u64, right: u64): u64 {
+    let a: u64 = left % hash_u32_modulus()
+    let b: u64 = right % hash_u32_modulus()
+    let place: u64 = 1 as u64
+    let result: u64 = 0 as u64
+    let bit: int = 0
+    while bit < 32 {
+        if a % 2 as u64 != b % 2 as u64 { result = result + place }
+        a = a / 2 as u64
+        b = b / 2 as u64
+        if bit < 31 { place = place * 2 as u64 }
+        bit = bit + 1
+    }
+    return result % hash_u32_modulus()
+}
+
+function hash_mul32(left: u64, right: u64): u64 {
+    // Multiplication is accumulated in 16-bit chunks so intermediate values
+    // stay well inside signed 64-bit range even in checked-overflow mode.
+    let aLow: u64 = left % 65536 as u64
+    let aHigh: u64 = (left / 65536 as u64) % 65536 as u64
+    let bLow: u64 = right % 65536 as u64
+    let bHigh: u64 = (right / 65536 as u64) % 65536 as u64
+    let low: u64 = aLow * bLow
+    let middle: u64 = (aLow * bHigh + aHigh * bLow) % 65536 as u64
+    return (low + middle * 65536 as u64) % hash_u32_modulus()
+}
+
+export function hash_fnv1a32_update_byte(state: u64, byte: u8): u64 {
+    return hash_mul32(hash_xor32(state, byte as u64), hash_fnv32_prime())
+}
+
+export function hash_fnv1a32(data: []u8): u64 {
+    let state: u64 = hash_fnv1a32_offset()
+    let i: usize = 0 as usize
+    while i < len(data) {
+        state = hash_fnv1a32_update_byte(state, data[i])
+        i = i + 1 as usize
+    }
+    return state
+}
+
+export function hash_fnv132_update_byte(state: u64, byte: u8): u64 {
+    return hash_xor32(hash_mul32(state, hash_fnv32_prime()), byte as u64)
+}
+
+export function hash_fnv132(data: []u8): u64 {
+    let state: u64 = hash_fnv1a32_offset()
+    let i: usize = 0 as usize
+    while i < len(data) {
+        state = hash_fnv132_update_byte(state, data[i])
+        i = i + 1 as usize
+    }
+    return state
+}
+
+export function hash_djb2_update_byte(state: u64, byte: u8): u64 {
+    return (state * 33 as u64 + byte as u64) % hash_u32_modulus()
+}
+
+export function hash_djb2(data: []u8): u64 {
+    let state: u64 = hash_djb2_seed()
+    let i: usize = 0 as usize
+    while i < len(data) {
+        state = hash_djb2_update_byte(state, data[i])
+        i = i + 1 as usize
+    }
+    return state
+}
+
+export function hash_sdbm_update_byte(state: u64, byte: u8): u64 {
+    // h = byte + h*65599, expressed with bounded arithmetic.
+    let scaled: u64 = hash_mul32(state, 65599 as u64)
+    return (scaled + byte as u64) % hash_u32_modulus()
+}
+
+export function hash_sdbm(data: []u8): u64 {
+    let state: u64 = hash_sdbm_seed()
+    let i: usize = 0 as usize
+    while i < len(data) {
+        state = hash_sdbm_update_byte(state, data[i])
+        i = i + 1 as usize
+    }
+    return state
+}
+
+export function hash_polynomial32(data: []u8, base: u64, seed: u64): u64 {
+    let normalizedBase: u64 = base % hash_u32_modulus()
+    let state: u64 = seed % hash_u32_modulus()
+    let i: usize = 0 as usize
+    while i < len(data) {
+        state = (hash_mul32(state, normalizedBase) + data[i] as u64) % hash_u32_modulus()
+        i = i + 1 as usize
+    }
+    return state
+}
+
+export function hash_polynomial31(data: []u8): u64 { return hash_polynomial32(data, 31 as u64, 0 as u64) }
+export function hash_polynomial131(data: []u8): u64 { return hash_polynomial32(data, 131 as u64, 0 as u64) }
+
+export function hash_fnv1a_state_init(state: *Hash32State): bool {
+    if state == null { return false }
+    state.value = hash_fnv1a32_offset()
+    state.bytes = 0 as usize
+    return true
+}
+
+export function hash_fnv1a_state_reset(state: *Hash32State): bool { return hash_fnv1a_state_init(state) }
+
+export function hash_fnv1a_state_update_byte(state: *Hash32State, byte: u8): bool {
+    if state == null { return false }
+    state.value = hash_fnv1a32_update_byte(state.value, byte)
+    state.bytes = state.bytes + 1 as usize
+    return true
+}
+
+export function hash_fnv1a_state_update(state: *Hash32State, data: []u8): bool {
+    if state == null { return false }
+    let i: usize = 0 as usize
+    while i < len(data) {
+        state.value = hash_fnv1a32_update_byte(state.value, data[i])
+        state.bytes = state.bytes + 1 as usize
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function hash_fnv1a_state_value(state: *Hash32State): u64 {
+    if state == null { return 0 as u64 }
+    return state.value % hash_u32_modulus()
+}
+
+export function hash_state_bytes(state: *Hash32State): usize {
+    if state == null { return 0 as usize }
+    return state.bytes
+}
+
+export function hash_state_copy(destination: *Hash32State, source: *Hash32State): bool {
+    if destination == null || source == null { return false }
+    destination.value = source.value
+    destination.bytes = source.bytes
+    return true
+}
+
+export function hash_combine32(left: u64, right: u64): u64 {
+    // A small avalanche-style combiner that stays portable without shifts.
+    let mixed: u64 = (left + 2654435769 as u64 + hash_mul32(right, 33 as u64)) % hash_u32_modulus()
+    return hash_xor32(mixed, right)
+}
+
+export function hash_pair32(first: u64, second: u64): u64 {
+    return hash_combine32(first % hash_u32_modulus(), second % hash_u32_modulus())
+}
+
+export function hash_many32(values: []u64): u64 {
+    let state: u64 = hash_fnv1a32_offset()
+    let i: usize = 0 as usize
+    while i < len(values) {
+        state = hash_combine32(state, values[i] % hash_u32_modulus())
+        i = i + 1 as usize
+    }
+    return state
+}
+
+export function hash_u64_decimal(value: u64): u64 {
+    if value == 0 as u64 {
+        let zero: [u8; 1] = [48 as u8]
+        return hash_fnv1a32(slice(zero))
+    }
+    let digits: [u8; 20] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let current: u64 = value
+    let count: usize = 0 as usize
+    while current > 0 as u64 && count < len(digits) {
+        digits[count] = (48 as u64 + current % 10 as u64) as u8
+        current = current / 10 as u64
+        count = count + 1 as usize
+    }
+    let state: u64 = hash_fnv1a32_offset()
+    let i: usize = count
+    while i > 0 as usize {
+        i = i - 1 as usize
+        state = hash_fnv1a32_update_byte(state, digits[i])
+    }
+    return state
+}
+
+export function hash_equal_bytes(left: []u8, right: []u8): bool {
+    if len(left) != len(right) { return false }
+    let i: usize = 0 as usize
+    while i < len(left) {
+        if left[i] != right[i] { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function hash_same_fnv1a32(left: []u8, right: []u8): bool {
+    return hash_fnv1a32(left) == hash_fnv1a32(right)
+}
+
+export function hash_bucket32(hash: u64, bucketCount: usize): usize {
+    if bucketCount == 0 as usize { return 0 as usize }
+    return (hash % bucketCount as u64) as usize
+}
+
+export function hash_fnv1a_bucket(data: []u8, bucketCount: usize): usize {
+    return hash_bucket32(hash_fnv1a32(data), bucketCount)
+}
+
+export function hash_distribution_counts(values: []u64, buckets: []usize): bool {
+    if len(buckets) == 0 as usize { return false }
+    let i: usize = 0 as usize
+    while i < len(buckets) { buckets[i] = 0 as usize i = i + 1 as usize }
+    i = 0 as usize
+    while i < len(values) {
+        let bucket: usize = hash_bucket32(values[i], len(buckets))
+        buckets[bucket] = buckets[bucket] + 1 as usize
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function hash_max_bucket_load(buckets: []usize): usize {
+    let maximum: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(buckets) {
+        if buckets[i] > maximum { maximum = buckets[i] }
+        i = i + 1 as usize
+    }
+    return maximum
+}
+
+export function hash_nonempty_bucket_count(buckets: []usize): usize {
+    let count: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(buckets) {
+        if buckets[i] > 0 as usize { count = count + 1 as usize }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function hash_load_per_mille(itemCount: usize, bucketCount: usize): usize {
+    if bucketCount == 0 as usize { return 0 as usize }
+    return itemCount * 1000 as usize / bucketCount
+}
+
+// Compatibility helpers from the placeholder era.
+export function hash_byte_sum(data: []u8): u64 {
+    let sum: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < len(data) { sum = sum + data[i] as u64 i = i + 1 as usize }
+    return sum
+}
+export function hash_all_zero(data: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 as usize }
+    return true
+}
 export function hash_bounded_length(data: []u8, max: usize): bool { return len(data) <= max }
 export function hash_nonempty(data: []u8): bool { return len(data) > 0 as usize }

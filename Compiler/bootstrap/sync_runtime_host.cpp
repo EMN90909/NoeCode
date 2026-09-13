@@ -69,7 +69,11 @@ std::size_t runtimeMutexCreate(){auto state=std::make_shared<MutexState>();const
 bool runtimeMutexLock(std::size_t handle,std::int64_t timeoutMillis){auto state=lookup(mutexes,handle);if(!state||timeoutMillis<0)return false;const bool ok=timeoutMillis==0?state->mutex.try_lock():state->mutex.try_lock_for(std::chrono::milliseconds(timeoutMillis));if(!ok)return false;{std::lock_guard<std::mutex>lock(state->ownerMutex);state->owner=std::this_thread::get_id();}runtimeSynchronizationPoint();return true;}
 bool runtimeMutexTryLock(std::size_t handle){return runtimeMutexLock(handle,0);}
 bool runtimeMutexUnlock(std::size_t handle){auto state=lookup(mutexes,handle);if(!state)return false;{std::lock_guard<std::mutex>lock(state->ownerMutex);if(state->owner!=std::this_thread::get_id())return false;state->owner={};}runtimeSynchronizationPoint();state->mutex.unlock();return true;}
-bool runtimeMutexDestroy(std::size_t handle){std::shared_ptr<MutexState>state;{std::lock_guard<std::mutex>lock(registryMutex);auto it=mutexes.find(handle);if(it==mutexes.end())return false;state=it->second;mutexes.erase(it);}std::lock_guard<std::mutex>lock(state->ownerMutex);return state->owner==std::thread::id{};}
+bool runtimeMutexDestroy(std::size_t handle){
+    auto state=lookup(mutexes,handle);if(!state)return false;
+    {std::lock_guard<std::mutex>lock(state->ownerMutex);if(state->owner!=std::thread::id{})return false;}
+    std::lock_guard<std::mutex>lock(registryMutex);auto it=mutexes.find(handle);if(it==mutexes.end()||it->second!=state)return false;mutexes.erase(it);return true;
+}
 
 std::size_t runtimeRwLockCreate(){auto state=std::make_shared<RwState>();const auto h=allocateHandle();std::lock_guard<std::mutex>lock(registryMutex);rwlocks.emplace(h,std::move(state));return h;}
 bool runtimeRwLockRead(std::size_t handle,std::int64_t timeoutMillis){auto state=lookup(rwlocks,handle);if(!state||timeoutMillis<0)return false;const bool ok=timeoutMillis==0?state->mutex.try_lock_shared():state->mutex.try_lock_shared_for(std::chrono::milliseconds(timeoutMillis));if(!ok)return false;{std::lock_guard<std::mutex>lock(state->ownerMutex);state->readers[std::this_thread::get_id()]++;}runtimeSynchronizationPoint();return true;}
@@ -81,7 +85,11 @@ bool runtimeRwLockUnlock(std::size_t handle){
     {std::lock_guard<std::mutex>lock(state->ownerMutex);const auto id=std::this_thread::get_id();if(state->writer==id){state->writer={};writer=true;}else{auto it=state->readers.find(id);if(it!=state->readers.end()&&it->second){if(--it->second==0)state->readers.erase(it);reader=true;}}}
     if(!writer&&!reader)return false;runtimeSynchronizationPoint();if(writer)state->mutex.unlock();else state->mutex.unlock_shared();return true;
 }
-bool runtimeRwLockDestroy(std::size_t handle){std::shared_ptr<RwState>state;{std::lock_guard<std::mutex>lock(registryMutex);auto it=rwlocks.find(handle);if(it==rwlocks.end())return false;state=it->second;rwlocks.erase(it);}std::lock_guard<std::mutex>lock(state->ownerMutex);return state->writer==std::thread::id{}&&state->readers.empty();}
+bool runtimeRwLockDestroy(std::size_t handle){
+    auto state=lookup(rwlocks,handle);if(!state)return false;
+    {std::lock_guard<std::mutex>lock(state->ownerMutex);if(state->writer!=std::thread::id{}||!state->readers.empty())return false;}
+    std::lock_guard<std::mutex>lock(registryMutex);auto it=rwlocks.find(handle);if(it==rwlocks.end()||it->second!=state)return false;rwlocks.erase(it);return true;
+}
 
 void runtimeSyncReset(){
     std::lock_guard<std::mutex>lock(registryMutex);

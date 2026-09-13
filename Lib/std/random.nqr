@@ -1,5 +1,27 @@
 module noqeri.std.random
+
+// Park-Miller compatibility API retained for existing Noqeri programs.
+export function nqRandomSeed(seed: i64): i64 {
+    let normalized: i64 = seed % (2147483647 as i64)
+    if normalized <= 0 { return 1 as i64 }
+    return normalized
+}
+
+export function nqRandomNext(seed: i64): i64 {
+    let normalized: i64 = nqRandomSeed(seed)
+    return (normalized * (48271 as i64)) % (2147483647 as i64)
+}
+
+export function nqRandomRange(seed: i64, low: i64, highExclusive: i64): i64 {
+    if highExclusive <= low { return low }
+    let span: i64 = highExclusive - low
+    return low + (nqRandomNext(seed) % span)
+}
+
+// Wider-state helpers for applications that want a u64 generator state.
 export function random_next(state: u64): u64 { return state * 6364136223846793005 as u64 + 1442695040888963407 as u64 }
 export function random_range(state: u64, low: u64, high: u64): u64 { if high <= low { return low } return low + (random_next(state) % (high-low)) }
 export function random_bool(state: u64): bool { return (random_next(state) % 2 as u64) == 1 as u64 }
 export function random_percent(state: u64): u64 { return random_next(state) % 100 as u64 }
+export function random_unit_per_mille(state: u64): u64 { return random_next(state) % 1000 as u64 }
+export function random_range_inclusive(state: u64, low: u64, high: u64): u64 { if high <= low { return low } return low + (random_next(state) % (high-low+1 as u64)) }

@@ -4,11 +4,12 @@ import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 import { createPackageManager } from './package-manager.mjs'
 import { auditProject } from './package-security.mjs'
+import { auditAdvisories } from './advisory-audit.mjs'
 import { formatNoqeri, isFormattedNoqeri } from './formatter.mjs'
 import { extractNoqeriApi, renderNoqeriMarkdown } from './docgen.mjs'
 
 function usage() {
-  console.log(`Noqeri stage-1 portable compiler kernel\n\nUsage:\n  noqeri --version\n  noqeri check <file.nqr>\n  noqeri fmt <file.nqr> [--check]\n  noqeri doc <file.nqr> [output.md]\n  noqeri lex-count <file.nqr>\n  noqeri fingerprint <file.nqr>\n  noqeri add <namespace/name>[@version]\n  noqeri install\n  noqeri resolve <file.nqr>\n  noqeri audit\n  noqeri selftest\n\nRegistry source uses import package "namespace/name". Packages are cached immutably, re-hashed before use, and noqeri audit validates the deterministic lockfile.`)
+  console.log(`Noqeri stage-1 portable compiler kernel\n\nUsage:\n  noqeri --version\n  noqeri check <file.nqr>\n  noqeri fmt <file.nqr> [--check]\n  noqeri doc <file.nqr> [output.md]\n  noqeri lex-count <file.nqr>\n  noqeri fingerprint <file.nqr>\n  noqeri add <namespace/name>[@version]\n  noqeri install\n  noqeri resolve <file.nqr>\n  noqeri audit\n  noqeri selftest\n\nRegistry source uses import package "namespace/name". Packages are cached immutably, re-hashed before use, and noqeri audit validates the deterministic lockfile plus known package advisories.`)
 }
 
 const modulePath = process.env.NOQERI_STAGE1_MODULE || resolve(process.cwd(), 'build/noqeri-stage1.nqo')
@@ -51,8 +52,15 @@ try {
   if (command === 'install') { await packages.installProject(); process.exit(0) }
   if (command === 'resolve') { if (!args[1]) throw new Error('noqeri resolve needs a source file'); for (const item of await packages.resolvePackageImports(args[1])) console.log(`${item.coordinate}@${item.version} -> ${item.entry} ${item.integrity}`); process.exit(0) }
   if (command === 'audit') {
-    const result = await auditProject(process.cwd())
-    console.log(`audit OK: ${result.dependencies} root dependencies; ${result.lockedPackages} locked packages; SHA-256 lock records valid`)
+    const integrity = await auditProject(process.cwd())
+    const advisories = await auditAdvisories(process.cwd(), process.env.NOQERI_ADVISORY_DB || '')
+    if (advisories.findings.length) {
+      for (const finding of advisories.findings) {
+        console.error(`${finding.severity.toUpperCase()} ${finding.id}: ${finding.package}@${finding.version}${finding.summary ? ` — ${finding.summary}` : ''}${finding.fixed?.length ? `; fixed: ${finding.fixed.join(', ')}` : ''}`)
+      }
+      throw new Error(`${advisories.findings.length} vulnerable locked package(s) found`)
+    }
+    console.log(`audit OK: ${integrity.dependencies} root dependencies; ${integrity.lockedPackages} locked packages; SHA-256 lock records valid; ${advisories.checked} packages checked against advisories`)
     process.exit(0)
   }
   if (!['check', 'lex-count', 'fingerprint'].includes(command)) { usage(); process.exit(2) }

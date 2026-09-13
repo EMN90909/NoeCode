@@ -1,0 +1,34 @@
+module noqeri.std.mutex
+
+extern function mutexHostCreate(): usize
+extern function mutexHostLock(mutex: usize, timeoutMillis: i64): bool
+extern function mutexHostTryLock(mutex: usize): bool
+extern function mutexHostUnlock(mutex: usize): bool
+extern function mutexHostDestroy(mutex: usize): bool
+
+export function mutex_handle_valid(mutex: usize): bool { return mutex != 0 as usize }
+export function mutex_timeout_valid(timeoutMillis: i64): bool { return timeoutMillis >= 0 as i64 }
+
+export function mutex_create(): usize {
+    unsafe { return mutexHostCreate() }
+}
+
+export function mutex_lock(mutex: usize, timeoutMillis: i64): bool {
+    if !mutex_handle_valid(mutex) || !mutex_timeout_valid(timeoutMillis) { return false }
+    unsafe { return mutexHostLock(mutex, timeoutMillis) }
+}
+
+export function mutex_try_lock(mutex: usize): bool {
+    if !mutex_handle_valid(mutex) { return false }
+    unsafe { return mutexHostTryLock(mutex) }
+}
+
+export function mutex_unlock(mutex: usize): bool {
+    if !mutex_handle_valid(mutex) { return false }
+    unsafe { return mutexHostUnlock(mutex) }
+}
+
+export function mutex_destroy(mutex: usize): bool {
+    if !mutex_handle_valid(mutex) { return false }
+    unsafe { return mutexHostDestroy(mutex) }
+}

@@ -70,6 +70,17 @@ if(BUILD_TESTING)
  add_test(NAME noqeri-stress COMMAND noqeri stress ${CMAKE_SOURCE_DIR})
  add_test(NAME noqeri-doctor COMMAND noqeri doctor ${CMAKE_SOURCE_DIR})
  add_test(NAME noqeri-audit COMMAND noqeri audit ${CMAKE_SOURCE_DIR})
+
+ # The language conformance and backend differential suites are local tests.
+ # They never depend on GitHub Actions. If Node is available, CTest includes
+ # them automatically and points the scripts at the just-built compiler.
+ find_program(NOQERI_NODE_EXECUTABLE NAMES node nodejs)
+ if(NOQERI_NODE_EXECUTABLE)
+  add_test(NAME noqeri-conformance COMMAND ${NOQERI_NODE_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/conformance.mjs)
+  set_tests_properties(noqeri-conformance PROPERTIES ENVIRONMENT "NOQERI_BIN=$<TARGET_FILE:noqeri>;NOQERI_OFFLINE=1")
+  add_test(NAME noqeri-differential COMMAND ${NOQERI_NODE_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/differential-test.mjs)
+  set_tests_properties(noqeri-differential PROPERTIES ENVIRONMENT "NOQERI_BIN=$<TARGET_FILE:noqeri>;NOQERI_OFFLINE=1")
+ endif()
 endif()
 install(TARGETS noqeri noqeri_abi RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(DIRECTORY Include/noqeri/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/noqeri FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")

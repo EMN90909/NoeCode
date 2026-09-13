@@ -1,6 +1,7 @@
 module noqeri.compiler.selfhost.coff_writer
 import "targets.nqr"
 import "object_formats.nqr"
+
 export function nqCoffSectionNameBytes(): usize { return 8 as usize }
 export function nqCoffFileHeaderBytes(): usize { return 20 as usize }
 export function nqCoffSectionHeaderBytes(): usize { return 40 as usize }
@@ -14,3 +15,23 @@ export function nqCoffMachine(target: int): u16 { if target == nqTargetWindowsAr
 export function nqCoffTargetValid(target: int): bool { return target == nqTargetWindowsX64() || target == nqTargetWindowsArm64() }
 export function nqCoffImageAlignment(): usize { return 4096 as usize }
 export function nqCoffFileAlignment(): usize { return 512 as usize }
+
+// Writes an IMAGE_FILE_HEADER for a relocatable .obj. The timestamp is supplied
+// by the caller so reproducible builds can pass zero instead of wall-clock time.
+export function nqCoffWriteFileHeader(buffer: []u8, offset: usize, target: int, sections: usize, symbols: usize, symbolTableOffset: u32, timestamp: u32): isize {
+    if !nqCoffTargetValid(target) || !nqCoffSectionCountValid(sections) || !nqCoffSymbolCountValid(symbols) { return -1 }
+    if !nqObjectRangeValid(buffer, offset, nqCoffFileHeaderBytes()) { return -2 }
+    if !nqObjectZero(buffer, offset, nqCoffFileHeaderBytes()) { return -2 }
+    if !nqObjectWriteU16LE(buffer, offset, nqCoffMachine(target)) { return -2 }
+    if !nqObjectWriteU16LE(buffer, offset + 2 as usize, sections as u16) { return -2 }
+    if !nqObjectWriteU32LE(buffer, offset + 4 as usize, timestamp) { return -2 }
+    if !nqObjectWriteU32LE(buffer, offset + 8 as usize, symbolTableOffset) { return -2 }
+    if !nqObjectWriteU32LE(buffer, offset + 12 as usize, symbols as u32) { return -2 }
+    // SizeOfOptionalHeader and Characteristics stay zero for a plain object.
+    return nqCoffFileHeaderBytes() as isize
+}
+
+export function nqCoffObjectHeaderSize(sections: usize): usize {
+    if !nqCoffSectionCountValid(sections) { return 0 as usize }
+    return nqCoffFileHeaderBytes() + sections * nqCoffSectionHeaderBytes()
+}

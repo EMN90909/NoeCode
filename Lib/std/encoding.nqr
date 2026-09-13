@@ -1,6 +1,445 @@
 module noqeri.std.encoding
 
-export function encoding_byte_sum(data: []u8): u64 { let sum: u64 = 0 as u64 let i: usize = 0 as usize while i < len(data) { sum = sum + data[i] as u64 i = i + 1 } return sum }
-export function encoding_all_zero(data: []u8): bool { let i: usize = 0 as usize while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 } return true }
+// Character-encoding helpers intentionally operate on byte slices. This module
+// owns detection/validation/transcoding; binary integer layout belongs in
+// std/endian and variable-length integers belong in std/varint.
+record EncodingDetection {
+    kind: int
+    bom_bytes: usize
+    valid: bool
+    ascii_only: bool
+}
+
+record TranscodeResult {
+    read: usize
+    written: usize
+    ok: bool
+    invalid_input: bool
+    output_full: bool
+}
+
+export function encoding_unknown(): int { return 0 }
+export function encoding_ascii(): int { return 1 }
+export function encoding_utf8(): int { return 2 }
+export function encoding_utf16_le(): int { return 3 }
+export function encoding_utf16_be(): int { return 4 }
+export function encoding_latin1(): int { return 5 }
+
+export function encoding_kind_valid(kind: int): bool {
+    return kind >= encoding_ascii() && kind <= encoding_latin1()
+}
+
+export function encoding_is_unicode(kind: int): bool {
+    return kind == encoding_utf8() || kind == encoding_utf16_le() || kind == encoding_utf16_be()
+}
+
+export function encoding_has_utf8_bom(data: []u8): bool {
+    return len(data) >= 3 as usize && data[0 as usize] == 239 as u8 && data[1 as usize] == 187 as u8 && data[2 as usize] == 191 as u8
+}
+
+export function encoding_has_utf16_le_bom(data: []u8): bool {
+    return len(data) >= 2 as usize && data[0 as usize] == 255 as u8 && data[1 as usize] == 254 as u8
+}
+
+export function encoding_has_utf16_be_bom(data: []u8): bool {
+    return len(data) >= 2 as usize && data[0 as usize] == 254 as u8 && data[1 as usize] == 255 as u8
+}
+
+export function encoding_ascii_valid(data: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(data) {
+        if data[i] >= 128 as u8 { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function encoding_ascii_printable(data: []u8, allowWhitespace: bool): bool {
+    let i: usize = 0 as usize
+    while i < len(data) {
+        let value: u8 = data[i]
+        if value >= 32 as u8 && value <= 126 as u8 { i = i + 1 as usize }
+        else if allowWhitespace && (value == 9 as u8 || value == 10 as u8 || value == 13 as u8) { i = i + 1 as usize }
+        else { return false }
+    }
+    return true
+}
+
+export function encoding_utf8_sequence_width(first: u8): usize {
+    if first < 128 as u8 { return 1 as usize }
+    if first >= 194 as u8 && first <= 223 as u8 { return 2 as usize }
+    if first >= 224 as u8 && first <= 239 as u8 { return 3 as usize }
+    if first >= 240 as u8 && first <= 244 as u8 { return 4 as usize }
+    return 0 as usize
+}
+
+export function encoding_utf8_continuation(value: u8): bool {
+    return value >= 128 as u8 && value <= 191 as u8
+}
+
+export function encoding_utf8_decode_at(data: []u8, offset: usize, codepoint: *u32, width: *usize): bool {
+    if codepoint == null || width == null || offset >= len(data) { return false }
+    let first: u8 = data[offset]
+    let count: usize = encoding_utf8_sequence_width(first)
+    if count == 0 as usize || count > len(data) - offset { return false }
+    if count == 1 as usize {
+        *codepoint = first as u32
+        *width = 1 as usize
+        return true
+    }
+    let second: u8 = data[offset + 1 as usize]
+    if !encoding_utf8_continuation(second) { return false }
+    if count == 2 as usize {
+        *codepoint = (first as u32 - 192 as u32) * 64 as u32 + (second as u32 - 128 as u32)
+        *width = 2 as usize
+        return true
+    }
+    let third: u8 = data[offset + 2 as usize]
+    if !encoding_utf8_continuation(third) { return false }
+    if count == 3 as usize {
+        let cp: u32 = (first as u32 - 224 as u32) * 4096 as u32 + (second as u32 - 128 as u32) * 64 as u32 + (third as u32 - 128 as u32)
+        if cp < 2048 as u32 || (cp >= 55296 as u32 && cp <= 57343 as u32) { return false }
+        *codepoint = cp
+        *width = 3 as usize
+        return true
+    }
+    let fourth: u8 = data[offset + 3 as usize]
+    if !encoding_utf8_continuation(fourth) { return false }
+    let cp: u32 = (first as u32 - 240 as u32) * 262144 as u32 + (second as u32 - 128 as u32) * 4096 as u32 + (third as u32 - 128 as u32) * 64 as u32 + (fourth as u32 - 128 as u32)
+    if cp < 65536 as u32 || cp > 1114111 as u32 { return false }
+    *codepoint = cp
+    *width = 4 as usize
+    return true
+}
+
+export function encoding_utf8_valid(data: []u8): bool {
+    let offset: usize = 0 as usize
+    while offset < len(data) {
+        let codepoint: u32 = 0 as u32
+        let width: usize = 0 as usize
+        if !encoding_utf8_decode_at(data, offset, &codepoint, &width) { return false }
+        offset = offset + width
+    }
+    return true
+}
+
+export function encoding_utf8_codepoint_count(data: []u8): isize {
+    let offset: usize = 0 as usize
+    let count: usize = 0 as usize
+    while offset < len(data) {
+        let codepoint: u32 = 0 as u32
+        let width: usize = 0 as usize
+        if !encoding_utf8_decode_at(data, offset, &codepoint, &width) { return -1 as isize }
+        offset = offset + width
+        count = count + 1 as usize
+    }
+    return count as isize
+}
+
+export function encoding_codepoint_valid(codepoint: u32): bool {
+    if codepoint > 1114111 as u32 { return false }
+    return codepoint < 55296 as u32 || codepoint > 57343 as u32
+}
+
+export function encoding_utf8_width_for_codepoint(codepoint: u32): usize {
+    if !encoding_codepoint_valid(codepoint) { return 0 as usize }
+    if codepoint <= 127 as u32 { return 1 as usize }
+    if codepoint <= 2047 as u32 { return 2 as usize }
+    if codepoint <= 65535 as u32 { return 3 as usize }
+    return 4 as usize
+}
+
+export function encoding_utf8_write_codepoint(output: []u8, offset: usize, codepoint: u32): usize {
+    let width: usize = encoding_utf8_width_for_codepoint(codepoint)
+    if width == 0 as usize || offset > len(output) || width > len(output) - offset { return 0 as usize }
+    if width == 1 as usize {
+        output[offset] = codepoint as u8
+        return 1 as usize
+    }
+    if width == 2 as usize {
+        output[offset] = (192 as u32 + codepoint / 64 as u32) as u8
+        output[offset + 1 as usize] = (128 as u32 + codepoint % 64 as u32) as u8
+        return 2 as usize
+    }
+    if width == 3 as usize {
+        output[offset] = (224 as u32 + codepoint / 4096 as u32) as u8
+        output[offset + 1 as usize] = (128 as u32 + (codepoint / 64 as u32) % 64 as u32) as u8
+        output[offset + 2 as usize] = (128 as u32 + codepoint % 64 as u32) as u8
+        return 3 as usize
+    }
+    output[offset] = (240 as u32 + codepoint / 262144 as u32) as u8
+    output[offset + 1 as usize] = (128 as u32 + (codepoint / 4096 as u32) % 64 as u32) as u8
+    output[offset + 2 as usize] = (128 as u32 + (codepoint / 64 as u32) % 64 as u32) as u8
+    output[offset + 3 as usize] = (128 as u32 + codepoint % 64 as u32) as u8
+    return 4 as usize
+}
+
+export function encoding_utf16_unit_at(data: []u8, offset: usize, little: bool, out: *u16): bool {
+    if out == null || offset > len(data) || 2 as usize > len(data) - offset { return false }
+    if little {
+        *out = data[offset] as u16 + data[offset + 1 as usize] as u16 * 256 as u16
+    } else {
+        *out = data[offset] as u16 * 256 as u16 + data[offset + 1 as usize] as u16
+    }
+    return true
+}
+
+export function encoding_utf16_write_unit(output: []u8, offset: usize, value: u16, little: bool): bool {
+    if offset > len(output) || 2 as usize > len(output) - offset { return false }
+    if little {
+        output[offset] = (value % 256 as u16) as u8
+        output[offset + 1 as usize] = (value / 256 as u16) as u8
+    } else {
+        output[offset] = (value / 256 as u16) as u8
+        output[offset + 1 as usize] = (value % 256 as u16) as u8
+    }
+    return true
+}
+
+export function encoding_utf16_decode_at(data: []u8, offset: usize, little: bool, codepoint: *u32, width: *usize): bool {
+    if codepoint == null || width == null { return false }
+    let first: u16 = 0 as u16
+    if !encoding_utf16_unit_at(data, offset, little, &first) { return false }
+    if first >= 55296 as u16 && first <= 56319 as u16 {
+        let second: u16 = 0 as u16
+        if !encoding_utf16_unit_at(data, offset + 2 as usize, little, &second) { return false }
+        if second < 56320 as u16 || second > 57343 as u16 { return false }
+        *codepoint = 65536 as u32 + (first as u32 - 55296 as u32) * 1024 as u32 + (second as u32 - 56320 as u32)
+        *width = 4 as usize
+        return true
+    }
+    if first >= 56320 as u16 && first <= 57343 as u16 { return false }
+    *codepoint = first as u32
+    *width = 2 as usize
+    return true
+}
+
+export function encoding_utf16_valid(data: []u8, little: bool, skipBom: bool): bool {
+    let offset: usize = 0 as usize
+    if skipBom && len(data) >= 2 as usize {
+        if (little && encoding_has_utf16_le_bom(data)) || (!little && encoding_has_utf16_be_bom(data)) { offset = 2 as usize }
+    }
+    if (len(data) - offset) % 2 as usize != 0 as usize { return false }
+    while offset < len(data) {
+        let codepoint: u32 = 0 as u32
+        let width: usize = 0 as usize
+        if !encoding_utf16_decode_at(data, offset, little, &codepoint, &width) { return false }
+        offset = offset + width
+    }
+    return true
+}
+
+export function encoding_transcode_result_reset(result: *TranscodeResult): bool {
+    if result == null { return false }
+    result.read = 0 as usize
+    result.written = 0 as usize
+    result.ok = false
+    result.invalid_input = false
+    result.output_full = false
+    return true
+}
+
+export function encoding_latin1_to_utf8(input: []u8, output: []u8, result: *TranscodeResult): bool {
+    if result == null { return false }
+    encoding_transcode_result_reset(result)
+    let i: usize = 0 as usize
+    let written: usize = 0 as usize
+    while i < len(input) {
+        let cp: u32 = input[i] as u32
+        let needed: usize = encoding_utf8_width_for_codepoint(cp)
+        if written > len(output) || needed > len(output) - written {
+            result.read = i
+            result.written = written
+            result.output_full = true
+            return false
+        }
+        encoding_utf8_write_codepoint(output, written, cp)
+        written = written + needed
+        i = i + 1 as usize
+    }
+    result.read = len(input)
+    result.written = written
+    result.ok = true
+    return true
+}
+
+export function encoding_utf8_to_latin1(input: []u8, output: []u8, result: *TranscodeResult): bool {
+    if result == null { return false }
+    encoding_transcode_result_reset(result)
+    let offset: usize = 0 as usize
+    let written: usize = 0 as usize
+    while offset < len(input) {
+        let cp: u32 = 0 as u32
+        let width: usize = 0 as usize
+        if !encoding_utf8_decode_at(input, offset, &cp, &width) || cp > 255 as u32 {
+            result.read = offset
+            result.written = written
+            result.invalid_input = true
+            return false
+        }
+        if written >= len(output) {
+            result.read = offset
+            result.written = written
+            result.output_full = true
+            return false
+        }
+        output[written] = cp as u8
+        offset = offset + width
+        written = written + 1 as usize
+    }
+    result.read = len(input)
+    result.written = written
+    result.ok = true
+    return true
+}
+
+export function encoding_ascii_to_utf8(input: []u8, output: []u8, result: *TranscodeResult): bool {
+    if result == null { return false }
+    encoding_transcode_result_reset(result)
+    if !encoding_ascii_valid(input) { result.invalid_input = true return false }
+    if len(output) < len(input) { result.output_full = true return false }
+    let i: usize = 0 as usize
+    while i < len(input) { output[i] = input[i] i = i + 1 as usize }
+    result.read = len(input)
+    result.written = len(input)
+    result.ok = true
+    return true
+}
+
+export function encoding_utf16_to_utf8(input: []u8, little: bool, skipBom: bool, output: []u8, result: *TranscodeResult): bool {
+    if result == null { return false }
+    encoding_transcode_result_reset(result)
+    let offset: usize = 0 as usize
+    if skipBom && len(input) >= 2 as usize {
+        if (little && encoding_has_utf16_le_bom(input)) || (!little && encoding_has_utf16_be_bom(input)) { offset = 2 as usize }
+    }
+    let written: usize = 0 as usize
+    while offset < len(input) {
+        let cp: u32 = 0 as u32
+        let width: usize = 0 as usize
+        if !encoding_utf16_decode_at(input, offset, little, &cp, &width) {
+            result.read = offset
+            result.written = written
+            result.invalid_input = true
+            return false
+        }
+        let needed: usize = encoding_utf8_width_for_codepoint(cp)
+        if written > len(output) || needed > len(output) - written {
+            result.read = offset
+            result.written = written
+            result.output_full = true
+            return false
+        }
+        encoding_utf8_write_codepoint(output, written, cp)
+        offset = offset + width
+        written = written + needed
+    }
+    result.read = len(input)
+    result.written = written
+    result.ok = true
+    return true
+}
+
+export function encoding_utf8_to_utf16(input: []u8, little: bool, output: []u8, result: *TranscodeResult): bool {
+    if result == null { return false }
+    encoding_transcode_result_reset(result)
+    let offset: usize = 0 as usize
+    let written: usize = 0 as usize
+    while offset < len(input) {
+        let cp: u32 = 0 as u32
+        let width: usize = 0 as usize
+        if !encoding_utf8_decode_at(input, offset, &cp, &width) {
+            result.read = offset
+            result.written = written
+            result.invalid_input = true
+            return false
+        }
+        let needed: usize = 2 as usize
+        if cp > 65535 as u32 { needed = 4 as usize }
+        if written > len(output) || needed > len(output) - written {
+            result.read = offset
+            result.written = written
+            result.output_full = true
+            return false
+        }
+        if cp <= 65535 as u32 {
+            encoding_utf16_write_unit(output, written, cp as u16, little)
+        } else {
+            let adjusted: u32 = cp - 65536 as u32
+            let high: u16 = (55296 as u32 + adjusted / 1024 as u32) as u16
+            let low: u16 = (56320 as u32 + adjusted % 1024 as u32) as u16
+            encoding_utf16_write_unit(output, written, high, little)
+            encoding_utf16_write_unit(output, written + 2 as usize, low, little)
+        }
+        offset = offset + width
+        written = written + needed
+    }
+    result.read = len(input)
+    result.written = written
+    result.ok = true
+    return true
+}
+
+export function encoding_detect(data: []u8, result: *EncodingDetection): bool {
+    if result == null { return false }
+    result.kind = encoding_unknown()
+    result.bom_bytes = 0 as usize
+    result.valid = false
+    result.ascii_only = encoding_ascii_valid(data)
+
+    if encoding_has_utf8_bom(data) {
+        result.kind = encoding_utf8()
+        result.bom_bytes = 3 as usize
+        let tailOffset: usize = 3 as usize
+        let tailValid: bool = true
+        let cursor: usize = tailOffset
+        while cursor < len(data) {
+            let cp: u32 = 0 as u32
+            let width: usize = 0 as usize
+            if !encoding_utf8_decode_at(data, cursor, &cp, &width) { tailValid = false cursor = len(data) }
+            else { cursor = cursor + width }
+        }
+        result.valid = tailValid
+        return true
+    }
+    if encoding_has_utf16_le_bom(data) {
+        result.kind = encoding_utf16_le()
+        result.bom_bytes = 2 as usize
+        result.valid = encoding_utf16_valid(data, true, true)
+        return true
+    }
+    if encoding_has_utf16_be_bom(data) {
+        result.kind = encoding_utf16_be()
+        result.bom_bytes = 2 as usize
+        result.valid = encoding_utf16_valid(data, false, true)
+        return true
+    }
+    if result.ascii_only {
+        result.kind = encoding_ascii()
+        result.valid = true
+        return true
+    }
+    if encoding_utf8_valid(data) {
+        result.kind = encoding_utf8()
+        result.valid = true
+        return true
+    }
+    // BOM-less Latin-1 accepts every byte. Detection cannot distinguish it
+    // from arbitrary binary data; callers should treat this fallback as weak.
+    result.kind = encoding_latin1()
+    result.valid = true
+    return true
+}
+
+export function encoding_strip_bom_offset(data: []u8, kind: int): usize {
+    if kind == encoding_utf8() && encoding_has_utf8_bom(data) { return 3 as usize }
+    if kind == encoding_utf16_le() && encoding_has_utf16_le_bom(data) { return 2 as usize }
+    if kind == encoding_utf16_be() && encoding_has_utf16_be_bom(data) { return 2 as usize }
+    return 0 as usize
+}
+
+// Compatibility helpers from the placeholder era.
+export function encoding_byte_sum(data: []u8): u64 { let sum: u64 = 0 as u64 let i: usize = 0 as usize while i < len(data) { sum = sum + data[i] as u64 i = i + 1 as usize } return sum }
+export function encoding_all_zero(data: []u8): bool { let i: usize = 0 as usize while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 as usize } return true }
 export function encoding_bounded_length(data: []u8, max: usize): bool { return len(data) <= max }
 export function encoding_nonempty(data: []u8): bool { return len(data) > 0 as usize }

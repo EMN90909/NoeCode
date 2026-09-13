@@ -1,0 +1,5 @@
+module conformance.raw_pointer_without_unsafe
+
+function read_raw(value: *int): int {
+    return *value
+}

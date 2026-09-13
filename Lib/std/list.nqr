@@ -1,6 +1,77 @@
 module noqeri.std.list
+
+// List<T> is a caller-owned contiguous buffer descriptor. It performs no hidden
+// allocation: embedded, freestanding and application runtimes can provide the
+// backing storage appropriate to their environment.
+record List<T> {
+    data: *T
+    length: usize
+    capacity: usize
+}
+
+export function list_length<T>(list: *List<T>): usize { return list.length }
+export function list_capacity<T>(list: *List<T>): usize { return list.capacity }
+export function list_empty<T>(list: *List<T>): bool { return list.length == 0 as usize }
+export function list_full<T>(list: *List<T>): bool { return list.length >= list.capacity }
+export function list_invariant<T>(list: *List<T>): bool { return list.length <= list.capacity && (list.capacity == 0 as usize || list.data != null) }
+export function list_index_valid<T>(list: *List<T>, index: usize): bool { return index < list.length }
+export function list_remaining<T>(list: *List<T>): usize { if list.length >= list.capacity { return 0 as usize } return list.capacity - list.length }
+
+export function list_get_or<T>(list: *List<T>, index: usize, fallback: T): T {
+    if index >= list.length || list.data == null { return fallback }
+    return list.data[index]
+}
+
+export function list_set<T>(list: *List<T>, index: usize, value: T): bool {
+    if index >= list.length || list.data == null { return false }
+    list.data[index] = value
+    return true
+}
+
+export function list_push<T>(list: *List<T>, value: T): bool {
+    if list.data == null || list.length >= list.capacity { return false }
+    list.data[list.length] = value
+    list.length = list.length + 1 as usize
+    return true
+}
+
+export function list_pop_or<T>(list: *List<T>, fallback: T): T {
+    if list.data == null || list.length == 0 as usize { return fallback }
+    list.length = list.length - 1 as usize
+    return list.data[list.length]
+}
+
+export function list_first_or<T>(list: *List<T>, fallback: T): T { return list_get_or(list, 0 as usize, fallback) }
+export function list_last_or<T>(list: *List<T>, fallback: T): T { if list.length == 0 as usize { return fallback } return list_get_or(list, list.length - 1 as usize, fallback) }
+
+export function list_contains_value<T: Eq>(list: *List<T>, value: T): bool {
+    if list.data == null { return false }
+    let i: usize = 0 as usize
+    while i < list.length { if list.data[i] == value { return true } i = i + 1 as usize }
+    return false
+}
+
+export function list_index_of<T: Eq>(list: *List<T>, value: T): isize {
+    if list.data == null { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < list.length { if list.data[i] == value { return i as isize } i = i + 1 as usize }
+    return -1 as isize
+}
+
+export function list_clear<T>(list: *List<T>): void { list.length = 0 as usize }
+export function list_truncate<T>(list: *List<T>, length: usize): bool { if length > list.length { return false } list.length = length return true }
+
+export function list_remove_at<T>(list: *List<T>, index: usize): bool {
+    if list.data == null || index >= list.length { return false }
+    let i: usize = index
+    while i + 1 as usize < list.length { list.data[i] = list.data[i + 1 as usize] i = i + 1 as usize }
+    list.length = list.length - 1 as usize
+    return true
+}
+
+// Slice-oriented compatibility helpers retained for existing Noqeri programs.
 export function list_len<T>(items: []T): usize { return len(items) }
 export function list_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
-export function list_first<T>(items: []T): T { return items[0] }
-export function list_last<T>(items: []T): T { return items[len(items)-1] }
-export function list_contains<T: Eq>(items: []T, value: T): bool { let i: usize = 0 as usize while i < len(items) { if items[i] == value { return true } i = i + 1 } return false }
+export function list_first<T>(items: []T): T { return items[0 as usize] }
+export function list_last<T>(items: []T): T { return items[len(items)-1 as usize] }
+export function list_contains<T: Eq>(items: []T, value: T): bool { let i: usize = 0 as usize while i < len(items) { if items[i] == value { return true } i = i + 1 as usize } return false }

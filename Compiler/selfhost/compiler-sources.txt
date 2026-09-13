@@ -36,3 +36,4 @@ Compiler/selfhost/syntax.nqr
 Compiler/selfhost/targets.nqr
 Compiler/selfhost/type_ref.nqr
 Compiler/selfhost/types.nqr
+Compiler/selfhost/zero_init.nqr

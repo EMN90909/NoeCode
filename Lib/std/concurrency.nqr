@@ -1,0 +1,59 @@
+module noqeri.std.concurrency
+
+// First-class concurrency surface. Runtime implementations are provided by the
+// host ABI so the same source API is available on Windows, Linux and macOS.
+
+extern function taskSpawn(entry: string): isize
+extern function taskJoin(task: isize): isize
+extern function taskCancel(task: isize): isize
+extern function taskIsCancelled(task: isize): bool
+extern function taskSleepMillis(milliseconds: i64): isize
+extern function taskJoinTimeout(task: isize, milliseconds: i64): isize
+
+extern function channelCreate(capacity: usize): isize
+extern function channelSend(channel: isize, value: isize): isize
+extern function channelReceive(channel: isize): isize
+extern function channelSendTimeout(channel: isize, value: isize, milliseconds: i64): isize
+extern function channelReceiveTimeout(channel: isize, milliseconds: i64): isize
+extern function channelClose(channel: isize): isize
+
+extern function mutexCreate(): isize
+extern function mutexLock(mutex: isize): isize
+extern function mutexTryLock(mutex: isize): bool
+extern function mutexUnlock(mutex: isize): isize
+
+extern function rwlockCreate(): isize
+extern function rwlockReadLock(lock: isize): isize
+extern function rwlockReadUnlock(lock: isize): isize
+extern function rwlockWriteLock(lock: isize): isize
+extern function rwlockWriteUnlock(lock: isize): isize
+
+export function task_spawn(entry: string): isize { return taskSpawn(entry) }
+export function task_join(task: isize): isize { return taskJoin(task) }
+export function task_cancel(task: isize): isize { return taskCancel(task) }
+export function task_cancelled(task: isize): bool { return taskIsCancelled(task) }
+export function task_sleep(milliseconds: i64): isize { return taskSleepMillis(milliseconds) }
+export function task_join_timeout(task: isize, milliseconds: i64): isize { return taskJoinTimeout(task, milliseconds) }
+
+export function channel_create(capacity: usize): isize { return channelCreate(capacity) }
+export function channel_send(channel: isize, value: isize): isize { return channelSend(channel, value) }
+export function channel_receive(channel: isize): isize { return channelReceive(channel) }
+export function channel_send_timeout(channel: isize, value: isize, milliseconds: i64): isize { return channelSendTimeout(channel, value, milliseconds) }
+export function channel_receive_timeout(channel: isize, milliseconds: i64): isize { return channelReceiveTimeout(channel, milliseconds) }
+export function channel_close(channel: isize): isize { return channelClose(channel) }
+
+export function mutex_create(): isize { return mutexCreate() }
+export function mutex_lock(mutex: isize): isize { return mutexLock(mutex) }
+export function mutex_try_lock(mutex: isize): bool { return mutexTryLock(mutex) }
+export function mutex_unlock(mutex: isize): isize { return mutexUnlock(mutex) }
+
+export function rwlock_create(): isize { return rwlockCreate() }
+export function rwlock_read_lock(lock: isize): isize { return rwlockReadLock(lock) }
+export function rwlock_read_unlock(lock: isize): isize { return rwlockReadUnlock(lock) }
+export function rwlock_write_lock(lock: isize): isize { return rwlockWriteLock(lock) }
+export function rwlock_write_unlock(lock: isize): isize { return rwlockWriteUnlock(lock) }
+
+// Structured concurrency status helpers.
+export function concurrency_ok(status: isize): bool { return status >= 0 as isize }
+export function concurrency_timeout(status: isize): bool { return status == -2 as isize }
+export function concurrency_cancelled(status: isize): bool { return status == -3 as isize }

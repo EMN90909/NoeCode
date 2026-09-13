@@ -1,5 +1,11 @@
 module noqeri.std.profile
 
+record ProfileCounter { calls: u64 total_ns: u64 min_ns: u64 max_ns: u64 }
+
+export function profile_reset(counter: *ProfileCounter): void { counter.calls = 0 as u64 counter.total_ns = 0 as u64 counter.min_ns = 0 as u64 counter.max_ns = 0 as u64 }
+export function profile_record(counter: *ProfileCounter, elapsed_ns: u64): void { if counter.calls == 0 as u64 || elapsed_ns < counter.min_ns { counter.min_ns = elapsed_ns } if counter.calls == 0 as u64 || elapsed_ns > counter.max_ns { counter.max_ns = elapsed_ns } counter.calls = counter.calls + 1 as u64 counter.total_ns = counter.total_ns + elapsed_ns }
+export function profile_mean_ns(counter: *ProfileCounter): u64 { if counter.calls == 0 as u64 { return 0 as u64 } return counter.total_ns / counter.calls }
+export function profile_range_ns(counter: *ProfileCounter): u64 { if counter.calls == 0 as u64 { return 0 as u64 } return counter.max_ns - counter.min_ns }
 export function profile_ratio_per_mille(part: usize, total: usize): usize { if total == 0 as usize { return 0 as usize } return (part * 1000 as usize) / total }
 export function profile_passed(passed: usize, failed: usize): bool { return failed == 0 as usize && passed > 0 as usize }
 export function profile_delta(start: i64, end: i64): i64 { return end - start }

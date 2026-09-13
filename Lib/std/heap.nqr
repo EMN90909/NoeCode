@@ -1,6 +1,252 @@
 module noqeri.std.heap
 
+// Fixed-capacity binary heap backed by caller-owned storage.
+// The heap can operate as min-heap or max-heap without hidden allocation.
+record Heap<T> {
+    data: *T
+    length: usize
+    capacity: usize
+    min_heap: bool
+}
+
+export function heap_init<T>(heap: *Heap<T>, data: *T, capacity: usize, min_heap: bool): bool {
+    if heap == null { return false }
+    if capacity > 0 as usize && data == null { return false }
+    heap.data = data
+    heap.length = 0 as usize
+    heap.capacity = capacity
+    heap.min_heap = min_heap
+    return true
+}
+
+export function heap_invariant<T>(heap: *Heap<T>): bool {
+    if heap == null { return false }
+    if heap.length > heap.capacity { return false }
+    if heap.capacity > 0 as usize && heap.data == null { return false }
+    return true
+}
+
+export function heap_length<T>(heap: *Heap<T>): usize { if heap == null { return 0 as usize } return heap.length }
+export function heap_capacity<T>(heap: *Heap<T>): usize { if heap == null { return 0 as usize } return heap.capacity }
+export function heap_empty<T>(heap: *Heap<T>): bool { return heap == null || heap.length == 0 as usize }
+export function heap_full<T>(heap: *Heap<T>): bool { return heap != null && heap.length >= heap.capacity }
+export function heap_remaining<T>(heap: *Heap<T>): usize { if heap == null || heap.length >= heap.capacity { return 0 as usize } return heap.capacity - heap.length }
+export function heap_parent(index: usize): usize { if index == 0 as usize { return 0 as usize } return (index - 1 as usize) / 2 as usize }
+export function heap_left(index: usize): usize { return index * 2 as usize + 1 as usize }
+export function heap_right(index: usize): usize { return index * 2 as usize + 2 as usize }
+
+function heap_precedes<T: Ord + Copy>(heap: *Heap<T>, left: T, right: T): bool {
+    if heap.min_heap { return left < right }
+    return left > right
+}
+
+export function heap_ref<T>(heap: *Heap<T>, index: usize): *T {
+    if heap == null || heap.data == null || index >= heap.length { return null as *T }
+    return &heap.data[index]
+}
+
+export function heap_peek_or<T: Copy>(heap: *Heap<T>, fallback: T): T {
+    if heap_empty(heap) || heap.data == null { return fallback }
+    return heap.data[0 as usize]
+}
+
+export function heap_swap<T: Copy>(heap: *Heap<T>, left: usize, right: usize): bool {
+    if heap == null || heap.data == null || left >= heap.length || right >= heap.length { return false }
+    if left == right { return true }
+    let temp: T = heap.data[left]
+    heap.data[left] = heap.data[right]
+    heap.data[right] = temp
+    return true
+}
+
+export function heap_sift_up<T: Ord + Copy>(heap: *Heap<T>, start: usize): bool {
+    if !heap_invariant(heap) || start >= heap.length { return false }
+    let index: usize = start
+    while index > 0 as usize {
+        let parent: usize = heap_parent(index)
+        if !heap_precedes(heap, heap.data[index], heap.data[parent]) { return true }
+        if !heap_swap(heap, index, parent) { return false }
+        index = parent
+    }
+    return true
+}
+
+export function heap_sift_down<T: Ord + Copy>(heap: *Heap<T>, start: usize): bool {
+    if !heap_invariant(heap) || start >= heap.length { return false }
+    let index: usize = start
+    while true {
+        let left: usize = heap_left(index)
+        if left >= heap.length { return true }
+        let best: usize = left
+        let right: usize = heap_right(index)
+        if right < heap.length && heap_precedes(heap, heap.data[right], heap.data[left]) { best = right }
+        if !heap_precedes(heap, heap.data[best], heap.data[index]) { return true }
+        if !heap_swap(heap, index, best) { return false }
+        index = best
+    }
+    return true
+}
+
+export function heap_push<T: Ord + Copy>(heap: *Heap<T>, value: T): bool {
+    if !heap_invariant(heap) || heap_full(heap) || heap.data == null { return false }
+    let index: usize = heap.length
+    heap.data[index] = value
+    heap.length = heap.length + 1 as usize
+    return heap_sift_up(heap, index)
+}
+
+export function heap_pop_or<T: Ord + Copy>(heap: *Heap<T>, fallback: T): T {
+    if !heap_invariant(heap) || heap.length == 0 as usize || heap.data == null { return fallback }
+    let root: T = heap.data[0 as usize]
+    heap.length = heap.length - 1 as usize
+    if heap.length > 0 as usize {
+        heap.data[0 as usize] = heap.data[heap.length]
+        heap_sift_down(heap, 0 as usize)
+    }
+    return root
+}
+
+export function heap_replace_root<T: Ord + Copy>(heap: *Heap<T>, value: T, fallback: T): T {
+    if !heap_invariant(heap) || heap.length == 0 as usize || heap.data == null { return fallback }
+    let old: T = heap.data[0 as usize]
+    heap.data[0 as usize] = value
+    heap_sift_down(heap, 0 as usize)
+    return old
+}
+
+export function heap_push_pop<T: Ord + Copy>(heap: *Heap<T>, value: T): T {
+    if heap == null || heap.length == 0 as usize { return value }
+    if heap_precedes(heap, value, heap.data[0 as usize]) { return value }
+    let old: T = heap.data[0 as usize]
+    heap.data[0 as usize] = value
+    heap_sift_down(heap, 0 as usize)
+    return old
+}
+
+export function heap_clear<T>(heap: *Heap<T>): bool {
+    if heap == null { return false }
+    heap.length = 0 as usize
+    return true
+}
+
+export function heap_contains<T: Eq + Copy>(heap: *Heap<T>, value: T): bool {
+    if !heap_invariant(heap) { return false }
+    let i: usize = 0 as usize
+    while i < heap.length {
+        if heap.data[i] == value { return true }
+        i = i + 1 as usize
+    }
+    return false
+}
+
+export function heap_index_of<T: Eq + Copy>(heap: *Heap<T>, value: T): isize {
+    if !heap_invariant(heap) { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < heap.length {
+        if heap.data[i] == value { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function heap_remove_at<T: Ord + Copy>(heap: *Heap<T>, index: usize): bool {
+    if !heap_invariant(heap) || index >= heap.length || heap.data == null { return false }
+    heap.length = heap.length - 1 as usize
+    if index == heap.length { return true }
+    heap.data[index] = heap.data[heap.length]
+    if index > 0 as usize && heap_precedes(heap, heap.data[index], heap.data[heap_parent(index)]) {
+        return heap_sift_up(heap, index)
+    }
+    return heap_sift_down(heap, index)
+}
+
+export function heap_remove_value<T: Ord + Eq + Copy>(heap: *Heap<T>, value: T): bool {
+    let index: isize = heap_index_of(heap, value)
+    if index < 0 as isize { return false }
+    return heap_remove_at(heap, index as usize)
+}
+
+export function heap_update_at<T: Ord + Copy>(heap: *Heap<T>, index: usize, value: T): bool {
+    if !heap_invariant(heap) || index >= heap.length || heap.data == null { return false }
+    heap.data[index] = value
+    if index > 0 as usize && heap_precedes(heap, heap.data[index], heap.data[heap_parent(index)]) {
+        return heap_sift_up(heap, index)
+    }
+    return heap_sift_down(heap, index)
+}
+
+export function heap_build<T: Ord + Copy>(heap: *Heap<T>, values: []T): bool {
+    if heap == null || len(values) > heap.capacity || (len(values) > 0 as usize && heap.data == null) { return false }
+    let i: usize = 0 as usize
+    while i < len(values) {
+        heap.data[i] = values[i]
+        i = i + 1 as usize
+    }
+    heap.length = len(values)
+    if heap.length <= 1 as usize { return true }
+    let parent: usize = heap_parent(heap.length - 1 as usize) + 1 as usize
+    while parent > 0 as usize {
+        parent = parent - 1 as usize
+        if !heap_sift_down(heap, parent) { return false }
+    }
+    return true
+}
+
+export function heap_is_valid<T: Ord + Copy>(heap: *Heap<T>): bool {
+    if !heap_invariant(heap) { return false }
+    let i: usize = 1 as usize
+    while i < heap.length {
+        let parent: usize = heap_parent(i)
+        if heap_precedes(heap, heap.data[i], heap.data[parent]) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function heap_copy_to<T: Copy>(heap: *Heap<T>, out: []T): usize {
+    if !heap_invariant(heap) || len(out) < heap.length { return 0 as usize }
+    let i: usize = 0 as usize
+    while i < heap.length {
+        out[i] = heap.data[i]
+        i = i + 1 as usize
+    }
+    return heap.length
+}
+
+export function heap_drain_sorted_to<T: Ord + Copy>(heap: *Heap<T>, out: []T, fallback: T): usize {
+    if !heap_invariant(heap) || len(out) < heap.length { return 0 as usize }
+    let count: usize = heap.length
+    let i: usize = 0 as usize
+    while i < count {
+        out[i] = heap_pop_or(heap, fallback)
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function heap_push_many<T: Ord + Copy>(heap: *Heap<T>, values: []T): usize {
+    if !heap_invariant(heap) { return 0 as usize }
+    let written: usize = 0 as usize
+    while written < len(values) && !heap_full(heap) {
+        if !heap_push(heap, values[written]) { return written }
+        written = written + 1 as usize
+    }
+    return written
+}
+
+export function heap_equal_shape<T: Eq + Copy>(left: *Heap<T>, right: *Heap<T>): bool {
+    if !heap_invariant(left) || !heap_invariant(right) { return false }
+    if left.length != right.length || left.min_heap != right.min_heap { return false }
+    let i: usize = 0 as usize
+    while i < left.length {
+        if left.data[i] != right.data[i] { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+// Compatibility helpers retained for the former placeholder API.
 export function heap_len<T>(items: []T): usize { return len(items) }
 export function heap_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
-export function heap_first<T>(items: []T): T { return items[0] }
-export function heap_last<T>(items: []T): T { return items[len(items)-1] }
+export function heap_first<T: Copy>(items: []T): T { return items[0 as usize] }
+export function heap_last<T: Copy>(items: []T): T { return items[len(items)-1 as usize] }

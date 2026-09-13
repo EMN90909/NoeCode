@@ -1,5 +1,6 @@
 #include "noe.hpp"
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <functional>
 #include <sstream>

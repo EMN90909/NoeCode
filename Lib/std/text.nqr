@@ -1,7 +1,20 @@
 module noqeri.std.text
 
+// Existing string-oriented API retained.
+export function nqTextIsEmpty(value: string): bool { return textLength(value) == 0 }
+export function nqTextHasLength(value: string, expected: int): bool { return textLength(value) == expected }
+export function nqTextJoin2(left: string, right: string): string { return left + right }
+export function nqTextJoin3(first: string, second: string, third: string): string { return first + second + third }
+export function nqTextEquals(left: string, right: string): bool { return left == right }
+
+// ASCII classification and case helpers for byte-oriented parsers.
 export function text_is_ascii_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
-export function text_is_ascii_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
+export function text_is_ascii_upper(c: u8): bool { return c >= 65 as u8 && c <= 90 as u8 }
+export function text_is_ascii_lower(c: u8): bool { return c >= 97 as u8 && c <= 122 as u8 }
+export function text_is_ascii_alpha(c: u8): bool { return text_is_ascii_upper(c) || text_is_ascii_lower(c) }
+export function text_is_ascii_alnum(c: u8): bool { return text_is_ascii_alpha(c) || text_is_ascii_digit(c) }
 export function text_is_ascii_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
-export function text_ascii_lower(c: u8): u8 { if c >= 65 as u8 && c <= 90 as u8 { return c + 32 as u8 } return c }
-export function text_ascii_upper(c: u8): u8 { if c >= 97 as u8 && c <= 122 as u8 { return c - 32 as u8 } return c }
+export function text_ascii_lower(c: u8): u8 { if text_is_ascii_upper(c) { return c + 32 as u8 } return c }
+export function text_ascii_upper(c: u8): u8 { if text_is_ascii_lower(c) { return c - 32 as u8 } return c }
+export function text_trim_left_count(value: []u8): usize { let i: usize=0 as usize while i<len(value)&&text_is_ascii_space(value[i]) { i=i+1 } return i }
+export function text_count_ascii_digits(value: []u8): usize { let count: usize=0 as usize let i:usize=0 as usize while i<len(value) { if text_is_ascii_digit(value[i]) { count=count+1 } i=i+1 } return count }

@@ -1,6 +1,364 @@
 module noqeri.std.ring
 
+// Ring<T> is a fixed-capacity circular buffer backed by caller-owned storage.
+// The normal push operation keeps the newest values: when the ring is full it
+// overwrites the oldest slot and increments overwritten. try_push is provided
+// for callers that prefer an explicit full-buffer failure instead.
+record Ring<T> {
+    data: *T
+    capacity: usize
+    length: usize
+    head: usize
+    overwritten: u64
+}
+
+export function ring_init<T>(ring: *Ring<T>, data: *T, capacity: usize): bool {
+    if ring == null { return false }
+    if capacity > 0 as usize && data == null { return false }
+    ring.data = data
+    ring.capacity = capacity
+    ring.length = 0 as usize
+    ring.head = 0 as usize
+    ring.overwritten = 0 as u64
+    return true
+}
+
+export function ring_invariant<T>(ring: *Ring<T>): bool {
+    if ring == null { return false }
+    if ring.length > ring.capacity { return false }
+    if ring.capacity > 0 as usize && ring.data == null { return false }
+    if ring.capacity == 0 as usize { return ring.length == 0 as usize && ring.head == 0 as usize }
+    return ring.head < ring.capacity
+}
+
+export function ring_length<T>(ring: *Ring<T>): usize {
+    if ring == null { return 0 as usize }
+    return ring.length
+}
+
+export function ring_capacity<T>(ring: *Ring<T>): usize {
+    if ring == null { return 0 as usize }
+    return ring.capacity
+}
+
+export function ring_remaining<T>(ring: *Ring<T>): usize {
+    if ring == null || ring.length >= ring.capacity { return 0 as usize }
+    return ring.capacity - ring.length
+}
+
+export function ring_empty<T>(ring: *Ring<T>): bool {
+    return ring == null || ring.length == 0 as usize
+}
+
+export function ring_full<T>(ring: *Ring<T>): bool {
+    return ring != null && ring.capacity > 0 as usize && ring.length >= ring.capacity
+}
+
+export function ring_overwrite_count<T>(ring: *Ring<T>): u64 {
+    if ring == null { return 0 as u64 }
+    return ring.overwritten
+}
+
+export function ring_index_valid<T>(ring: *Ring<T>, logicalIndex: usize): bool {
+    return ring != null && logicalIndex < ring.length
+}
+
+function ring_physical_index<T>(ring: *Ring<T>, logicalIndex: usize): usize {
+    if ring == null || ring.capacity == 0 as usize { return 0 as usize }
+    return (ring.head + logicalIndex) % ring.capacity
+}
+
+function ring_tail_slot<T>(ring: *Ring<T>): usize {
+    if ring == null || ring.capacity == 0 as usize { return 0 as usize }
+    return (ring.head + ring.length) % ring.capacity
+}
+
+function ring_previous_slot<T>(ring: *Ring<T>, slot: usize): usize {
+    if ring == null || ring.capacity == 0 as usize { return 0 as usize }
+    if slot == 0 as usize { return ring.capacity - 1 as usize }
+    return slot - 1 as usize
+}
+
+function ring_next_slot<T>(ring: *Ring<T>, slot: usize): usize {
+    if ring == null || ring.capacity == 0 as usize { return 0 as usize }
+    return (slot + 1 as usize) % ring.capacity
+}
+
+export function ring_ref<T>(ring: *Ring<T>, logicalIndex: usize): *T {
+    if !ring_index_valid(ring, logicalIndex) || ring.data == null { return null as *T }
+    return &ring.data[ring_physical_index(ring, logicalIndex)]
+}
+
+export function ring_get_or<T: Copy>(ring: *Ring<T>, logicalIndex: usize, fallback: T): T {
+    let item: *T = ring_ref(ring, logicalIndex)
+    if item == null { return fallback }
+    return *item
+}
+
+export function ring_set<T: Copy>(ring: *Ring<T>, logicalIndex: usize, value: T): bool {
+    let item: *T = ring_ref(ring, logicalIndex)
+    if item == null { return false }
+    *item = value
+    return true
+}
+
+export function ring_oldest_ref<T>(ring: *Ring<T>): *T {
+    return ring_ref(ring, 0 as usize)
+}
+
+export function ring_newest_ref<T>(ring: *Ring<T>): *T {
+    if ring == null || ring.length == 0 as usize { return null as *T }
+    return ring_ref(ring, ring.length - 1 as usize)
+}
+
+export function ring_oldest_or<T: Copy>(ring: *Ring<T>, fallback: T): T {
+    return ring_get_or(ring, 0 as usize, fallback)
+}
+
+export function ring_newest_or<T: Copy>(ring: *Ring<T>, fallback: T): T {
+    if ring == null || ring.length == 0 as usize { return fallback }
+    return ring_get_or(ring, ring.length - 1 as usize, fallback)
+}
+
+export function ring_try_push<T: Copy>(ring: *Ring<T>, value: T): bool {
+    if ring == null || ring.data == null || ring.capacity == 0 as usize || ring.length >= ring.capacity { return false }
+    let slot: usize = ring_tail_slot(ring)
+    ring.data[slot] = value
+    ring.length = ring.length + 1 as usize
+    return true
+}
+
+// Returns true when the value was accepted. A zero-capacity ring rejects it.
+// When full, the oldest value is replaced.
+export function ring_push<T: Copy>(ring: *Ring<T>, value: T): bool {
+    if ring == null || ring.data == null || ring.capacity == 0 as usize { return false }
+    if ring.length < ring.capacity { return ring_try_push(ring, value) }
+    ring.data[ring.head] = value
+    ring.head = ring_next_slot(ring, ring.head)
+    ring.overwritten = ring.overwritten + 1 as u64
+    return true
+}
+
+export function ring_push_many<T: Copy>(ring: *Ring<T>, values: []T): usize {
+    if ring == null { return 0 as usize }
+    let accepted: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(values) {
+        if !ring_push(ring, values[i]) { return accepted }
+        accepted = accepted + 1 as usize
+        i = i + 1 as usize
+    }
+    return accepted
+}
+
+export function ring_try_push_many<T: Copy>(ring: *Ring<T>, values: []T): usize {
+    if ring == null { return 0 as usize }
+    let accepted: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(values) {
+        if !ring_try_push(ring, values[i]) { return accepted }
+        accepted = accepted + 1 as usize
+        i = i + 1 as usize
+    }
+    return accepted
+}
+
+export function ring_pop_oldest_or<T: Copy>(ring: *Ring<T>, fallback: T): T {
+    if ring == null || ring.length == 0 as usize || ring.data == null { return fallback }
+    let value: T = ring.data[ring.head]
+    ring.head = ring_next_slot(ring, ring.head)
+    ring.length = ring.length - 1 as usize
+    if ring.length == 0 as usize { ring.head = 0 as usize }
+    return value
+}
+
+export function ring_pop_newest_or<T: Copy>(ring: *Ring<T>, fallback: T): T {
+    if ring == null || ring.length == 0 as usize || ring.data == null { return fallback }
+    let slot: usize = ring_physical_index(ring, ring.length - 1 as usize)
+    let value: T = ring.data[slot]
+    ring.length = ring.length - 1 as usize
+    if ring.length == 0 as usize { ring.head = 0 as usize }
+    return value
+}
+
+export function ring_drop_oldest<T>(ring: *Ring<T>, count: usize): usize {
+    if ring == null || ring.length == 0 as usize { return 0 as usize }
+    let removed: usize = count
+    if removed > ring.length { removed = ring.length }
+    if ring.capacity > 0 as usize { ring.head = (ring.head + removed) % ring.capacity }
+    ring.length = ring.length - removed
+    if ring.length == 0 as usize { ring.head = 0 as usize }
+    return removed
+}
+
+export function ring_keep_newest<T>(ring: *Ring<T>, count: usize): usize {
+    if ring == null { return 0 as usize }
+    if count >= ring.length { return ring.length }
+    ring_drop_oldest(ring, ring.length - count)
+    return ring.length
+}
+
+export function ring_clear<T>(ring: *Ring<T>): bool {
+    if ring == null { return false }
+    ring.length = 0 as usize
+    ring.head = 0 as usize
+    return true
+}
+
+export function ring_reset<T>(ring: *Ring<T>): bool {
+    if !ring_clear(ring) { return false }
+    ring.overwritten = 0 as u64
+    return true
+}
+
+export function ring_contains<T: Eq + Copy>(ring: *Ring<T>, value: T): bool {
+    if ring == null { return false }
+    let i: usize = 0 as usize
+    while i < ring.length {
+        if ring_get_or(ring, i, value) == value { return true }
+        i = i + 1 as usize
+    }
+    return false
+}
+
+export function ring_index_of<T: Eq + Copy>(ring: *Ring<T>, value: T): isize {
+    if ring == null { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < ring.length {
+        let item: *T = ring_ref(ring, i)
+        if item != null && *item == value { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function ring_count_value<T: Eq + Copy>(ring: *Ring<T>, value: T): usize {
+    if ring == null { return 0 as usize }
+    let count: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < ring.length {
+        let item: *T = ring_ref(ring, i)
+        if item != null && *item == value { count = count + 1 as usize }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function ring_copy_into<T: Copy>(destination: []T, ring: *Ring<T>): usize {
+    if ring == null { return 0 as usize }
+    let count: usize = ring.length
+    if count > len(destination) { count = len(destination) }
+    let i: usize = 0 as usize
+    while i < count {
+        let item: *T = ring_ref(ring, i)
+        if item != null { destination[i] = *item }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function ring_copy_newest_into<T: Copy>(destination: []T, ring: *Ring<T>): usize {
+    if ring == null || len(destination) == 0 as usize { return 0 as usize }
+    let count: usize = ring.length
+    if count > len(destination) { count = len(destination) }
+    let start: usize = ring.length - count
+    let i: usize = 0 as usize
+    while i < count {
+        let item: *T = ring_ref(ring, start + i)
+        if item != null { destination[i] = *item }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function ring_copy_oldest_into<T: Copy>(destination: []T, ring: *Ring<T>): usize {
+    return ring_copy_into(destination, ring)
+}
+
+export function ring_equals_sequence<T: Eq + Copy>(ring: *Ring<T>, values: []T): bool {
+    if ring == null || ring.length != len(values) { return false }
+    let i: usize = 0 as usize
+    while i < ring.length {
+        let item: *T = ring_ref(ring, i)
+        if item == null || *item != values[i] { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function ring_rotate_left<T>(ring: *Ring<T>, amount: usize): bool {
+    if ring == null { return false }
+    if ring.length == 0 as usize || ring.capacity == 0 as usize { return true }
+    // Rotation is only representation-safe without moving data when all
+    // physical slots belong to the logical ring.
+    if ring.length != ring.capacity { return false }
+    ring.head = (ring.head + amount % ring.length) % ring.capacity
+    return true
+}
+
+export function ring_rotate_right<T>(ring: *Ring<T>, amount: usize): bool {
+    if ring == null { return false }
+    if ring.length == 0 as usize || ring.capacity == 0 as usize { return true }
+    if ring.length != ring.capacity { return false }
+    let normalized: usize = amount % ring.length
+    if normalized == 0 as usize { return true }
+    ring.head = (ring.head + ring.capacity - normalized) % ring.capacity
+    return true
+}
+
+export function ring_utilization_per_mille<T>(ring: *Ring<T>): usize {
+    if ring == null || ring.capacity == 0 as usize { return 0 as usize }
+    return ring.length * 1000 as usize / ring.capacity
+}
+
+export function ring_has_wrapped<T>(ring: *Ring<T>): bool {
+    if ring == null || ring.length == 0 as usize || ring.capacity == 0 as usize { return false }
+    return ring.head + ring.length > ring.capacity
+}
+
+export function ring_contiguous_prefix_length<T>(ring: *Ring<T>): usize {
+    if ring == null || ring.length == 0 as usize || ring.capacity == 0 as usize { return 0 as usize }
+    let untilEnd: usize = ring.capacity - ring.head
+    if ring.length < untilEnd { return ring.length }
+    return untilEnd
+}
+
+export function ring_contiguous_suffix_length<T>(ring: *Ring<T>): usize {
+    if ring == null || !ring_has_wrapped(ring) { return 0 as usize }
+    return ring.length - ring_contiguous_prefix_length(ring)
+}
+
+export function ring_logical_to_physical<T>(ring: *Ring<T>, logicalIndex: usize): isize {
+    if !ring_index_valid(ring, logicalIndex) { return -1 as isize }
+    return ring_physical_index(ring, logicalIndex) as isize
+}
+
+export function ring_physical_is_live<T>(ring: *Ring<T>, slot: usize): bool {
+    if ring == null || slot >= ring.capacity || ring.length == 0 as usize { return false }
+    let i: usize = 0 as usize
+    while i < ring.length {
+        if ring_physical_index(ring, i) == slot { return true }
+        i = i + 1 as usize
+    }
+    return false
+}
+
+export function ring_rebase<T: Copy>(ring: *Ring<T>, scratch: []T): bool {
+    if ring == null { return false }
+    if ring.length > len(scratch) { return false }
+    let copied: usize = ring_copy_into(scratch, ring)
+    if copied != ring.length { return false }
+    let i: usize = 0 as usize
+    while i < copied {
+        ring.data[i] = scratch[i]
+        i = i + 1 as usize
+    }
+    ring.head = 0 as usize
+    return true
+}
+
+// Compatibility helpers retained for callers that treated a slice as a ring.
 export function ring_len<T>(items: []T): usize { return len(items) }
 export function ring_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
-export function ring_first<T>(items: []T): T { return items[0] }
-export function ring_last<T>(items: []T): T { return items[len(items)-1] }
+export function ring_first<T: Copy>(items: []T): T { return items[0 as usize] }
+export function ring_last<T: Copy>(items: []T): T { return items[len(items)-1 as usize] }

@@ -2,6 +2,7 @@ module noqeri.compiler.selfhost.pipeline
 import "parser.nqr"
 import "parser_stmt.nqr"
 import "ast.nqr"
+import "zero_init.nqr"
 import "semantics.nqr"
 import "semantic_program.nqr"
 import "nir.nqr"
@@ -57,6 +58,8 @@ export function nqPipelineSemanticCheckMerged(source: []u8, unsafeAllowed: bool)
     let first: isize = nqAstNoNode()
     let parseStatus: isize = nqParserParseProgram(source, slice(nodes), &count, &first)
     if parseStatus < 0 as isize { return parseStatus }
+    let zeroStatus: isize = nqZeroInitNormalize(source, slice(nodes), &count, first)
+    if zeroStatus < 0 as isize { return zeroStatus }
     return nqSemanticAnalyzeProgram(source, slice(nodes), &count, first, unsafeAllowed)
 }
 
@@ -109,6 +112,8 @@ export function nqPipelineCompileToNir(source: []u8, target: int, debug: bool, u
     let astCount: usize = 0 as usize
     let parseStatus: isize = nqParserParseProgram(source, nodes, &astCount, &first)
     if parseStatus < 0 as isize { out.status = parseStatus return parseStatus }
+    let zeroStatus: isize = nqZeroInitNormalize(source, nodes, &astCount, first)
+    if zeroStatus < 0 as isize { out.status = zeroStatus return zeroStatus }
     let semanticStatus: isize = nqSemanticAnalyzeProgram(source, nodes, &astCount, first, unsafeAllowed)
     if semanticStatus < 0 as isize { out.status = semanticStatus return semanticStatus }
     let instructionCount: usize = 0 as usize

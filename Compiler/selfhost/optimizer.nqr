@@ -1,0 +1,12 @@
+module noqeri.compiler.selfhost.optimizer
+import "nir.nqr"
+
+export function nqOptLevelNone(): int { return 0 }
+export function nqOptLevelSize(): int { return 1 }
+export function nqOptLevelSpeed(): int { return 2 }
+export function nqOptLevelAggressive(): int { return 3 }
+export function nqOptimizerLevelValid(level: int): bool { return level >= nqOptLevelNone() && level <= nqOptLevelAggressive() }
+export function nqOptimizerCanFold(opcode: int): bool { return nqNirIsPureArithmetic(opcode) }
+export function nqOptimizerCanEliminate(opcode: int, resultUsed: bool): bool { return !resultUsed && !nqNirHasSideEffect(opcode) }
+export function nqOptimizerShouldInline(instructions: usize, level: int): bool { if level == nqOptLevelNone() { return false } if level == nqOptLevelSize() { return instructions <= 6 as usize } if level == nqOptLevelSpeed() { return instructions <= 24 as usize } return instructions <= 64 as usize }
+export function nqOptimizerPassBudget(level: int): int { if level <= 0 { return 0 } if level == 1 { return 2 } if level == 2 { return 5 } return 8 }

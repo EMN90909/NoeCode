@@ -14,6 +14,15 @@ public:
                  const std::filesystem::path& databaseOverride,
                  std::ostream& output,
                  Diagnostics& diagnostics) const;
+
+    // SQL is an adapter over the same .nqdb storage engine. The supported
+    // application subset is CREATE TABLE, INSERT, SELECT, UPDATE, DELETE and
+    // BEGIN/COMMIT/ROLLBACK boundaries, with equality WHERE clauses and simple
+    // ORDER BY/projection. Unsupported SQL fails closed with a diagnostic.
+    bool executeSql(const std::filesystem::path& script,
+                    const std::filesystem::path& databaseOverride,
+                    std::ostream& output,
+                    Diagnostics& diagnostics) const;
 };
 
 } // namespace noe

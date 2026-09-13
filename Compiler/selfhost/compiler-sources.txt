@@ -15,6 +15,7 @@ Compiler/selfhost/lsp.nqr
 Compiler/selfhost/macho_writer.nqr
 Compiler/selfhost/main.nqr
 Compiler/selfhost/nir.nqr
+Compiler/selfhost/nqo_writer.nqr
 Compiler/selfhost/object_formats.nqr
 Compiler/selfhost/optimizer.nqr
 Compiler/selfhost/package_policy.nqr

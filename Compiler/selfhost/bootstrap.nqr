@@ -19,6 +19,7 @@ import "targets.nqr"
 import "object_formats.nqr"
 import "backend.nqr"
 import "race.nqr"
+import "nqo_writer.nqr"
 import "linker.nqr"
 import "formatter.nqr"
 import "lsp.nqr"
@@ -52,7 +53,7 @@ export function stage1ElfTargetValid(target: int): bool { return nqElfTargetVali
 export function stage1MachTargetValid(target: int): bool { return nqMachTargetValid(target) }
 
 // Stage-2-facing entry points keep parsing, generic inference, lowering,
-// optimisation, diagnostics instrumentation and proof verification in Noqeri.
+// optimisation, diagnostics instrumentation and portable module emission in Noqeri.
 export function stage2Plan(source: []u8, target: int, debug: bool, unsafeAllowed: bool, out: *NqCompilePlan): isize { return nqPipelinePlan(source, target, debug, unsafeAllowed, out) }
 export function stage2ParseExpression(source: []u8, nodes: []NqAstNode, count: *usize, outEnd: *usize): isize { return nqParserParseExpression(source, 0 as usize, nodes, count, outEnd) }
 export function stage2ParseProgram(source: []u8, nodes: []NqAstNode, count: *usize, first: *isize): isize { return nqParserParseProgram(source, nodes, count, first) }
@@ -60,6 +61,8 @@ export function stage2SemanticCheck(source: []u8, unsafeAllowed: bool): isize { 
 export function stage2InferGenerics(parameterTypes: []int, parameterSlots: []int, argumentTypes: []int, bindings: []int): isize { return nqGenericInfer(parameterTypes, parameterSlots, argumentTypes, bindings) }
 export function stage2LowerExpression(source: []u8, nodes: []NqAstNode, nodeIndex: isize, instructions: []NqNirInstruction, state: *NqLowerState): isize { return nqLowerExpression(source, nodes, nodeIndex, instructions, state) }
 export function stage2CompileToNir(source: []u8, target: int, debug: bool, unsafeAllowed: bool, nodes: []NqAstNode, instructions: []NqNirInstruction, functions: []NqNirFunction, out: *NqCompileResult): isize { return nqPipelineCompileToNir(source, target, debug, unsafeAllowed, nodes, instructions, functions, out) }
+export function stage2NqoRequiredBytes(sourceBytes: usize, functionCount: usize, instructionCount: usize, out: *usize): isize { return nqNqoRequiredBytes(sourceBytes, functionCount, instructionCount, out) }
+export function stage2WriteNqo(source: []u8, functions: []NqNirFunction, instructions: []NqNirInstruction, out: []u8): isize { return nqNqoWrite(source, functions, instructions, out) }
 export function stage2Optimize(instructions: []NqNirInstruction, level: int): usize { return nqOptimizerRun(instructions, level) }
 export function stage2ValidateNir(target: int, instructions: []NqNirInstruction, unsafeAllowed: bool): isize { return nqBackendProgramValid(target, instructions, unsafeAllowed) }
 export function stage2RaceInstrumentable(instructions: []NqNirInstruction): bool { return nqRaceProgramInstrumentable(instructions) }

@@ -29,6 +29,8 @@ export function nqBackendClassCall(): int { return 6 }
 export function nqBackendClassAtomic(): int { return 7 }
 export function nqBackendClassIntrinsic(): int { return 8 }
 export function nqBackendClassUnsafeAsm(): int { return 9 }
+export function nqBackendClassErrorFlow(): int { return 10 }
+export function nqBackendClassSafetyCheck(): int { return 11 }
 
 export function nqBackendTargetReady(target: int): bool { return nqTargetValid(target) && nqTargetPointerBytes(target) == 8 as usize }
 export function nqBackendOpcodeReady(opcode: int): bool { return nqNirOpcodeValid(opcode) }
@@ -49,6 +51,8 @@ export function nqBackendOpcodeClass(opcode: int): int {
     if opcode >= nqNirAtomicLoad() && opcode <= nqNirFence() { return nqBackendClassAtomic() }
     if opcode == nqNirIntrinsic() { return nqBackendClassIntrinsic() }
     if opcode == nqNirAsm() { return nqBackendClassUnsafeAsm() }
+    if opcode == nqNirTry() || opcode == nqNirThrow() { return nqBackendClassErrorFlow() }
+    if opcode == nqNirBoundsCheck() || opcode == nqNirOverflowCheck() { return nqBackendClassSafetyCheck() }
     return nqBackendClassNone()
 }
 

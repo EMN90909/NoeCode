@@ -1,13 +1,44 @@
 module noqeri.std.http.client
 
 extern function httpClientRequest(method: string, url: string, body: string): isize
+extern function httpClientRequestEx(method: string, url: string, body: string, contentType: string, timeoutMillis: i64): isize
 extern function httpClientStatus(request: usize): int
 extern function httpClientBody(request: usize): string
+extern function httpClientHeader(request: usize, name: string): string
 extern function httpClientClose(request: usize): void
 
-export function http_client_get(url: string): isize { return httpClientRequest("GET",url,"") }
-export function http_client_post(url: string, body: string): isize { return httpClientRequest("POST",url,body) }
+record HttpClientOptions {
+    timeoutMillis: i64
+    contentType: string
+}
+
+export function http_client_default_timeout_millis(): i64 { return 30000 as i64 }
+export function http_client_handle_valid(handle: isize): bool { return handle >= 0 as isize }
+export function http_client_get(url: string): isize { return httpClientRequest("GET", url, "") }
+export function http_client_head(url: string): isize { return httpClientRequest("HEAD", url, "") }
+export function http_client_post(url: string, body: string): isize { return httpClientRequest("POST", url, body) }
+export function http_client_put(url: string, body: string): isize { return httpClientRequest("PUT", url, body) }
+export function http_client_patch(url: string, body: string): isize { return httpClientRequest("PATCH", url, body) }
+export function http_client_delete(url: string): isize { return httpClientRequest("DELETE", url, "") }
+
+export function http_client_request(method: string, url: string, body: string, contentType: string, timeoutMillis: i64): isize {
+    if textLength(method) == 0 as usize || textLength(url) == 0 as usize { return -2 as isize }
+    if timeoutMillis < 0 as i64 { return -3 as isize }
+    return httpClientRequestEx(method, url, body, contentType, timeoutMillis)
+}
+
+export function http_client_json_post(url: string, body: string, timeoutMillis: i64): isize {
+    return http_client_request("POST", url, body, "application/json", timeoutMillis)
+}
+
 export function http_client_status(handle: usize): int { return httpClientStatus(handle) }
 export function http_client_body(handle: usize): string { return httpClientBody(handle) }
+export function http_client_header(handle: usize, name: string): string { return httpClientHeader(handle, name) }
 export function http_client_close(handle: usize): void { httpClientClose(handle) }
+
+export function http_client_informational(status: int): bool { return status >= 100 && status < 200 }
 export function http_client_success(status: int): bool { return status >= 200 && status < 300 }
+export function http_client_redirect(status: int): bool { return status >= 300 && status < 400 }
+export function http_client_error(status: int): bool { return status >= 400 && status < 500 }
+export function http_server_error(status: int): bool { return status >= 500 && status < 600 }
+export function http_client_retryable(status: int): bool { return status == 408 || status == 425 || status == 429 || status == 500 || status == 502 || status == 503 || status == 504 }

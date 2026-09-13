@@ -1,20 +1,102 @@
 module noqeri.std.text
 
-// Existing string-oriented API retained.
-export function nqTextIsEmpty(value: string): bool { return textLength(value) == 0 }
-export function nqTextHasLength(value: string, expected: int): bool { return textLength(value) == expected }
+// String-oriented compatibility API.
+export function nqTextIsEmpty(value: string): bool { return textLength(value) == 0 as usize }
+export function nqTextHasLength(value: string, expected: int): bool { return textLength(value) == expected as usize }
 export function nqTextJoin2(left: string, right: string): string { return left + right }
 export function nqTextJoin3(first: string, second: string, third: string): string { return first + second + third }
 export function nqTextEquals(left: string, right: string): bool { return left == right }
 
-// ASCII classification and case helpers for byte-oriented parsers.
+// Byte-oriented text helpers are allocation-free and suitable for parsers.
 export function text_is_ascii_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
 export function text_is_ascii_upper(c: u8): bool { return c >= 65 as u8 && c <= 90 as u8 }
 export function text_is_ascii_lower(c: u8): bool { return c >= 97 as u8 && c <= 122 as u8 }
 export function text_is_ascii_alpha(c: u8): bool { return text_is_ascii_upper(c) || text_is_ascii_lower(c) }
 export function text_is_ascii_alnum(c: u8): bool { return text_is_ascii_alpha(c) || text_is_ascii_digit(c) }
 export function text_is_ascii_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
+export function text_is_ascii_horizontal_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 }
+export function text_is_ascii_line_break(c: u8): bool { return c == 10 as u8 || c == 13 as u8 }
 export function text_ascii_lower(c: u8): u8 { if text_is_ascii_upper(c) { return c + 32 as u8 } return c }
 export function text_ascii_upper(c: u8): u8 { if text_is_ascii_lower(c) { return c - 32 as u8 } return c }
-export function text_trim_left_count(value: []u8): usize { let i: usize=0 as usize while i<len(value)&&text_is_ascii_space(value[i]) { i=i+1 } return i }
-export function text_count_ascii_digits(value: []u8): usize { let count: usize=0 as usize let i:usize=0 as usize while i<len(value) { if text_is_ascii_digit(value[i]) { count=count+1 } i=i+1 } return count }
+
+export function text_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && text_is_ascii_space(value[i]) { i = i + 1 as usize } return i }
+export function text_trim_right_count(value: []u8): usize { let i: usize = len(value) while i > 0 as usize && text_is_ascii_space(value[i - 1 as usize]) { i = i - 1 as usize } return len(value) - i }
+export function text_trimmed_length(value: []u8): usize { let left: usize = text_trim_left_count(value) let right: usize = text_trim_right_count(value) if left + right >= len(value) { return 0 as usize } return len(value) - left - right }
+
+export function text_count_ascii_digits(value: []u8): usize { let count: usize = 0 as usize let i: usize = 0 as usize while i < len(value) { if text_is_ascii_digit(value[i]) { count = count + 1 as usize } i = i + 1 as usize } return count }
+export function text_count_lines(value: []u8): usize { if len(value) == 0 as usize { return 0 as usize } let lines: usize = 1 as usize let i: usize = 0 as usize while i < len(value) { if value[i] == 10 as u8 { lines = lines + 1 as usize } i = i + 1 as usize } return lines }
+
+export function text_count_words_ascii(value: []u8): usize {
+    let count: usize = 0 as usize
+    let in_word: bool = false
+    let i: usize = 0 as usize
+    while i < len(value) {
+        if text_is_ascii_space(value[i]) { in_word = false }
+        else if !in_word { count = count + 1 as usize in_word = true }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function text_equal_ascii_ignore_case(left: []u8, right: []u8): bool {
+    if len(left) != len(right) { return false }
+    let i: usize = 0 as usize
+    while i < len(left) { if text_ascii_lower(left[i]) != text_ascii_lower(right[i]) { return false } i = i + 1 as usize }
+    return true
+}
+
+export function text_starts_with(value: []u8, prefix: []u8): bool {
+    if len(prefix) > len(value) { return false }
+    let i: usize = 0 as usize
+    while i < len(prefix) { if value[i] != prefix[i] { return false } i = i + 1 as usize }
+    return true
+}
+
+export function text_ends_with(value: []u8, suffix: []u8): bool {
+    if len(suffix) > len(value) { return false }
+    let start: usize = len(value) - len(suffix)
+    let i: usize = 0 as usize
+    while i < len(suffix) { if value[start + i] != suffix[i] { return false } i = i + 1 as usize }
+    return true
+}
+
+export function text_find_byte(value: []u8, target: u8): isize {
+    let i: usize = 0 as usize
+    while i < len(value) { if value[i] == target { return i as isize } i = i + 1 as usize }
+    return -1 as isize
+}
+
+export function text_parse_i64(value: []u8, out: *i64): bool {
+    if out == null || len(value) == 0 as usize { return false }
+    let index: usize = 0 as usize
+    let negative: bool = false
+    if value[0 as usize] == 45 as u8 { negative = true index = 1 as usize }
+    else if value[0 as usize] == 43 as u8 { index = 1 as usize }
+    if index >= len(value) { return false }
+
+    let minimum: i64 = (-9223372036854775807 as i64) - 1 as i64
+    let limit: i64 = -9223372036854775807 as i64
+    if negative { limit = minimum }
+    let result: i64 = 0 as i64
+    while index < len(value) {
+        let byte: u8 = value[index]
+        if !text_is_ascii_digit(byte) { return false }
+        let digit: i64 = (byte - 48 as u8) as i64
+        if result < limit / 10 as i64 { return false }
+        let multiplied: i64 = result * 10 as i64
+        if multiplied < limit + digit { return false }
+        result = multiplied - digit
+        index = index + 1 as usize
+    }
+    if negative { out[0 as usize] = result } else { out[0 as usize] = -result }
+    return true
+}
+
+export function text_parse_bool_ascii(value: []u8, out: *bool): bool {
+    if out == null { return false }
+    let trueText: [u8; 4] = [116 as u8,114 as u8,117 as u8,101 as u8]
+    let falseText: [u8; 5] = [102 as u8,97 as u8,108 as u8,115 as u8,101 as u8]
+    if text_equal_ascii_ignore_case(value, slice(trueText)) { out[0 as usize] = true return true }
+    if text_equal_ascii_ignore_case(value, slice(falseText)) { out[0 as usize] = false return true }
+    return false
+}

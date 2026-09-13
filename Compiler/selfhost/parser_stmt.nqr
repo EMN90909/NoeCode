@@ -9,12 +9,6 @@ export function nqParseBadStatement(): isize { return -121 }
 export function nqParseBadBlock(): isize { return -122 }
 export function nqParseBadBinding(): isize { return -123 }
 
-function nqStmtTokenIs(source: []u8, start: usize, text: []u8, out: *NqToken): bool {
-    if out == null { return false }
-    nqCompilerNextToken(source, start, out)
-    return nqTokenTextEqual(source, out, text)
-}
-
 function nqStmtOptionalSemicolon(source: []u8, start: usize): usize {
     let token: NqToken
     nqCompilerNextToken(source, start, &token)
@@ -64,7 +58,7 @@ function nqStmtParseBinding(source: []u8, start: usize, nodes: []NqAstNode, coun
     nodes[binding as usize].left = name
     nodes[binding as usize].right = value
     if typeStart > 0 as usize { nodes[binding as usize].extra = typeStart as isize }
-    if isConst { nodes[binding as usize].flags = nodes[binding as usize].flags + nqAstFlagConst() }
+    if isConst { nodes[binding as usize].flags = nqAstFlagConst() }
     outEnd[0] = end
     return binding
 }
@@ -83,7 +77,9 @@ function nqStmtParseReturnThrow(source: []u8, start: usize, nodes: []NqAstNode, 
         if value < 0 as isize { return nqAstNoNode() }
     }
     end = nqStmtOptionalSemicolon(source, end)
-    let node: isize = nqAstArenaPush(nodes, count, if throwing { nqAstThrow() } else { nqAstReturn() }, keyword.start, end)
+    let tag: int = nqAstReturn()
+    if throwing { tag = nqAstThrow() }
+    let node: isize = nqAstArenaPush(nodes, count, tag, keyword.start, end)
     if node < 0 as isize { return node }
     nodes[node as usize].left = value
     outEnd[0] = end
@@ -226,10 +222,10 @@ function nqStmtParseFunction(source: []u8, start: usize, nodes: []NqAstNode, cou
     if maybeGeneric.kind == nqTokenOperator() && maybeGeneric.first == 60 as u8 {
         cursor = maybeGeneric.end
         while true {
-            let parameter: NqToken
-            nqCompilerNextToken(source, cursor, &parameter)
-            if parameter.kind != nqTokenIdentifier() { return nqAstNoNode() }
-            cursor = parameter.end
+            let generic: NqToken
+            nqCompilerNextToken(source, cursor, &generic)
+            if generic.kind != nqTokenIdentifier() { return nqAstNoNode() }
+            cursor = generic.end
             let separator: NqToken
             nqCompilerNextToken(source, cursor, &separator)
             if separator.kind == nqTokenOperator() && separator.first == 62 as u8 { cursor = separator.end break }
@@ -247,8 +243,9 @@ function nqStmtParseFunction(source: []u8, start: usize, nodes: []NqAstNode, cou
     nqCompilerNextToken(source, cursor, &look)
     if !(look.kind == nqTokenPunctuation() && look.first == 41 as u8) {
         while true {
+            if look.kind != nqTokenIdentifier() { return nqAstNoNode() }
             let parameterName: isize = nqAstArenaPush(nodes, count, nqAstName(), look.start, look.end)
-            if look.kind != nqTokenIdentifier() || parameterName < 0 as isize { return nqAstNoNode() }
+            if parameterName < 0 as isize { return parameterName }
             cursor = look.end
             let typeStart: usize = 0 as usize
             let colon: NqToken
@@ -285,8 +282,10 @@ function nqStmtParseFunction(source: []u8, start: usize, nodes: []NqAstNode, cou
     let end: usize = cursor
     let bodyToken: NqToken
     nqCompilerNextToken(source, cursor, &bodyToken)
-    if bodyToken.kind == nqTokenPunctuation() && bodyToken.first == 123 as u8 { body = nqStmtParseBlock(source, cursor, nodes, count, &end) if body < 0 as isize { return nqAstNoNode() } }
-    else { end = nqStmtOptionalSemicolon(source, cursor) }
+    if bodyToken.kind == nqTokenPunctuation() && bodyToken.first == 123 as u8 {
+        body = nqStmtParseBlock(source, cursor, nodes, count, &end)
+        if body < 0 as isize { return nqAstNoNode() }
+    } else { end = nqStmtOptionalSemicolon(source, cursor) }
     let function: isize = nqAstArenaPush(nodes, count, nqAstFunction(), keyword.start, end)
     if function < 0 as isize { return function }
     nodes[function as usize].left = name
@@ -323,7 +322,7 @@ function nqStmtParseDeclaration(source: []u8, start: usize, nodes: []NqAstNode, 
         if endName <= token.end { return nqAstNoNode() }
         let end: usize = nqStmtOptionalSemicolon(source, endName)
         let node: isize = nqAstArenaPush(nodes, count, nqAstModule(), token.start, end)
-        if node >= 0 as isize { nodes[node as usize].left = token.end as isize outEnd[0] = end }
+        if node >= 0 as isize { nodes[node as usize].left = nqCompilerSkipTrivia(source, token.end) as isize outEnd[0] = end }
         return node
     }
     if topLevel && nqTokenTextEqual(source, &token, slice([105 as u8,109 as u8,112 as u8,111 as u8,114 as u8,116 as u8])) {

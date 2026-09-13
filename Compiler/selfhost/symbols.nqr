@@ -8,6 +8,7 @@ record NqSymbol {
     elementTypeCode: int
     elementTypeSymbol: u64
     arrayLength: usize
+    storageBytes: usize
     scopeDepth: usize
     flags: u32
 }
@@ -65,6 +66,7 @@ export function nqSymbolsDefineTyped(source: []u8, symbols: []NqSymbol, count: *
     symbols[index].elementTypeCode = elementTypeCode
     symbols[index].elementTypeSymbol = elementTypeSymbol
     symbols[index].arrayLength = arrayLength
+    symbols[index].storageBytes = 0 as usize
     symbols[index].scopeDepth = scopeDepth
     symbols[index].flags = flags
     count[0] = index + 1 as usize

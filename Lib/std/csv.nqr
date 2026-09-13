@@ -1,0 +1,5 @@
+module noqeri.std.csv
+
+export function csv_needs_quotes(value: []u8): bool { let i: usize=0 as usize while i<len(value) { let c:u8=value[i] if c==44 as u8||c==34 as u8||c==10 as u8||c==13 as u8 { return true } i=i+1 } return false }
+export function csv_count_columns(line: []u8): usize { let count:usize=1 as usize let quoted:bool=false let i:usize=0 as usize while i<len(line) { let c:u8=line[i] if c==34 as u8 { quoted=!quoted } if c==44 as u8&&!quoted { count=count+1 } i=i+1 } return count }
+export function csv_is_line_break(c:u8):bool{return c==10 as u8||c==13 as u8}

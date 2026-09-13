@@ -1,0 +1,6 @@
+module noqeri.std.string
+
+export function string_length(value: string): usize { return textLength(value) }
+export function string_is_empty(value: string): bool { return textLength(value) == 0 as usize }
+export function string_nonempty(value: string): bool { return textLength(value) > 0 as usize }
+export function string_same_length(a: string, b: string): bool { return textLength(a) == textLength(b) }

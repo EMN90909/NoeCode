@@ -1,0 +1,5 @@
+module noqeri.std.regex
+
+export function regex_is_meta(c:u8):bool{return c==46 as u8||c==94 as u8||c==36 as u8||c==42 as u8||c==43 as u8||c==63 as u8||c==40 as u8||c==41 as u8||c==91 as u8||c==93 as u8||c==123 as u8||c==125 as u8||c==124 as u8||c==92 as u8}
+export function regex_is_quantifier(c:u8):bool{return c==42 as u8||c==43 as u8||c==63 as u8}
+export function regex_escape_extra(c:u8):usize{if regex_is_meta(c){return 1 as usize}return 0 as usize}

@@ -1,0 +1,14 @@
+module noqeri.std.fs
+
+extern function fsExists(path: string): bool
+extern function fsIsDirectory(path: string): bool
+extern function fsCreateDirectory(path: string): isize
+extern function fsRemove(path: string): isize
+extern function fsRename(from: string, to: string): isize
+
+export function fs_exists(path: string): bool { return fsExists(path) }
+export function fs_is_directory(path: string): bool { return fsIsDirectory(path) }
+export function fs_create_directory(path: string): isize { return fsCreateDirectory(path) }
+export function fs_remove(path: string): isize { return fsRemove(path) }
+export function fs_rename(from: string, to: string): isize { return fsRename(from,to) }
+export function fs_status_ok(status: isize): bool { return status >= 0 as isize }

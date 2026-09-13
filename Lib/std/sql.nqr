@@ -1,0 +1,10 @@
+module noqeri.std.sql
+
+export function sql_is_ascii_space(c:u8):bool{return c==32 as u8||c==9 as u8||c==10 as u8||c==13 as u8}
+export function sql_is_ascii_digit(c:u8):bool{return c>=48 as u8&&c<=57 as u8}
+export function sql_is_ascii_alpha(c:u8):bool{return (c>=65 as u8&&c<=90 as u8)||(c>=97 as u8&&c<=122 as u8)}
+export function sql_identifier_start(c:u8):bool{return sql_is_ascii_alpha(c)||c==95 as u8}
+export function sql_identifier_continue(c:u8):bool{return sql_identifier_start(c)||sql_is_ascii_digit(c)}
+export function sql_identifier_valid(value:[]u8):bool{if len(value)==0 as usize{return false}if !sql_identifier_start(value[0]){return false}let i:usize=1 as usize while i<len(value){if !sql_identifier_continue(value[i]){return false}i=i+1}return true}
+export function sql_trim_left_count(value:[]u8):usize{let i:usize=0 as usize while i<len(value)&&sql_is_ascii_space(value[i]){i=i+1}return i}
+export function sql_parameter_index_valid(index:usize,count:usize):bool{return index<count}

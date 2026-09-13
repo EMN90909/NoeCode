@@ -1,0 +1,5 @@
+module noqeri.std.path
+
+export function path_is_separator(c: u8): bool { return c == 47 as u8 || c == 92 as u8 }
+export function path_has_drive_prefix(value: []u8): bool { return len(value)>=2 as usize && value[1]==58 as u8 }
+export function path_is_absolute(value: []u8): bool { if len(value)==0 as usize { return false } return path_is_separator(value[0]) || path_has_drive_prefix(value) }

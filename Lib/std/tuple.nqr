@@ -1,0 +1,6 @@
+module noqeri.std.tuple
+
+export function tuple_len<T>(items: []T): usize { return len(items) }
+export function tuple_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
+export function tuple_first<T>(items: []T): T { return items[0] }
+export function tuple_last<T>(items: []T): T { return items[len(items)-1] }

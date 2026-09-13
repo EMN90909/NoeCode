@@ -1,0 +1,9 @@
+module noqeri.std.crypto.ed25519
+
+export function ed25519_public_key_size():usize{return 32 as usize}
+export function ed25519_private_seed_size():usize{return 32 as usize}
+export function ed25519_signature_size():usize{return 64 as usize}
+export function ed25519_public_key_length_valid(length:usize):bool{return length==32 as usize}
+export function ed25519_private_seed_length_valid(length:usize):bool{return length==32 as usize}
+export function ed25519_signature_length_valid(length:usize):bool{return length==64 as usize}
+export function ed25519_context_length_valid(length:usize):bool{return length<=255 as usize}

@@ -1,0 +1,5 @@
+module noqeri.std.format
+
+export function format_digit(value: u8): u8 { if value < 10 as u8 { return 48 as u8 + value } return 63 as u8 }
+export function format_hex_digit(value: u8): u8 { if value < 10 as u8 { return 48 as u8 + value } if value < 16 as u8 { return 87 as u8 + value } return 63 as u8 }
+export function format_bool_len(value: bool): usize { if value { return 4 as usize } return 5 as usize }

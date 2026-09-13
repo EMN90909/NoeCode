@@ -1,0 +1,15 @@
+module noqeri.std.io
+
+extern function abiRead(handle: usize, data: *u8, count: usize): isize
+extern function abiWrite(handle: usize, data: *u8, count: usize): isize
+
+export function io_ok(status: isize): bool { return status >= 0 as isize }
+export function io_error(status: isize): bool { return status < 0 as isize }
+export function io_read(handle: usize, buffer: []u8): isize { if len(buffer) == 0 as usize { return 0 as isize } return abiRead(handle, &buffer[0], len(buffer)) }
+export function io_write(handle: usize, buffer: []u8): isize { if len(buffer) == 0 as usize { return 0 as isize } return abiWrite(handle, &buffer[0], len(buffer)) }
+export function io_write_all(handle: usize, buffer: []u8): isize {
+    let offset: usize = 0 as usize
+    while offset < len(buffer) { let wrote: isize = abiWrite(handle, &buffer[offset], len(buffer)-offset) if wrote < 0 as isize { return wrote } if wrote == 0 as isize { throw 5 } offset = offset + (wrote as usize) }
+    return offset as isize
+}
+export function io_checked_range(offset: usize, length: usize, capacity: usize): bool { if offset > capacity { return false } return length <= capacity-offset }

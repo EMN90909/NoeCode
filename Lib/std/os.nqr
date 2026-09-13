@@ -1,0 +1,6 @@
+module noqeri.std.os
+
+export function os_capacity_valid(length: usize, capacity: usize): bool { return length <= capacity }
+export function os_remaining(length: usize, capacity: usize): usize { if length >= capacity { return 0 as usize } return capacity - length }
+export function os_nonempty(length: usize): bool { return length > 0 as usize }
+export function os_checked_end(offset: usize, length: usize, capacity: usize): bool { if offset > capacity { return false } return length <= capacity - offset }

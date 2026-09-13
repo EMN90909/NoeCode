@@ -1,0 +1,10 @@
+module noqeri.std.log
+
+export function log_level_trace(): int { return 0 }
+export function log_level_debug(): int { return 1 }
+export function log_level_info(): int { return 2 }
+export function log_level_warn(): int { return 3 }
+export function log_level_error(): int { return 4 }
+export function log_level_valid(level: int): bool { return level >= 0 && level <= 4 }
+export function log_should_emit(level: int, minimum: int): bool { return log_level_valid(level) && log_level_valid(minimum) && level >= minimum }
+export function log_is_failure(level: int): bool { return level >= log_level_error() }

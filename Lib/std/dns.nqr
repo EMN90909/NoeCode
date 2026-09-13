@@ -1,0 +1,5 @@
+module noqeri.std.dns
+
+export function dns_valid_label_length(n:usize):bool{return n>0 as usize&&n<=63 as usize}
+export function dns_valid_name_length(n:usize):bool{return n>0 as usize&&n<=253 as usize}
+export function dns_is_label_char(c:u8):bool{return (c>=65 as u8&&c<=90 as u8)||(c>=97 as u8&&c<=122 as u8)||(c>=48 as u8&&c<=57 as u8)||c==45 as u8}

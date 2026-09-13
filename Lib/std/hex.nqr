@@ -1,0 +1,5 @@
+module noqeri.std.hex
+
+export function hex_value(c: u8): isize { if c>=48 as u8&&c<=57 as u8 { return (c-48 as u8) as isize } if c>=65 as u8&&c<=70 as u8 { return (c-55 as u8) as isize } if c>=97 as u8&&c<=102 as u8 { return (c-87 as u8) as isize } return -1 }
+export function hex_is_digit(c: u8): bool { return hex_value(c) >= 0 }
+export function hex_encoded_len(n: usize): usize { return n * 2 as usize }

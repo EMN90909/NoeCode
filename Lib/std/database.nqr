@@ -1,0 +1,11 @@
+module noqeri.std.database
+
+export function database_tx_idle(): int { return 0 }
+export function database_tx_active(): int { return 1 }
+export function database_tx_committed(): int { return 2 }
+export function database_tx_rolled_back(): int { return 3 }
+export function database_tx_state_valid(state: int): bool { return state >= 0 && state <= 3 }
+export function database_can_commit(state: int): bool { return state == database_tx_active() }
+export function database_can_rollback(state: int): bool { return state == database_tx_active() }
+export function database_page_offset(page: usize, page_size: usize): usize { return page * page_size }
+export function database_limit_valid(limit: usize, maximum: usize): bool { return limit > 0 as usize && limit <= maximum }

@@ -1,0 +1,5 @@
+module noqeri.std.compress
+
+export function compress_ratio_per_mille(input:usize,output:usize):usize{if input==0 as usize{return 0 as usize}return (output*1000 as usize)/input}
+export function compress_saved_bytes(input:usize,output:usize):usize{if output>=input{return 0 as usize}return input-output}
+export function compress_is_effective(input:usize,output:usize):bool{return output<input}

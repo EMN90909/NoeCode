@@ -1,0 +1,9 @@
+module noqeri.std.crypto.aes
+
+export function aes_key_size_valid(bits:usize):bool{return bits==128 as usize||bits==192 as usize||bits==256 as usize}
+export function aes_block_size():usize{return 16 as usize}
+export function aes_nonce_size_gcm():usize{return 12 as usize}
+export function aes_tag_size_gcm():usize{return 16 as usize}
+export function aes_block_aligned(length:usize):bool{return length%16 as usize==0 as usize}
+export function aes_gcm_parameters_valid(key_bits:usize,nonce_length:usize,tag_length:usize):bool{return aes_key_size_valid(key_bits)&&nonce_length==aes_nonce_size_gcm()&&tag_length==aes_tag_size_gcm()}
+export function aes_legacy_ecb_allowed():bool{return false}

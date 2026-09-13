@@ -1,0 +1,5 @@
+module noqeri.std.base64
+
+export function base64_encoded_len(n: usize): usize { return ((n + 2 as usize) / 3 as usize) * 4 as usize }
+export function base64_decoded_max_len(n: usize): usize { return (n / 4 as usize) * 3 as usize }
+export function base64_is_char(c: u8): bool { return (c>=65 as u8&&c<=90 as u8)||(c>=97 as u8&&c<=122 as u8)||(c>=48 as u8&&c<=57 as u8)||c==43 as u8||c==47 as u8||c==61 as u8 }

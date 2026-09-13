@@ -1,0 +1,6 @@
+module noqeri.std.html
+
+export function html_is_ascii_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
+export function html_is_ascii_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
+export function html_is_ascii_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
+export function html_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && html_is_ascii_space(value[i]) { i = i + 1 } return i }

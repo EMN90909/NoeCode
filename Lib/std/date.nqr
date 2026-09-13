@@ -1,0 +1,5 @@
+module noqeri.std.date
+
+export function date_is_leap_year(year: int): bool { if year % 400 == 0 { return true } if year % 100 == 0 { return false } return year % 4 == 0 }
+export function date_days_in_month(year: int, month: int): int { if month==2 { if date_is_leap_year(year) { return 29 } return 28 } if month==4||month==6||month==9||month==11 { return 30 } if month>=1&&month<=12 { return 31 } return 0 }
+export function date_valid(year: int, month: int, day: int): bool { return year != 0 && month>=1&&month<=12&&day>=1&&day<=date_days_in_month(year,month) }

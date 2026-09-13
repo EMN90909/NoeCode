@@ -1,0 +1,5 @@
+module noqeri.std.url
+
+export function url_is_unreserved(c: u8): bool { return (c>=65 as u8&&c<=90 as u8)||(c>=97 as u8&&c<=122 as u8)||(c>=48 as u8&&c<=57 as u8)||c==45 as u8||c==46 as u8||c==95 as u8||c==126 as u8 }
+export function url_is_scheme_char(c: u8): bool { return (c>=65 as u8&&c<=90 as u8)||(c>=97 as u8&&c<=122 as u8)||(c>=48 as u8&&c<=57 as u8)||c==43 as u8||c==45 as u8||c==46 as u8 }
+export function url_hex_upper(n: u8): u8 { if n<10 as u8 { return 48 as u8+n } return 55 as u8+n }

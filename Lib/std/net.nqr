@@ -1,0 +1,5 @@
+module noqeri.std.net
+
+export function net_valid_port(port:u32):bool{return port>0 as u32&&port<=65535 as u32}
+export function net_is_private_ipv4(a:u8,b:u8):bool{return a==10 as u8||(a==172 as u8&&b>=16 as u8&&b<=31 as u8)||(a==192 as u8&&b==168 as u8)}
+export function net_is_loopback_ipv4(a:u8):bool{return a==127 as u8}

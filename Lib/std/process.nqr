@@ -1,0 +1,13 @@
+module noqeri.std.process
+
+extern function processId(): u64
+extern function processExit(code: int): void
+extern function processSpawn(command: string): isize
+extern function processWait(pid: usize): isize
+
+export function process_id(): u64 { return processId() }
+export function process_spawn(command: string): isize { return processSpawn(command) }
+export function process_wait(pid: usize): isize { return processWait(pid) }
+export function process_exit(code: int): void { processExit(code) }
+export function process_success(code: int): bool { return code == 0 }
+export function process_exit_code_valid(code: int): bool { return code >= 0 && code <= 255 }

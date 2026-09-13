@@ -1,0 +1,6 @@
+module noqeri.std.ascii
+
+export function ascii_clamp(value: int, low: int, high: int): int { if value < low { return low } if value > high { return high } return value }
+export function ascii_between(value: int, low: int, high: int): bool { return value >= low && value <= high }
+export function ascii_min(a: int, b: int): int { if a < b { return a } return b }
+export function ascii_max(a: int, b: int): int { if a > b { return a } return b }

@@ -1,0 +1,6 @@
+module noqeri.std.retry
+
+export function retry_status_ok(status: isize): bool { return status >= 0 as isize }
+export function retry_status_error(status: isize): bool { return status < 0 as isize }
+export function retry_error_code(status: isize): isize { if status < 0 as isize { return -status } return 0 as isize }
+export function retry_attempt_allowed(attempt: usize, max_attempts: usize): bool { return attempt < max_attempts }

@@ -1,0 +1,6 @@
+module noqeri.std.list
+export function list_len<T>(items: []T): usize { return len(items) }
+export function list_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
+export function list_first<T>(items: []T): T { return items[0] }
+export function list_last<T>(items: []T): T { return items[len(items)-1] }
+export function list_contains<T: Eq>(items: []T, value: T): bool { let i: usize = 0 as usize while i < len(items) { if items[i] == value { return true } i = i + 1 } return false }

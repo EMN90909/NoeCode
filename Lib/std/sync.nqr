@@ -1,0 +1,8 @@
+module noqeri.std.sync
+
+export function sync_unlocked(): u64 { return 0 as u64 }
+export function sync_locked(): u64 { return 1 as u64 }
+export function sync_try_lock(state: *u64): bool { let old:u64=atomic.compareExchange(state,0 as u64,1 as u64) return old==0 as u64 }
+export function sync_unlock(state: *u64): void { atomic.store(state,0 as u64) }
+export function sync_is_locked(state: *u64): bool { return atomic.load(state)!=0 as u64 }
+export function sync_spin_pause(): void { intrinsic("x86.pause") }

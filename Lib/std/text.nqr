@@ -1,21 +1,7 @@
 module noqeri.std.text
 
-export function nqTextIsEmpty(value: string): bool {
-    return textLength(value) == 0
-}
-
-export function nqTextHasLength(value: string, expected: int): bool {
-    return textLength(value) == expected
-}
-
-export function nqTextJoin2(left: string, right: string): string {
-    return left + right
-}
-
-export function nqTextJoin3(first: string, second: string, third: string): string {
-    return first + second + third
-}
-
-export function nqTextEquals(left: string, right: string): bool {
-    return left == right
-}
+export function text_is_ascii_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
+export function text_is_ascii_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
+export function text_is_ascii_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
+export function text_ascii_lower(c: u8): u8 { if c >= 65 as u8 && c <= 90 as u8 { return c + 32 as u8 } return c }
+export function text_ascii_upper(c: u8): u8 { if c >= 97 as u8 && c <= 122 as u8 { return c - 32 as u8 } return c }

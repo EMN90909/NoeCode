@@ -1,0 +1,6 @@
+module noqeri.std.event
+
+export function event_state_valid(state: int): bool { return state >= 0 && state <= 4 }
+export function event_can_transition(current: int, next: int): bool { if current < 0 || next < 0 { return false } return next >= current || next == 0 }
+export function event_default_spin_limit(): usize { return 64 as usize }
+export function event_bounded_count(count: usize, limit: usize): usize { if count > limit { return limit } return count }

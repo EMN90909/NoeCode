@@ -1,0 +1,11 @@
+module noqeri.std.thread
+
+export function thread_new(): int { return 0 }
+export function thread_running(): int { return 1 }
+export function thread_blocked(): int { return 2 }
+export function thread_finished(): int { return 3 }
+export function thread_failed(): int { return 4 }
+export function thread_state_valid(state:int):bool{return state>=0&&state<=4}
+export function thread_terminal(state:int):bool{return state==thread_finished()||state==thread_failed()}
+export function thread_can_join(state:int):bool{return state==thread_running()||thread_terminal(state)}
+export function thread_default_spin_limit():usize{return 64 as usize}

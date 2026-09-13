@@ -1,20 +1,6 @@
 module noqeri.std.time
 
-export function nqElapsedMillis(start: i64, finish: i64): i64 {
-    if finish <= start { return 0 as i64 }
-    return finish - start
-}
-
-export function nqMillisToSecondsFloor(milliseconds: i64): i64 {
-    if milliseconds <= 0 { return 0 as i64 }
-    return milliseconds / (1000 as i64)
-}
-
-export function nqSecondsToMillis(seconds: i64): i64 {
-    if seconds <= 0 { return 0 as i64 }
-    return seconds * (1000 as i64)
-}
-
-export function nqDeadlineReached(now: i64, deadline: i64): bool {
-    return now >= deadline
-}
+export function time_seconds_to_millis(value: i64): i64 { return value * 1000 as i64 }
+export function time_minutes_to_seconds(value: i64): i64 { return value * 60 as i64 }
+export function time_hours_to_seconds(value: i64): i64 { return value * 3600 as i64 }
+export function time_days_to_seconds(value: i64): i64 { return value * 86400 as i64 }

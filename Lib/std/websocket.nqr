@@ -1,0 +1,5 @@
+module noqeri.std.websocket
+
+export function websocket_is_control_opcode(op:u8):bool{return op>=8 as u8}
+export function websocket_is_data_opcode(op:u8):bool{return op==0 as u8||op==1 as u8||op==2 as u8}
+export function websocket_valid_control_payload(n:usize):bool{return n<=125 as usize}

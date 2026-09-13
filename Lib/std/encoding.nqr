@@ -1,0 +1,6 @@
+module noqeri.std.encoding
+
+export function encoding_byte_sum(data: []u8): u64 { let sum: u64 = 0 as u64 let i: usize = 0 as usize while i < len(data) { sum = sum + data[i] as u64 i = i + 1 } return sum }
+export function encoding_all_zero(data: []u8): bool { let i: usize = 0 as usize while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 } return true }
+export function encoding_bounded_length(data: []u8, max: usize): bool { return len(data) <= max }
+export function encoding_nonempty(data: []u8): bool { return len(data) > 0 as usize }

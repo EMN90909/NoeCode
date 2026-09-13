@@ -1,0 +1,5 @@
+module noqeri.std.archive
+
+export function archive_tar_block_size():usize{return 512 as usize}
+export function archive_is_tar_aligned(n:usize):bool{return n%512 as usize==0 as usize}
+export function archive_zip_local_signature():u32{return 67324752 as u32}

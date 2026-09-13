@@ -1,0 +1,6 @@
+module noqeri.std.heap
+
+export function heap_len<T>(items: []T): usize { return len(items) }
+export function heap_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
+export function heap_first<T>(items: []T): T { return items[0] }
+export function heap_last<T>(items: []T): T { return items[len(items)-1] }

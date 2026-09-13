@@ -1,0 +1,6 @@
+module noqeri.std.crypto.hash
+
+export function crypto_hash_key_size_valid(bits: usize): bool { return bits == 128 as usize || bits == 192 as usize || bits == 256 as usize || bits == 2048 as usize || bits == 4096 as usize }
+export function crypto_hash_input_nonempty(data: []u8): bool { return len(data) > 0 as usize }
+export function crypto_hash_constant_time_length_match(a: []u8, b: []u8): bool { return len(a) == len(b) }
+export function crypto_hash_secure_default(): bool { return true }

@@ -1,0 +1,4 @@
+module noqeri.std.set
+export function set_contains<T: Eq>(items: []T, value: T): bool { let i: usize = 0 as usize while i < len(items) { if items[i] == value { return true } i = i + 1 } return false }
+export function set_count_unique<T: Eq>(items: []T): usize { let unique: usize = 0 as usize let i: usize = 0 as usize while i < len(items) { let seen: bool = false let j: usize = 0 as usize while j < i { if items[j] == items[i] { seen = true } j = j + 1 } if !seen { unique = unique + 1 } i = i + 1 } return unique }
+export function set_is_subset<T: Eq>(left: []T, right: []T): bool { let i: usize = 0 as usize while i < len(left) { if !set_contains(right,left[i]) { return false } i = i + 1 } return true }

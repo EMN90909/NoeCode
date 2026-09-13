@@ -1,0 +1,11 @@
+module noqeri.std.task
+
+export function task_pending(): int { return 0 }
+export function task_running(): int { return 1 }
+export function task_ready(): int { return 2 }
+export function task_failed(): int { return 3 }
+export function task_cancelled(): int { return 4 }
+export function task_state_valid(state:int):bool{return state>=0&&state<=4}
+export function task_terminal(state:int):bool{return state==task_ready()||state==task_failed()||state==task_cancelled()}
+export function task_can_start(state:int):bool{return state==task_pending()}
+export function task_can_cancel(state:int):bool{return state==task_pending()||state==task_running()}

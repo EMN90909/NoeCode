@@ -1,0 +1,6 @@
+module noqeri.std.unicode
+
+export function unicode_is_ascii(codepoint: u32): bool { return codepoint <= 127 as u32 }
+export function unicode_is_scalar(codepoint: u32): bool { if codepoint > 1114111 as u32 { return false } return codepoint < 55296 as u32 || codepoint > 57343 as u32 }
+export function unicode_is_surrogate(codepoint: u32): bool { return codepoint >= 55296 as u32 && codepoint <= 57343 as u32 }
+export function unicode_utf8_width(codepoint: u32): usize { if codepoint <= 127 as u32 { return 1 as usize } if codepoint <= 2047 as u32 { return 2 as usize } if codepoint <= 65535 as u32 { return 3 as usize } if codepoint <= 1114111 as u32 { return 4 as usize } return 0 as usize }

@@ -1,0 +1,16 @@
+module noqeri.std.map
+
+export function map_find<K: Eq>(keys: []K, key: K): isize {
+    let i: usize = 0 as usize
+    while i < len(keys) { if keys[i] == key { return i as isize } i = i + 1 }
+    return -1
+}
+export function map_contains_key<K: Eq>(keys: []K, key: K): bool { return map_find(keys, key) >= 0 }
+export function map_lengths_valid<K,V>(keys: []K, values: []V): bool { return len(keys) == len(values) }
+export function map_is_empty<K,V>(keys: []K, values: []V): bool { return len(keys) == 0 as usize && len(values) == 0 as usize }
+export function map_count<K,V>(keys: []K, values: []V): usize { if len(keys) < len(values) { return len(keys) } return len(values) }
+export function map_has_duplicate_keys<K: Eq>(keys: []K): bool {
+    let i: usize = 0 as usize
+    while i < len(keys) { let j: usize = i + 1 while j < len(keys) { if keys[i] == keys[j] { return true } j = j + 1 } i = i + 1 }
+    return false
+}

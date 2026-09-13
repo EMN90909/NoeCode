@@ -1,0 +1,5 @@
+module noqeri.std.tcp
+
+export function tcp_valid_port(port:u32):bool{return port>0 as u32&&port<=65535 as u32}
+export function tcp_default_backlog():int{return 128}
+export function tcp_is_ephemeral_port(port:u32):bool{return port>=49152 as u32&&port<=65535 as u32}

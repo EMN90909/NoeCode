@@ -1,0 +1,4 @@
+module noqeri.std.collections
+export function contains<T: Eq>(items: []T, value: T): bool { let i: usize = 0 as usize while i < len(items) { if items[i] == value { return true } i = i + 1 } return false }
+export function all_equal<T: Eq>(items: []T): bool { if len(items) < 2 as usize { return true } let i: usize = 1 as usize while i < len(items) { if items[i] != items[0] { return false } i = i + 1 } return true }
+export function count_value<T: Eq>(items: []T, value: T): usize { let count: usize = 0 as usize let i: usize = 0 as usize while i < len(items) { if items[i] == value { count = count + 1 } i = i + 1 } return count }

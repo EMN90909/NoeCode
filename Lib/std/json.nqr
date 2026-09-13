@@ -1,0 +1,5 @@
+module noqeri.std.json
+
+export function json_is_whitespace(c:u8):bool{return c==32 as u8||c==9 as u8||c==10 as u8||c==13 as u8}
+export function json_is_digit(c:u8):bool{return c>=48 as u8&&c<=57 as u8}
+export function json_is_value_start(c:u8):bool{return c==34 as u8||c==123 as u8||c==91 as u8||c==116 as u8||c==102 as u8||c==110 as u8||c==45 as u8||json_is_digit(c)}

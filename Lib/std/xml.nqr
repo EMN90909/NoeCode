@@ -1,0 +1,5 @@
+module noqeri.std.xml
+
+export function xml_is_name_start(c:u8):bool{return (c>=65 as u8&&c<=90 as u8)||(c>=97 as u8&&c<=122 as u8)||c==95 as u8||c==58 as u8}
+export function xml_is_name_char(c:u8):bool{return xml_is_name_start(c)||(c>=48 as u8&&c<=57 as u8)||c==45 as u8||c==46 as u8}
+export function xml_needs_escape(c:u8):bool{return c==38 as u8||c==60 as u8||c==62 as u8||c==34 as u8||c==39 as u8}

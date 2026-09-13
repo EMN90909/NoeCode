@@ -1,0 +1,9 @@
+module noqeri.std.crypto.rsa
+
+export function rsa_key_size_valid(bits:usize):bool{return bits>=2048 as usize&&bits<=16384 as usize&&bits%256 as usize==0 as usize}
+export function rsa_default_key_bits():usize{return 3072 as usize}
+export function rsa_public_exponent_default():u32{return 65537 as u32}
+export function rsa_public_exponent_valid(value:u32):bool{return value>=3 as u32&&value%2 as u32==1 as u32}
+export function rsa_oaep_required_for_encryption():bool{return true}
+export function rsa_pss_required_for_signature():bool{return true}
+export function rsa_key_pair_valid(bits:usize,exponent:u32):bool{return rsa_key_size_valid(bits)&&rsa_public_exponent_valid(exponent)}

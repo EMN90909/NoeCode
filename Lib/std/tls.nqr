@@ -1,0 +1,5 @@
+module noqeri.std.tls
+
+export function tls_record_type_valid(t:u8):bool{return t==20 as u8||t==21 as u8||t==22 as u8||t==23 as u8}
+export function tls_version_is_12(major:u8,minor:u8):bool{return major==3 as u8&&minor==3 as u8}
+export function tls_record_length_valid(n:usize):bool{return n<=18432 as usize}

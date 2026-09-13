@@ -1,0 +1,5 @@
+module noqeri.std.crypto
+
+export function crypto_constant_time_equal(a:[]u8,b:[]u8):bool{if len(a)!=len(b){return false}let diff:u8=0 as u8 let i:usize=0 as usize while i<len(a){if a[i]!=b[i]{diff=1 as u8}i=i+1}return diff==0 as u8}
+export function crypto_valid_key_bits(bits:usize):bool{return bits==128 as usize||bits==192 as usize||bits==256 as usize}
+export function crypto_zero_byte():u8{return 0 as u8}

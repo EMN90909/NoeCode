@@ -1,0 +1,6 @@
+module noqeri.std.duration
+
+export function duration_seconds_to_millis(value:i64):i64{return value*1000 as i64}
+export function duration_minutes_to_seconds(value:i64):i64{return value*60 as i64}
+export function duration_hours_to_seconds(value:i64):i64{return value*3600 as i64}
+export function duration_nonnegative(value:i64):bool{return value>=0 as i64}

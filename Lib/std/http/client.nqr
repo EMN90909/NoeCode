@@ -1,0 +1,13 @@
+module noqeri.std.http.client
+
+extern function httpClientRequest(method: string, url: string, body: string): isize
+extern function httpClientStatus(request: usize): int
+extern function httpClientBody(request: usize): string
+extern function httpClientClose(request: usize): void
+
+export function http_client_get(url: string): isize { return httpClientRequest("GET",url,"") }
+export function http_client_post(url: string, body: string): isize { return httpClientRequest("POST",url,body) }
+export function http_client_status(handle: usize): int { return httpClientStatus(handle) }
+export function http_client_body(handle: usize): string { return httpClientBody(handle) }
+export function http_client_close(handle: usize): void { httpClientClose(handle) }
+export function http_client_success(status: int): bool { return status >= 200 && status < 300 }

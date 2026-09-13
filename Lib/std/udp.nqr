@@ -1,0 +1,5 @@
+module noqeri.std.udp
+
+export function udp_valid_port(port:u32):bool{return port>0 as u32&&port<=65535 as u32}
+export function udp_max_payload_ipv4():usize{return 65507 as usize}
+export function udp_is_dns_port(port:u32):bool{return port==53 as u32}

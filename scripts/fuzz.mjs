@@ -3,18 +3,21 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { parseSqlStatement } from '../Runtime/sql-parser.mjs'
+import { parseHttpRequest, parseHttpResponse } from '../Runtime/http-parser.mjs'
 
 const argv = process.argv.slice(2)
 const value = name => { const i=argv.indexOf(name); return i>=0 ? argv[i+1] : '' }
 const cases = Math.max(1, Number(value('--cases') || 250))
-let state = Number(value('--seed') || 1314014546) >>> 0
+const originalSeed=Number(value('--seed') || 1314014546) >>> 0
+let state = originalSeed
 const compiler = resolve(process.env.NOQERI_BIN || join(process.cwd(),'build',process.platform==='win32'?'noqeri.exe':'noqeri'))
 const timeout = Math.max(250, Number(process.env.NOQERI_FUZZ_TIMEOUT_MS || 4000))
 
 function rand(){ state ^= state << 13; state ^= state >>> 17; state ^= state << 5; return state >>> 0 }
 function pick(list){ return list[rand()%list.length] }
 function mutate(seed){
-  const alphabet='(){}[]<>+-*/%=!&|:;,._ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"\\\n\t'
+  const alphabet='(){}[]<>+-*/%=!&|:;,._ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"\\\n\t\r'
   let text=seed
   const edits=1+(rand()%12)
   for(let n=0;n<edits;n++){
@@ -50,7 +53,7 @@ const sqlSeeds=[
 ]
 const networkSeeds=[
  'GET / HTTP/1.1\r\nHost: example.test\r\nConnection: close\r\n\r\n',
- 'https://example.test/path?q=value#fragment',
+ 'POST /api HTTP/1.1\r\nHost: example.test\r\nContent-Length: 2\r\n\r\n{}',
  'HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n'
 ]
 
@@ -60,6 +63,7 @@ function run(args,cwd){
   if(result.signal) throw new Error(`crash ${result.signal}: ${args.join(' ')}\n${result.stderr||''}`)
   return result
 }
+function controlledParse(fn,input){try{fn(input)}catch(error){if(!(error instanceof Error))throw error}}
 
 const root=await mkdtemp(join(tmpdir(),'noqeri-fuzz-'))
 let executed=0
@@ -79,22 +83,21 @@ try{
     await writeFile(nqdPath,nqd)
     run(['db',nqdPath,join(root,`case-${i}.nqdb`)],root); executed++
 
-    // SQL and network inputs are retained as deterministic corpora even while
-    // their production parsers are host/provider backed. NOQERI_*_FUZZ_CMD can
-    // point at a parser executable without changing this harness.
     const sql=mutate(pick(sqlSeeds)), sqlPath=join(root,`case-${i}.sql`)
-    await writeFile(sqlPath,sql)
-    if(process.env.NOQERI_SQL_FUZZ_CMD){spawnSync(process.env.NOQERI_SQL_FUZZ_CMD,[sqlPath],{timeout,encoding:'utf8'});executed++}
+    await writeFile(sqlPath,sql);controlledParse(parseSqlStatement,sql);executed++
+    if(process.env.NOQERI_SQL_FUZZ_CMD){const r=spawnSync(process.env.NOQERI_SQL_FUZZ_CMD,[sqlPath],{timeout,encoding:'utf8'});if(r.signal)throw new Error(`SQL parser crash ${r.signal}`);executed++}
+
     const net=mutate(pick(networkSeeds)), netPath=join(root,`case-${i}.net`)
     await writeFile(netPath,net)
-    if(process.env.NOQERI_NETWORK_FUZZ_CMD){spawnSync(process.env.NOQERI_NETWORK_FUZZ_CMD,[netPath],{timeout,encoding:'utf8'});executed++}
+    controlledParse(net.startsWith('HTTP/')?parseHttpResponse:parseHttpRequest,net);executed++
+    if(process.env.NOQERI_NETWORK_FUZZ_CMD){const r=spawnSync(process.env.NOQERI_NETWORK_FUZZ_CMD,[netPath],{timeout,encoding:'utf8'});if(r.signal)throw new Error(`network parser crash ${r.signal}`);executed++}
 
-    // Object/linker fuzzing is deliberately non-executing by default: malformed
-    // object bytes must first pass Noqeri's own object inspector. The optional
-    // target lets hardened loader builds participate without invoking a system linker.
+    // Object bytes are never sent directly to a system linker. A hardened
+    // ObjectInspector target may be supplied here; LinkerDriver itself also
+    // inspects objects before invoking a configured platform linker.
     const objectPath=join(root,`case-${i}.o`)
     await writeFile(objectPath,Buffer.from(mutate('\x7fELF000000000000'),'binary'))
-    if(process.env.NOQERI_OBJECT_FUZZ_CMD){spawnSync(process.env.NOQERI_OBJECT_FUZZ_CMD,[objectPath],{timeout,encoding:'utf8'});executed++}
+    if(process.env.NOQERI_OBJECT_FUZZ_CMD){const r=spawnSync(process.env.NOQERI_OBJECT_FUZZ_CMD,[objectPath],{timeout,encoding:'utf8'});if(r.signal)throw new Error(`object loader crash ${r.signal}`);executed++}
   }
-  console.log(`fuzz: PASS cases=${cases} invocations=${executed} seed=${Number(value('--seed')||1314014546)>>>0}`)
+  console.log(`fuzz: PASS cases=${cases} invocations=${executed} seed=${originalSeed}`)
 } finally { await rm(root,{recursive:true,force:true}) }

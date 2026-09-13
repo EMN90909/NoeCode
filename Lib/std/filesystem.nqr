@@ -25,28 +25,28 @@ extern function fsWatchClose(watcher: isize): isize
 extern function fsMmap(path: string, writable: bool): isize
 extern function fsMunmap(mapping: isize): isize
 
-export function read_text(path: string): string { return fsReadText(path) }
-export function write_text(path: string, text: string): isize { return fsWriteText(path, text) }
-export function append_text(path: string, text: string): isize { return fsAppendText(path, text) }
-export function exists(path: string): bool { return fsExists(path) }
-export function is_directory(path: string): bool { return fsIsDirectory(path) }
-export function create_directory(path: string): isize { return fsCreateDirectory(path) }
-export function create_directories(path: string): isize { return fsCreateDirectories(path) }
-export function remove(path: string): isize { return fsRemove(path) }
-export function remove_tree(path: string): isize { return fsRemoveTree(path) }
-export function rename(from: string, to: string): isize { return fsRename(from, to) }
-export function atomic_replace(from: string, to: string): isize { return fsAtomicReplace(from, to) }
-export function symlink(target: string, link_path: string): isize { return fsSymlink(target, link_path) }
-export function readlink(path: string): string { return fsReadlink(path) }
-export function permissions(path: string): int { return fsPermissions(path) }
-export function set_permissions(path: string, mode: int): isize { return fsSetPermissions(path, mode) }
-export function metadata(path: string): string { return fsMetadata(path) }
-export function walk(path: string): string { return fsWalk(path) }
-export function temp_file(prefix: string): string { return fsTempFile(prefix) }
-export function temp_directory(prefix: string): string { return fsTempDirectory(prefix) }
-export function watch(path: string): isize { return fsWatch(path) }
-export function watch_next(watcher: isize, timeout_millis: i64): string { return fsWatchNext(watcher, timeout_millis) }
-export function watch_close(watcher: isize): isize { return fsWatchClose(watcher) }
-export function mmap(path: string, writable: bool): isize { return fsMmap(path, writable) }
-export function munmap(mapping: isize): isize { return fsMunmap(mapping) }
+export function read_text(path: string): string { unsafe { return fsReadText(path) } }
+export function write_text(path: string, text: string): isize { unsafe { return fsWriteText(path, text) } }
+export function append_text(path: string, text: string): isize { unsafe { return fsAppendText(path, text) } }
+export function exists(path: string): bool { unsafe { return fsExists(path) } }
+export function is_directory(path: string): bool { unsafe { return fsIsDirectory(path) } }
+export function create_directory(path: string): isize { unsafe { return fsCreateDirectory(path) } }
+export function create_directories(path: string): isize { unsafe { return fsCreateDirectories(path) } }
+export function remove(path: string): isize { unsafe { return fsRemove(path) } }
+export function remove_tree(path: string): isize { unsafe { return fsRemoveTree(path) } }
+export function rename(from: string, to: string): isize { unsafe { return fsRename(from, to) } }
+export function atomic_replace(from: string, to: string): isize { unsafe { return fsAtomicReplace(from, to) } }
+export function symlink(target: string, link_path: string): isize { unsafe { return fsSymlink(target, link_path) } }
+export function readlink(path: string): string { unsafe { return fsReadlink(path) } }
+export function permissions(path: string): int { unsafe { return fsPermissions(path) } }
+export function set_permissions(path: string, mode: int): isize { unsafe { return fsSetPermissions(path, mode) } }
+export function metadata(path: string): string { unsafe { return fsMetadata(path) } }
+export function walk(path: string): string { unsafe { return fsWalk(path) } }
+export function temp_file(prefix: string): string { unsafe { return fsTempFile(prefix) } }
+export function temp_directory(prefix: string): string { unsafe { return fsTempDirectory(prefix) } }
+export function watch(path: string): isize { unsafe { return fsWatch(path) } }
+export function watch_next(watcher: isize, timeout_millis: i64): string { unsafe { return fsWatchNext(watcher, timeout_millis) } }
+export function watch_close(watcher: isize): isize { unsafe { return fsWatchClose(watcher) } }
+export function mmap(path: string, writable: bool): isize { unsafe { return fsMmap(path, writable) } }
+export function munmap(mapping: isize): isize { unsafe { return fsMunmap(mapping) } }
 export function status_ok(status: isize): bool { return status >= 0 as isize }

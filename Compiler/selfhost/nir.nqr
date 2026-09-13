@@ -8,14 +8,19 @@ record NqNirInstruction {
     left: isize
     right: isize
     immediate: i64
+    floatImmediate: float
     symbol: u64
     width: usize
+    sourceStart: usize
+    sourceEnd: usize
     typeCode: int
     flags: u32
 }
 
 record NqNirFunction {
     symbol: u64
+    nameStart: usize
+    nameEnd: usize
     firstInstruction: usize
     instructionCount: usize
     parameterCount: usize
@@ -93,14 +98,18 @@ export function nqNirInstructionInit(out: *NqNirInstruction, opcode: int, dest: 
     out.left = nqNirNoValue()
     out.right = nqNirNoValue()
     out.immediate = 0 as i64
+    out.floatImmediate = 0.0
     out.symbol = 0 as u64
     out.width = 0 as usize
+    out.sourceStart = 0 as usize
+    out.sourceEnd = 0 as usize
     out.typeCode = 0
     out.flags = 0 as u32
 }
 
 export function nqNirInstructionValid(instruction: *NqNirInstruction): bool {
     if instruction == null || !nqNirOpcodeValid(instruction.opcode) { return false }
+    if instruction.sourceEnd < instruction.sourceStart { return false }
     if nqNirDefinesValue(instruction.opcode) && instruction.dest < 0 as isize { return false }
     if instruction.opcode == nqNirMove() && instruction.left < 0 as isize { return false }
     if nqNirIsPureArithmetic(instruction.opcode) && (instruction.left < 0 as isize || instruction.right < 0 as isize) { return false }
@@ -135,7 +144,7 @@ export function nqNirProgramValid(instructions: []NqNirInstruction): bool {
 }
 
 export function nqNirFunctionValid(function: *NqNirFunction, instructionCount: usize): bool {
-    if function == null || function.symbol == 0 as u64 || function.firstInstruction > instructionCount { return false }
+    if function == null || function.symbol == 0 as u64 || function.nameEnd <= function.nameStart || function.firstInstruction > instructionCount { return false }
     return function.instructionCount <= instructionCount - function.firstInstruction
 }
 

@@ -1,11 +1,34 @@
 module noqeri.compiler.selfhost
 import "driver.nqr"
 import "types.nqr"
+import "package_policy.nqr"
+import "pipeline.nqr"
+import "stage2.nqr"
+import "ast.nqr"
+import "nir.nqr"
 
+// Compatibility exports used by the portable Stage-1 loader. `check` now owns
+// the complete Noqeri grammar rather than the old token/syntax-only seed path.
 export function stage1VersionMajor(): int { return nqCompilerVersionMajor() }
 export function stage1VersionMinor(): int { return nqCompilerVersionMinor() }
 export function stage1VersionPatch(): int { return nqCompilerVersionPatch() }
-export function stage1CheckSource(source: []u8): isize { return nqCompilerCheckSource(source) }
+export function stage1CheckSource(source: []u8): isize { return nqPipelineCheck(source) }
 export function stage1TokenCount(source: []u8): usize { return nqCompilerSourceTokenCount(source) }
 export function stage1Fingerprint(source: []u8): u32 { return nqCompilerSourceFingerprint(source) }
 export function stage1CanImplicitWiden(fromCode: int, toCode: int): bool { return nqCompilerCanImplicitWiden(fromCode, toCode) }
+export function stage1PackageCoordinateValid(value: []u8): bool { return nqPackageCoordinateValid(value) }
+
+// Stage-2 exports are host-independent. The caller provides AST/NIR/function
+// arenas; parsing, semantics, lowering, safety and optimisation stay in Noqeri.
+export function stage2SyntaxCheck(source: []u8): isize { return nqPipelineSyntaxCheck(source) }
+export function stage2SemanticCheckMerged(source: []u8, unsafeAllowed: bool): isize { return nqPipelineSemanticCheckMerged(source, unsafeAllowed) }
+export function stage2CompileReady(source: []u8, target: int): bool { return nqPipelineCompileReady(source, target) }
+export function stage2CompileCheck(source: []u8, target: int, unsafeAllowed: bool): isize { return nqPipelineCompileCheck(source, target, unsafeAllowed) }
+export function stage2CompileToNir(source: []u8, target: int, debug: bool, unsafeAllowed: bool, nodes: []NqAstNode, instructions: []NqNirInstruction, functions: []NqNirFunction, out: *NqCompileResult): isize {
+    return nqPipelineCompileToNir(source, target, debug, unsafeAllowed, nodes, instructions, functions, out)
+}
+export function stage2WorkspaceAstMinimum(): usize { return nqPipelineWorkspaceAstMinimum() }
+export function stage2WorkspaceNirMinimum(): usize { return nqPipelineWorkspaceNirMinimum() }
+export function stage2WorkspaceFunctionMinimum(): usize { return nqPipelineWorkspaceFunctionMinimum() }
+export function stage2ProofStatus(proof: *NqStage2Proof): isize { return nqStage2GateStatus(proof) }
+export function stage2Verified(proof: *NqStage2Proof): bool { return nqStage2ProofValid(proof) }

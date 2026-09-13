@@ -146,6 +146,11 @@ StmtPtr Parser::statement(){
     if(match({TokenKind::While}))return whileStatement();
     if(match({TokenKind::Return}))return returnStatement();
     if(match({TokenKind::Throw}))return throwStatement();
+    if(match({TokenKind::Unsafe})){
+        Token start=previous();
+        consume(TokenKind::LBrace,"expected '{' after unsafe");
+        auto b=block();b->span=start.span;b->isUnsafe=true;return b;
+    }
     if(match({TokenKind::LBrace}))return block();
     return expressionStatement();
 }
@@ -209,5 +214,5 @@ const Token& Parser::advance(){if(!check(TokenKind::Eof))++current_;return previ
 const Token& Parser::previous()const{return tokens_[current_-1];}
 const Token& Parser::peek()const{return tokens_[current_];}
 const Token& Parser::consume(TokenKind kind,const std::string& message){if(check(kind))return advance();diagnostics_.error("NOE-P2000",peek().span,message);throw ParseError("parse");}
-void Parser::synchronize(){if(!check(TokenKind::Eof))advance();while(!check(TokenKind::Eof)){if(previous().kind==TokenKind::Semicolon)return;switch(peek().kind){case TokenKind::Function:case TokenKind::Record:case TokenKind::Module:case TokenKind::Import:case TokenKind::Extern:case TokenKind::Export:case TokenKind::Let:case TokenKind::Const:case TokenKind::If:case TokenKind::While:case TokenKind::Return:case TokenKind::Throw:return;default:break;}advance();}}
+void Parser::synchronize(){if(!check(TokenKind::Eof))advance();while(!check(TokenKind::Eof)){if(previous().kind==TokenKind::Semicolon)return;switch(peek().kind){case TokenKind::Function:case TokenKind::Record:case TokenKind::Module:case TokenKind::Import:case TokenKind::Extern:case TokenKind::Export:case TokenKind::Let:case TokenKind::Const:case TokenKind::If:case TokenKind::While:case TokenKind::Return:case TokenKind::Throw:case TokenKind::Unsafe:return;default:break;}advance();}}
 } // namespace noe

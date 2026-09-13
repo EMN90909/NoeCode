@@ -1,23 +1,51 @@
 module noqeri.compiler.selfhost.types
+import "ast.nqr"
 
+// Stage-2 type queries use the stable AST type tags directly. Keeping this
+// mapping in Noqeri prevents the host seed from owning conversion semantics.
 export function nqCompilerPrimitiveTypeWidth(code: int): usize {
-    if code == 1 || code == 2 { return 1 as usize }
-    if code == 3 || code == 4 { return 2 as usize }
-    if code == 5 || code == 6 { return 4 as usize }
-    if code == 7 || code == 8 || code == 9 || code == 10 || code == 11 { return 8 as usize }
+    if code == nqAstTypeBool() || code == nqAstTypeI8() || code == nqAstTypeU8() { return 1 as usize }
+    if code == nqAstTypeI16() || code == nqAstTypeU16() { return 2 as usize }
+    if code == nqAstTypeI32() || code == nqAstTypeU32() { return 4 as usize }
+    if code == nqAstTypeInt() || code == nqAstTypeFloat() || code == nqAstTypeI64() || code == nqAstTypeU64() || code == nqAstTypeIsize() || code == nqAstTypeUsize() || code == nqAstTypePointer() { return 8 as usize }
+    if code == nqAstTypeString() || code == nqAstTypeSlice() { return 16 as usize }
     return 0 as usize
 }
 
-export function nqCompilerTypeIsInteger(code: int): bool {
-    return code >= 1 && code <= 11
-}
+export function nqCompilerTypeIsInteger(code: int): bool { return nqAstTypeInteger(code) }
+export function nqCompilerTypeIsFloat(code: int): bool { return code == nqAstTypeFloat() }
+export function nqCompilerTypeIsNumeric(code: int): bool { return nqCompilerTypeIsInteger(code) || nqCompilerTypeIsFloat(code) }
+export function nqCompilerTypeIsPointerLike(code: int): bool { return code == nqAstTypePointer() || code == nqAstTypeSlice() || code == nqAstTypeString() }
+export function nqCompilerTypeIsIndexable(code: int): bool { return code == nqAstTypeArray() || code == nqAstTypeSlice() || code == nqAstTypeString() }
+export function nqCompilerTypeIsAggregate(code: int): bool { return nqAstTypeAggregate(code) }
 
 export function nqCompilerTypeIsSigned(code: int): bool {
-    return code == 2 || code == 4 || code == 6 || code == 8 || code == 10 || code == 11
+    return code == nqAstTypeInt() || code == nqAstTypeI8() || code == nqAstTypeI16() || code == nqAstTypeI32() || code == nqAstTypeI64() || code == nqAstTypeIsize()
+}
+
+export function nqCompilerTypeIsUnsigned(code: int): bool {
+    return code == nqAstTypeU8() || code == nqAstTypeU16() || code == nqAstTypeU32() || code == nqAstTypeU64() || code == nqAstTypeUsize()
 }
 
 export function nqCompilerCanImplicitWiden(fromCode: int, toCode: int): bool {
+    if fromCode == toCode { return true }
     if !nqCompilerTypeIsInteger(fromCode) || !nqCompilerTypeIsInteger(toCode) { return false }
-    if nqCompilerTypeIsSigned(fromCode) != nqCompilerTypeIsSigned(toCode) { return false }
-    return nqCompilerPrimitiveTypeWidth(fromCode) <= nqCompilerPrimitiveTypeWidth(toCode)
+    let fromWidth: usize = nqCompilerPrimitiveTypeWidth(fromCode)
+    let toWidth: usize = nqCompilerPrimitiveTypeWidth(toCode)
+    if fromWidth == 0 as usize || toWidth == 0 as usize { return false }
+    if nqCompilerTypeIsSigned(fromCode) == nqCompilerTypeIsSigned(toCode) { return fromWidth <= toWidth }
+    // Unsigned -> signed is safe only when the destination has strictly more bits.
+    if nqCompilerTypeIsUnsigned(fromCode) && nqCompilerTypeIsSigned(toCode) { return fromWidth < toWidth }
+    return false
 }
+
+export function nqCompilerTypeStorageBytes(code: int, pointerBytes: usize): usize {
+    if code == nqAstTypePointer() { return pointerBytes }
+    if code == nqAstTypeString() || code == nqAstTypeSlice() { return pointerBytes * 2 as usize }
+    return nqCompilerPrimitiveTypeWidth(code)
+}
+
+export function nqCompilerIntegerBits(code: int): usize { return nqCompilerPrimitiveTypeWidth(code) * 8 as usize }
+export function nqCompilerTypeValid(code: int): bool { return code >= nqAstTypeVoid() && code <= nqAstTypeRecord() }
+export function nqCompilerTypeCanBeNull(code: int): bool { return code == nqAstTypePointer() }
+export function nqCompilerTypeSafeByValue(code: int): bool { return nqAstTypeScalar(code) || code == nqAstTypeString() || code == nqAstTypeSlice() }

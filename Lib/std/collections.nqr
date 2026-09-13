@@ -1,4 +1,13 @@
 module noqeri.std.collections
-export function contains<T: Eq>(items: []T, value: T): bool { let i: usize = 0 as usize while i < len(items) { if items[i] == value { return true } i = i + 1 } return false }
-export function all_equal<T: Eq>(items: []T): bool { if len(items) < 2 as usize { return true } let i: usize = 1 as usize while i < len(items) { if items[i] != items[0] { return false } i = i + 1 } return true }
-export function count_value<T: Eq>(items: []T, value: T): usize { let count: usize = 0 as usize let i: usize = 0 as usize while i < len(items) { if items[i] == value { count = count + 1 } i = i + 1 } return count }
+
+export function contains<T: Eq>(items: []T, value: T): bool { let i: usize = 0 as usize while i < len(items) { if items[i] == value { return true } i = i + 1 as usize } return false }
+export function all_equal<T: Eq>(items: []T): bool { if len(items) < 2 as usize { return true } let i: usize = 1 as usize while i < len(items) { if items[i] != items[0] { return false } i = i + 1 as usize } return true }
+export function count_value<T: Eq>(items: []T, value: T): usize { let count: usize = 0 as usize let i: usize = 0 as usize while i < len(items) { if items[i] == value { count = count + 1 as usize } i = i + 1 as usize } return count }
+export function first_index<T: Eq>(items: []T, value: T): isize { let i: usize = 0 as usize while i < len(items) { if items[i] == value { return i as isize } i = i + 1 as usize } return -1 as isize }
+export function last_index<T: Eq>(items: []T, value: T): isize { let i: usize = len(items) while i > 0 as usize { i = i - 1 as usize if items[i] == value { return i as isize } } return -1 as isize }
+export function starts_with<T: Eq>(items: []T, prefix: []T): bool { if len(prefix) > len(items) { return false } let i: usize = 0 as usize while i < len(prefix) { if items[i] != prefix[i] { return false } i = i + 1 as usize } return true }
+export function ends_with<T: Eq>(items: []T, suffix: []T): bool { if len(suffix) > len(items) { return false } let offset: usize = len(items) - len(suffix) let i: usize = 0 as usize while i < len(suffix) { if items[offset + i] != suffix[i] { return false } i = i + 1 as usize } return true }
+export function slice_equal<T: Eq>(left: []T, right: []T): bool { if len(left) != len(right) { return false } let i: usize = 0 as usize while i < len(left) { if left[i] != right[i] { return false } i = i + 1 as usize } return true }
+export function copy_into<T>(out: []T, input: []T): usize { let count: usize = len(input) if count > len(out) { count = len(out) } let i: usize = 0 as usize while i < count { out[i] = input[i] i = i + 1 as usize } return count }
+export function reverse_into<T>(out: []T, input: []T): usize { let count: usize = len(input) if count > len(out) { count = len(out) } let i: usize = 0 as usize while i < count { out[i] = input[len(input) - 1 as usize - i] i = i + 1 as usize } return count }
+export function dedupe_adjacent_into<T: Eq>(out: []T, input: []T): usize { if len(input) == 0 as usize || len(out) == 0 as usize { return 0 as usize } let written: usize = 1 as usize out[0] = input[0] let i: usize = 1 as usize while i < len(input) && written < len(out) { if input[i] != input[i - 1 as usize] { out[written] = input[i] written = written + 1 as usize } i = i + 1 as usize } return written }

@@ -1,4 +1,121 @@
 module noqeri.compiler.selfhost.syntax
+import "lexer.nqr"
+
+export function nqSyntaxUnsafeRequired(): isize { return -40 }
+export function nqSyntaxUnsafeMalformed(): isize { return -41 }
+
+export function nqSyntaxWordAt(source: []u8, start: usize, word: []u8): bool {
+    if start + len(word) > len(source) { return false }
+    let index: usize = 0 as usize
+    while index < len(word) {
+        if source[start + index] != word[index] { return false }
+        index = index + 1 as usize
+    }
+    if start > 0 as usize && nqCompilerIsIdentifierContinue(source[start - 1 as usize]) { return false }
+    if start + len(word) < len(source) && nqCompilerIsIdentifierContinue(source[start + len(word)]) { return false }
+    return true
+}
+
+export function nqSyntaxUnsafeAt(source: []u8, start: usize): bool {
+    return nqSyntaxWordAt(source, start, slice([117 as u8,110 as u8,115 as u8,97 as u8,102 as u8,101 as u8]))
+}
+
+export function nqSyntaxAsmAt(source: []u8, start: usize): bool {
+    return nqSyntaxWordAt(source, start, slice([97 as u8,115 as u8,109 as u8]))
+}
+
+export function nqSyntaxIntrinsicAt(source: []u8, start: usize): bool {
+    return nqSyntaxWordAt(source, start, slice([105 as u8,110 as u8,116 as u8,114 as u8,105 as u8,110 as u8,115 as u8,105 as u8,99 as u8]))
+}
+
+export function nqSyntaxVolatileAt(source: []u8, start: usize): bool {
+    return nqSyntaxWordAt(source, start, slice([118 as u8,111 as u8,108 as u8,97 as u8,116 as u8,105 as u8,108 as u8,101 as u8]))
+}
+
+export function nqSyntaxExternAt(source: []u8, start: usize): bool {
+    return nqSyntaxWordAt(source, start, slice([101 as u8,120 as u8,116 as u8,101 as u8,114 as u8,110 as u8]))
+}
+
+export function nqSyntaxPointerCastAt(source: []u8, start: usize): bool {
+    if !nqSyntaxWordAt(source, start, slice([97 as u8,115 as u8])) { return false }
+    let after: usize = nqCompilerSkipTrivia(source, start + 2 as usize)
+    return after < len(source) && source[after] == 42 as u8
+}
+
+export function nqCompilerUnsafeCheck(source: []u8): isize {
+    let index: usize = 0 as usize
+    let braces: int = 0
+    let unsafeBraceDepth: int = 0
+    let pendingUnsafeBlock: bool = false
+    let pendingUnsafeDeclaration: bool = false
+    let inString: bool = false
+    let inLineComment: bool = false
+    let inBlockComment: bool = false
+
+    while index < len(source) {
+        let value: u8 = source[index]
+        let next: u8 = 0 as u8
+        if index + 1 as usize < len(source) { next = source[index + 1 as usize] }
+
+        if inLineComment {
+            if value == 10 as u8 { inLineComment = false }
+            index = index + 1 as usize
+        } else if inBlockComment {
+            if value == 42 as u8 && next == 47 as u8 { inBlockComment = false; index = index + 2 as usize }
+            else { index = index + 1 as usize }
+        } else if inString {
+            if value == 92 as u8 { index = index + 2 as usize }
+            else { if value == 34 as u8 { inString = false } index = index + 1 as usize }
+        } else if value == 47 as u8 && next == 47 as u8 {
+            inLineComment = true
+            index = index + 2 as usize
+        } else if value == 47 as u8 && next == 42 as u8 {
+            inBlockComment = true
+            index = index + 2 as usize
+        } else if value == 34 as u8 {
+            inString = true
+            index = index + 1 as usize
+        } else {
+            let inUnsafe: bool = unsafeBraceDepth > 0
+            if nqSyntaxUnsafeAt(source, index) {
+                let after: usize = nqCompilerSkipTrivia(source, index + 6 as usize)
+                if after >= len(source) { return nqSyntaxUnsafeMalformed() }
+                if source[after] == 123 as u8 { pendingUnsafeBlock = true }
+                else if nqSyntaxExternAt(source, after) { pendingUnsafeDeclaration = true }
+                else { return nqSyntaxUnsafeMalformed() }
+                index = index + 6 as usize
+            } else if nqSyntaxExternAt(source, index) {
+                if !inUnsafe && !pendingUnsafeDeclaration { return nqSyntaxUnsafeRequired() }
+                pendingUnsafeDeclaration = false
+                index = index + 6 as usize
+            } else if nqSyntaxAsmAt(source, index) {
+                if !inUnsafe { return nqSyntaxUnsafeRequired() }
+                index = index + 3 as usize
+            } else if nqSyntaxIntrinsicAt(source, index) {
+                if !inUnsafe { return nqSyntaxUnsafeRequired() }
+                index = index + 9 as usize
+            } else if nqSyntaxVolatileAt(source, index) {
+                if !inUnsafe { return nqSyntaxUnsafeRequired() }
+                index = index + 8 as usize
+            } else if nqSyntaxPointerCastAt(source, index) {
+                if !inUnsafe { return nqSyntaxUnsafeRequired() }
+                index = index + 2 as usize
+            } else {
+                if value == 123 as u8 {
+                    braces = braces + 1
+                    if pendingUnsafeBlock { unsafeBraceDepth = braces; pendingUnsafeBlock = false }
+                } else if value == 125 as u8 {
+                    if unsafeBraceDepth == braces { unsafeBraceDepth = 0 }
+                    braces = braces - 1
+                }
+                if pendingUnsafeDeclaration && !nqCompilerIsSpace(value) { pendingUnsafeDeclaration = false }
+                index = index + 1 as usize
+            }
+        }
+    }
+    if pendingUnsafeBlock || pendingUnsafeDeclaration { return nqSyntaxUnsafeMalformed() }
+    return 0
+}
 
 export function nqCompilerSyntaxCheck(source: []u8): isize {
     let braces: int = 0
@@ -59,7 +176,7 @@ export function nqCompilerSyntaxCheck(source: []u8): isize {
     if parens != 0 { return -20 }
     if brackets != 0 { return -21 }
     if braces != 0 { return -22 }
-    return 0
+    return nqCompilerUnsafeCheck(source)
 }
 
 export function nqCompilerSyntaxOk(source: []u8): bool {

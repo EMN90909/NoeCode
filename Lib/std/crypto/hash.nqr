@@ -1,6 +1,35 @@
 module noqeri.std.crypto.hash
 
-export function crypto_hash_key_size_valid(bits: usize): bool { return bits == 128 as usize || bits == 192 as usize || bits == 256 as usize || bits == 2048 as usize || bits == 4096 as usize }
+extern function cryptoSha256(data: []u8, output: []u8): isize
+extern function cryptoSha512(data: []u8, output: []u8): isize
+extern function cryptoHmacSha256(key: []u8, data: []u8, output: []u8): isize
+extern function cryptoSecureEqual(left: []u8, right: []u8): bool
+
+export function sha256_size(): usize { return 32 as usize }
+export function sha512_size(): usize { return 64 as usize }
+export function hmac_sha256_size(): usize { return 32 as usize }
+
+export function sha256(data: []u8, output: []u8): isize {
+    if len(output) < sha256_size() { return -2 as isize }
+    return cryptoSha256(data, output)
+}
+
+export function sha512(data: []u8, output: []u8): isize {
+    if len(output) < sha512_size() { return -2 as isize }
+    return cryptoSha512(data, output)
+}
+
+export function hmac_sha256(key: []u8, data: []u8, output: []u8): isize {
+    if len(key) == 0 as usize { return -3 as isize }
+    if len(output) < hmac_sha256_size() { return -2 as isize }
+    return cryptoHmacSha256(key, data, output)
+}
+
+export function hash_secure_equal(left: []u8, right: []u8): bool {
+    if len(left) != len(right) { return false }
+    return cryptoSecureEqual(left, right)
+}
+
 export function crypto_hash_input_nonempty(data: []u8): bool { return len(data) > 0 as usize }
-export function crypto_hash_constant_time_length_match(a: []u8, b: []u8): bool { return len(a) == len(b) }
+export function crypto_hash_length_match(a: []u8, b: []u8): bool { return len(a) == len(b) }
 export function crypto_hash_secure_default(): bool { return true }

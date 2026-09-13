@@ -20,6 +20,8 @@ import "coff_writer.nqr"
 import "elf_writer.nqr"
 import "macho_writer.nqr"
 import "profiles.nqr"
+import "security.nqr"
+import "stage2.nqr"
 
 export function stage1VersionMajor(): int { return nqCompilerVersionMajor() }
 export function stage1VersionMinor(): int { return nqCompilerVersionMinor() }
@@ -40,3 +42,11 @@ export function stage1ProfileOptimization(profile: int): int { return nqProfileO
 export function stage1CoffTargetValid(target: int): bool { return nqCoffTargetValid(target) }
 export function stage1ElfTargetValid(target: int): bool { return nqElfTargetValid(target) }
 export function stage1MachTargetValid(target: int): bool { return nqMachTargetValid(target) }
+
+// Stage-2-facing entry points. These keep bootstrapping, optimisation and proof
+// verification in Noqeri source rather than requiring host-language glue.
+export function stage2Plan(source: []u8, target: int, debug: bool, unsafeAllowed: bool, out: *NqCompilePlan): isize { return nqPipelinePlan(source, target, debug, unsafeAllowed, out) }
+export function stage2Optimize(instructions: []NqNirInstruction, level: int): usize { return nqOptimizerRun(instructions, level) }
+export function stage2ValidateNir(target: int, instructions: []NqNirInstruction, unsafeAllowed: bool): isize { return nqBackendProgramValid(target, instructions, unsafeAllowed) }
+export function stage2ProofStatus(proof: *NqStage2Proof): isize { return nqStage2GateStatus(proof) }
+export function stage2Verified(proof: *NqStage2Proof): bool { return nqStage2ProofValid(proof) }

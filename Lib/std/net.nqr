@@ -1,5 +1,32 @@
 module noqeri.std.net
 
-export function net_valid_port(port:u32):bool{return port>0 as u32&&port<=65535 as u32}
-export function net_is_private_ipv4(a:u8,b:u8):bool{return a==10 as u8||(a==172 as u8&&b>=16 as u8&&b<=31 as u8)||(a==192 as u8&&b==168 as u8)}
-export function net_is_loopback_ipv4(a:u8):bool{return a==127 as u8}
+record Ipv4Address {
+    a: u8
+    b: u8
+    c: u8
+    d: u8
+}
+
+export function net_valid_port(port: u32): bool { return port > 0 as u32 && port <= 65535 as u32 }
+export function net_is_private_ipv4(a: u8, b: u8): bool { return a == 10 as u8 || (a == 172 as u8 && b >= 16 as u8 && b <= 31 as u8) || (a == 192 as u8 && b == 168 as u8) }
+export function net_is_loopback_ipv4(a: u8): bool { return a == 127 as u8 }
+export function net_is_unspecified_ipv4(a: u8, b: u8, c: u8, d: u8): bool { return a == 0 as u8 && b == 0 as u8 && c == 0 as u8 && d == 0 as u8 }
+export function net_is_broadcast_ipv4(a: u8, b: u8, c: u8, d: u8): bool { return a == 255 as u8 && b == 255 as u8 && c == 255 as u8 && d == 255 as u8 }
+export function net_is_link_local_ipv4(a: u8, b: u8): bool { return a == 169 as u8 && b == 254 as u8 }
+export function net_is_multicast_ipv4(a: u8): bool { return a >= 224 as u8 && a <= 239 as u8 }
+export function net_is_reserved_ipv4(a: u8): bool { return a >= 240 as u8 }
+
+export function net_ipv4_is_public(address: *Ipv4Address): bool {
+    if net_is_unspecified_ipv4(address.a, address.b, address.c, address.d) { return false }
+    if net_is_broadcast_ipv4(address.a, address.b, address.c, address.d) { return false }
+    if net_is_private_ipv4(address.a, address.b) || net_is_loopback_ipv4(address.a) || net_is_link_local_ipv4(address.a, address.b) || net_is_multicast_ipv4(address.a) || net_is_reserved_ipv4(address.a) { return false }
+    return true
+}
+
+export function net_ipv4_equal(left: *Ipv4Address, right: *Ipv4Address): bool { return left.a == right.a && left.b == right.b && left.c == right.c && left.d == right.d }
+
+export function net_prefix_mask_valid(bits: int): bool { return bits >= 0 && bits <= 32 }
+export function net_ipv6_prefix_valid(bits: int): bool { return bits >= 0 && bits <= 128 }
+export function net_ephemeral_port(port: u32): bool { return port >= 49152 as u32 && port <= 65535 as u32 }
+export function net_well_known_port(port: u32): bool { return port > 0 as u32 && port <= 1023 as u32 }
+export function net_registered_port(port: u32): bool { return port >= 1024 as u32 && port <= 49151 as u32 }

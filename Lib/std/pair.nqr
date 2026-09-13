@@ -1,6 +1,18 @@
 module noqeri.std.pair
 
+record Pair<A, B> {
+    first: A
+    second: B
+}
+
+export function pair_first_ref<A,B>(pair: *Pair<A,B>): A { return pair.first }
+export function pair_second_ref<A,B>(pair: *Pair<A,B>): B { return pair.second }
+export function pair_set_first<A,B>(pair: *Pair<A,B>, value: A): void { pair.first = value }
+export function pair_set_second<A,B>(pair: *Pair<A,B>, value: B): void { pair.second = value }
+export function pair_equal<A: Eq,B: Eq>(left: *Pair<A,B>, right: *Pair<A,B>): bool { return left.first == right.first && left.second == right.second }
+
+// Legacy two-item slice helpers retained for source compatibility.
 export function pair_len<T>(items: []T): usize { return len(items) }
 export function pair_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
-export function pair_first<T>(items: []T): T { return items[0] }
-export function pair_last<T>(items: []T): T { return items[len(items)-1] }
+export function pair_first<T>(items: []T): T { return items[0 as usize] }
+export function pair_last<T>(items: []T): T { return items[len(items)-1 as usize] }

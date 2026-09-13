@@ -1,11 +1,51 @@
 module noqeri.std.task
 
+extern function taskHostSpawn(entry: string, payload: string): usize
+extern function taskHostState(task: usize): int
+extern function taskHostJoin(task: usize, timeoutMillis: i64): isize
+extern function taskHostCancel(task: usize): bool
+extern function taskHostDestroy(task: usize): bool
+extern function taskHostCancelled(task: usize): bool
+
 export function task_pending(): int { return 0 }
 export function task_running(): int { return 1 }
 export function task_ready(): int { return 2 }
 export function task_failed(): int { return 3 }
 export function task_cancelled(): int { return 4 }
-export function task_state_valid(state:int):bool{return state>=0&&state<=4}
-export function task_terminal(state:int):bool{return state==task_ready()||state==task_failed()||state==task_cancelled()}
-export function task_can_start(state:int):bool{return state==task_pending()}
-export function task_can_cancel(state:int):bool{return state==task_pending()||state==task_running()}
+export function task_state_valid(state: int): bool { return state >= 0 && state <= 4 }
+export function task_terminal(state: int): bool { return state == task_ready() || state == task_failed() || state == task_cancelled() }
+export function task_can_start(state: int): bool { return state == task_pending() }
+export function task_can_cancel(state: int): bool { return state == task_pending() || state == task_running() }
+export function task_timeout_valid(timeoutMillis: i64): bool { return timeoutMillis >= 0 as i64 }
+export function task_handle_valid(task: usize): bool { return task != 0 as usize }
+
+// Entry points are named until first-class function values land in the
+// self-host compiler. Handles, cancellation and timeout semantics are stable.
+export function task_spawn(entry: string, payload: string): usize {
+    unsafe { return taskHostSpawn(entry, payload) }
+}
+
+export function task_state(task: usize): int {
+    if !task_handle_valid(task) { return task_failed() }
+    unsafe { return taskHostState(task) }
+}
+
+export function task_join(task: usize, timeoutMillis: i64): isize {
+    if !task_handle_valid(task) || !task_timeout_valid(timeoutMillis) { return -1 }
+    unsafe { return taskHostJoin(task, timeoutMillis) }
+}
+
+export function task_cancel(task: usize): bool {
+    if !task_handle_valid(task) { return false }
+    unsafe { return taskHostCancel(task) }
+}
+
+export function task_is_cancelled(task: usize): bool {
+    if !task_handle_valid(task) { return true }
+    unsafe { return taskHostCancelled(task) }
+}
+
+export function task_destroy(task: usize): bool {
+    if !task_handle_valid(task) { return false }
+    unsafe { return taskHostDestroy(task) }
+}

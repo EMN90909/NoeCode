@@ -1,0 +1,26 @@
+function checked_dynamic_index(): int {
+    let values: [int; 4] = [10, 20, 30, 40]
+    let index: usize = 2 as usize
+    return values[index]
+}
+
+function checked_slice_index(): u32 {
+    let values: [u32; 3] = [4 as u32, 8 as u32, 12 as u32]
+    let view: []u32 = slice(values)
+    let index: usize = 1 as usize
+    return view[index]
+}
+
+function raw_pointer_inside_unsafe(): u32 {
+    let value: u32 = 7 as u32
+    let raw: *u32 = &value
+    unsafe {
+        raw[0] = 9 as u32
+        return raw[0]
+    }
+}
+
+let safety_runtime_sum: int = checked_dynamic_index() + checked_slice_index() as int + raw_pointer_inside_unsafe() as int
+if safety_runtime_sum != 37 {
+    throw 1
+}

@@ -1,11 +1,98 @@
 module noqeri.std.math.big
 
-export function big_digit_valid(value:u8):bool{return value<=9 as u8}
-export function big_add_digit(a:u8,b:u8,carry:u8):u8{return (a+b+carry)%10 as u8}
-export function big_add_carry(a:u8,b:u8,carry:u8):u8{return (a+b+carry)/10 as u8}
-export function big_sub_digit(a:u8,b:u8,borrow:u8):u8{let av:int=a as int let bv:int=(b+borrow) as int if av<bv{return (av+10-bv) as u8}return (av-bv) as u8}
-export function big_sub_borrow(a:u8,b:u8,borrow:u8):u8{if (a as int)<((b+borrow) as int){return 1 as u8}return 0 as u8}
-export function big_mul_digit(a:u8,b:u8,carry:u8):u8{return ((a as u32)*(b as u32)+(carry as u32))%10 as u32 as u8}
-export function big_mul_carry(a:u8,b:u8,carry:u8):u8{return (((a as u32)*(b as u32)+(carry as u32))/10 as u32) as u8}
-export function big_compare_length(a:usize,b:usize):int{if a<b{return -1}if a>b{return 1}return 0}
-export function big_digits_valid(value:[]u8):bool{let i:usize=0 as usize while i<len(value){if !big_digit_valid(value[i]){return false}i=i+1}return true}
+// Big integers use little-endian base-10 digit slices: index 0 is the least
+// significant decimal digit. Operations write into caller-owned buffers and
+// return the significant output length, or 0 when the destination is too small.
+export function big_digit_valid(value: u8): bool { return value <= 9 as u8 }
+export function big_digits_valid(value: []u8): bool { let i: usize = 0 as usize while i < len(value) { if !big_digit_valid(value[i]) { return false } i = i + 1 as usize } return true }
+export function big_add_digit(a: u8, b: u8, carry: u8): u8 { return (a + b + carry) % 10 as u8 }
+export function big_add_carry(a: u8, b: u8, carry: u8): u8 { return (a + b + carry) / 10 as u8 }
+export function big_sub_digit(a: u8, b: u8, borrow: u8): u8 { let av: int = a as int let bv: int = (b + borrow) as int if av < bv { return (av + 10 - bv) as u8 } return (av - bv) as u8 }
+export function big_sub_borrow(a: u8, b: u8, borrow: u8): u8 { if (a as int) < ((b + borrow) as int) { return 1 as u8 } return 0 as u8 }
+export function big_mul_digit(a: u8, b: u8, carry: u8): u8 { return ((a as u32) * (b as u32) + (carry as u32)) % 10 as u32 as u8 }
+export function big_mul_carry(a: u8, b: u8, carry: u8): u8 { return (((a as u32) * (b as u32) + (carry as u32)) / 10 as u32) as u8 }
+export function big_compare_length(a: usize, b: usize): int { if a < b { return -1 } if a > b { return 1 } return 0 }
+
+export function big_significant_length(value: []u8): usize {
+    let length: usize = len(value)
+    while length > 1 as usize && value[length - 1 as usize] == 0 as u8 { length = length - 1 as usize }
+    return length
+}
+
+export function big_is_zero(value: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(value) { if value[i] != 0 as u8 { return false } i = i + 1 as usize }
+    return true
+}
+
+export function big_compare(left: []u8, right: []u8): int {
+    let leftLength: usize = big_significant_length(left)
+    let rightLength: usize = big_significant_length(right)
+    if leftLength < rightLength { return -1 }
+    if leftLength > rightLength { return 1 }
+    let index: usize = leftLength
+    while index > 0 as usize {
+        index = index - 1 as usize
+        if left[index] < right[index] { return -1 }
+        if left[index] > right[index] { return 1 }
+    }
+    return 0
+}
+
+export function big_add_into(destination: []u8, left: []u8, right: []u8): usize {
+    let needed: usize = len(left)
+    if len(right) > needed { needed = len(right) }
+    if len(destination) < needed + 1 as usize { return 0 as usize }
+    let carry: u8 = 0 as u8
+    let index: usize = 0 as usize
+    while index < needed {
+        let a: u8 = 0 as u8
+        let b: u8 = 0 as u8
+        if index < len(left) { a = left[index] }
+        if index < len(right) { b = right[index] }
+        destination[index] = big_add_digit(a, b, carry)
+        carry = big_add_carry(a, b, carry)
+        index = index + 1 as usize
+    }
+    if carry != 0 as u8 { destination[needed] = carry return needed + 1 as usize }
+    if needed == 0 as usize { destination[0 as usize] = 0 as u8 return 1 as usize }
+    return needed
+}
+
+export function big_sub_into(destination: []u8, left: []u8, right: []u8): usize {
+    if big_compare(left, right) < 0 { return 0 as usize }
+    if len(destination) < len(left) { return 0 as usize }
+    let borrow: u8 = 0 as u8
+    let index: usize = 0 as usize
+    while index < len(left) {
+        let b: u8 = 0 as u8
+        if index < len(right) { b = right[index] }
+        destination[index] = big_sub_digit(left[index], b, borrow)
+        borrow = big_sub_borrow(left[index], b, borrow)
+        index = index + 1 as usize
+    }
+    return big_significant_length(slice(&destination[0 as usize], len(left)))
+}
+
+export function big_mul_small_into(destination: []u8, value: []u8, multiplier: u8): usize {
+    if multiplier > 9 as u8 || !big_digits_valid(value) { return 0 as usize }
+    if len(destination) < len(value) + 1 as usize { return 0 as usize }
+    let carry: u32 = 0 as u32
+    let index: usize = 0 as usize
+    while index < len(value) {
+        let product: u32 = (value[index] as u32) * (multiplier as u32) + carry
+        destination[index] = (product % 10 as u32) as u8
+        carry = product / 10 as u32
+        index = index + 1 as usize
+    }
+    if carry > 0 as u32 { destination[len(value)] = carry as u8 return len(value) + 1 as usize }
+    if len(value) == 0 as usize { destination[0 as usize] = 0 as u8 return 1 as usize }
+    return big_significant_length(slice(&destination[0 as usize], len(value)))
+}
+
+export function big_copy(destination: []u8, source: []u8): usize {
+    if len(destination) < len(source) { return 0 as usize }
+    let index: usize = 0 as usize
+    while index < len(source) { destination[index] = source[index] index = index + 1 as usize }
+    return big_significant_length(slice(&destination[0 as usize], len(source)))
+}

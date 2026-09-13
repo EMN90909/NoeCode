@@ -29,10 +29,24 @@ Unsafe blocks do not disable type checking, bounds checking for arrays/slices, o
 
 Noqeri's concurrency contract is data-race-free by default:
 
-- task/channel/mutex/RW-lock operations establish synchronization edges;
-- sequentially-consistent atomics establish a total order for the participating atomic operations;
-- cancellation is cooperative and must be observed at cancellation points;
+- task spawn establishes a parent-to-child synchronization edge for work sequenced before spawn;
+- successful task join establishes a child-to-parent edge for work after join;
+- successful channel send/receive, mutex/RW-lock operations and atomic synchronization establish synchronization edges;
+- sequentially-consistent atomics establish a total order for participating atomic operations;
+- cancellation is cooperative and long-running tasks can poll `task_cancelled_current()`;
 - structured task scopes must not return while child tasks remain unjoined unless they were explicitly detached;
 - unsynchronized conflicting memory accesses from different threads are a data race and outside the safe-language contract.
 
-Race detection is a planned tool mode rather than a silent runtime behavior. The intended command is `noqeri test --race` once instrumentation is available.
+The reference runtime backs tasks with C++17 worker threads, channels with bounded queues/condition variables, mutexes with timed mutexes, and RW locks with shared timed locks. This is deliberately a runtime implementation detail; ordinary Noqeri code uses the std APIs rather than thread primitives.
+
+## Runtime checking
+
+The canonical bootstrap tool exposes:
+
+```text
+noqeri run app.nqr --check-memory
+noqeri run app.nqr --overflow
+noqeri test tests --race
+```
+
+`--race` enables the first-generation thread-aware memory conflict detector. Raw non-atomic accesses are tracked by address and thread, while spawn/join, channels, locks and atomics create synchronization boundaries. It is useful now and has direct multi-threaded regression coverage; higher-precision vector-clock analysis and larger stress campaigns remain hardening work rather than syntax requirements.

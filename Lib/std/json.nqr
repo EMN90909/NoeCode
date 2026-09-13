@@ -1,5 +1,63 @@
 module noqeri.std.json
 
-export function json_is_whitespace(c:u8):bool{return c==32 as u8||c==9 as u8||c==10 as u8||c==13 as u8}
-export function json_is_digit(c:u8):bool{return c>=48 as u8&&c<=57 as u8}
-export function json_is_value_start(c:u8):bool{return c==34 as u8||c==123 as u8||c==91 as u8||c==116 as u8||c==102 as u8||c==110 as u8||c==45 as u8||json_is_digit(c)}
+extern function jsonHostValidate(text: string): bool
+extern function jsonHostEncodeString(value: string): string
+extern function jsonHostDecodeString(text: string): string
+extern function jsonHostStreamOpen(text: string): usize
+extern function jsonHostStreamNext(stream: usize): int
+extern function jsonHostStreamText(stream: usize): string
+extern function jsonHostStreamClose(stream: usize): bool
+
+export function json_token_end(): int { return 0 }
+export function json_token_object_start(): int { return 1 }
+export function json_token_object_end(): int { return 2 }
+export function json_token_array_start(): int { return 3 }
+export function json_token_array_end(): int { return 4 }
+export function json_token_key(): int { return 5 }
+export function json_token_string(): int { return 6 }
+export function json_token_number(): int { return 7 }
+export function json_token_true(): int { return 8 }
+export function json_token_false(): int { return 9 }
+export function json_token_null(): int { return 10 }
+export function json_token_error(): int { return 11 }
+
+export function json_is_whitespace(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
+export function json_is_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
+export function json_is_value_start(c: u8): bool { return c == 34 as u8 || c == 123 as u8 || c == 91 as u8 || c == 116 as u8 || c == 102 as u8 || c == 110 as u8 || c == 45 as u8 || json_is_digit(c) }
+export function json_token_valid(token: int): bool { return token >= json_token_end() && token <= json_token_error() }
+export function json_stream_valid(stream: usize): bool { return stream != 0 as usize }
+
+export function validate(text: string): bool {
+    unsafe { return jsonHostValidate(text) }
+}
+
+export function encode_string(value: string): string {
+    unsafe { return jsonHostEncodeString(value) }
+}
+
+export function decode_string(text: string): string {
+    unsafe { return jsonHostDecodeString(text) }
+}
+
+export function stream_open(text: string): usize {
+    unsafe { return jsonHostStreamOpen(text) }
+}
+
+export function stream_next(stream: usize): int {
+    if !json_stream_valid(stream) { return json_token_error() }
+    unsafe { return jsonHostStreamNext(stream) }
+}
+
+export function stream_text(stream: usize): string {
+    if !json_stream_valid(stream) { return "" }
+    unsafe { return jsonHostStreamText(stream) }
+}
+
+export function stream_close(stream: usize): bool {
+    if !json_stream_valid(stream) { return false }
+    unsafe { return jsonHostStreamClose(stream) }
+}
+
+export function json_validate(text: string): bool { return validate(text) }
+export function json_encode_string(value: string): string { return encode_string(value) }
+export function json_decode_string(text: string): string { return decode_string(text) }

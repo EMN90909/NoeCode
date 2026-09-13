@@ -28,9 +28,9 @@ export function nqAbiAapcs64(): int { return 3 }
 export function nqAbiAppleArm64(): int { return 4 }
 
 export function nqTargetValid(target: int): bool { return target >= nqTargetWindowsX64() && target <= nqTargetMacArm64() }
-export function nqTargetObjectFormat(target: int): int { if target <= nqTargetWindowsArm64() { return nqObjectCoff() } if target <= nqTargetLinuxArm64() { return nqObjectElf() } return nqObjectMachO() }
-export function nqTargetArchitecture(target: int): int { if target == nqTargetWindowsArm64() || target == nqTargetLinuxArm64() || target == nqTargetMacArm64() { return nqArchArm64() } return nqArchX64() }
-export function nqTargetAbi(target: int): int { if target == nqTargetWindowsX64() || target == nqTargetWindowsArm64() { return nqAbiWin64() } if target == nqTargetLinuxX64() { return nqAbiSysV64() } if target == nqTargetLinuxArm64() { return nqAbiAapcs64() } if target == nqTargetMacArm64() { return nqAbiAppleArm64() } return nqAbiSysV64() }
+export function nqTargetObjectFormat(target: int): int { if !nqTargetValid(target) { return 0 } if target <= nqTargetWindowsArm64() { return nqObjectCoff() } if target <= nqTargetLinuxArm64() { return nqObjectElf() } return nqObjectMachO() }
+export function nqTargetArchitecture(target: int): int { if !nqTargetValid(target) { return 0 } if target == nqTargetWindowsArm64() || target == nqTargetLinuxArm64() || target == nqTargetMacArm64() { return nqArchArm64() } return nqArchX64() }
+export function nqTargetAbi(target: int): int { if !nqTargetValid(target) { return 0 } if target == nqTargetWindowsX64() || target == nqTargetWindowsArm64() { return nqAbiWin64() } if target == nqTargetLinuxX64() { return nqAbiSysV64() } if target == nqTargetLinuxArm64() { return nqAbiAapcs64() } if target == nqTargetMacArm64() { return nqAbiAppleArm64() } return nqAbiSysV64() }
 export function nqTargetPointerBytes(target: int): usize { if nqTargetValid(target) { return 8 as usize } return 0 as usize }
 export function nqTargetStackAlignment(target: int): usize { if nqTargetValid(target) { return 16 as usize } return 0 as usize }
 export function nqTargetLittleEndian(target: int): bool { return nqTargetValid(target) }
@@ -39,8 +39,6 @@ export function nqTargetSupportsStatic(target: int): bool { return nqTargetValid
 export function nqTargetSupportsDebug(target: int): bool { return nqTargetValid(target) }
 export function nqTargetPageAlignment(target: int): usize { if target == nqTargetMacArm64() { return 16384 as usize } if nqTargetValid(target) { return 4096 as usize } return 0 as usize }
 
-// Preferred high-level target API. Backend users obtain one coherent descriptor
-// rather than reproducing target/ABI/object-format conditionals themselves.
 export function nqTargetDescribe(target: int, out: *NqTargetInfo): bool {
     if out == null || !nqTargetValid(target) { return false }
     out.target = target

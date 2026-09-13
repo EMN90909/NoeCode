@@ -15,8 +15,8 @@ set(NOQERI_FRONTEND_SOURCES
  Compiler/core.cpp Compiler/modules.cpp Compiler/workspace.cpp Compiler/type_checker.cpp
  Compiler/lifetime.cpp Compiler/safety.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp Compiler/register_alloc.cpp Compiler/optimizer.cpp
  Compiler/bootstrap/lexer_host.cpp Compiler/bootstrap/parser_host.cpp Compiler/bootstrap/abi_runtime_host.cpp Compiler/bootstrap/interpreter_host.cpp
- Compiler/bootstrap/runtime_checks_host.cpp Compiler/bootstrap/task_scheduler_host.cpp Compiler/bootstrap/profile_host.cpp Compiler/bootstrap/profile_runner_host.cpp
- Compiler/bootstrap/noqeridb_host.cpp)
+ Compiler/bootstrap/runtime_checks_host.cpp Compiler/bootstrap/task_scheduler_host.cpp Compiler/bootstrap/sync_runtime_host.cpp
+ Compiler/bootstrap/profile_host.cpp Compiler/bootstrap/profile_runner_host.cpp Compiler/bootstrap/noqeridb_host.cpp)
 set(NOQERI_SOURCES ${NOQERI_FRONTEND_SOURCES}
  Compiler/native_backend.cpp Compiler/web_backend.cpp Compiler/linker.cpp Compiler/object_loader.cpp
  Compiler/bootstrap/cli_host.cpp Compiler/bootstrap/formatter_host.cpp Compiler/bootstrap/package_host.cpp Compiler/bootstrap/lsp_host.cpp
@@ -73,6 +73,13 @@ if(BUILD_TESTING)
  target_link_libraries(noqeri-task-scheduler-test PRIVATE Threads::Threads)
  noqeri_apply_warnings(noqeri-task-scheduler-test)
  add_test(NAME noqeri-task-scheduler COMMAND noqeri-task-scheduler-test)
+
+ add_executable(noqeri-sync-runtime-test tests/sync_runtime_host_test.cpp Compiler/bootstrap/sync_runtime_host.cpp Compiler/bootstrap/runtime_checks_host.cpp Compiler/bootstrap/profile_host.cpp)
+ target_include_directories(noqeri-sync-runtime-test PRIVATE Include/noqeri Compiler/bootstrap)
+ target_compile_features(noqeri-sync-runtime-test PRIVATE cxx_std_17)
+ target_link_libraries(noqeri-sync-runtime-test PRIVATE Threads::Threads)
+ noqeri_apply_warnings(noqeri-sync-runtime-test)
+ add_test(NAME noqeri-sync-runtime COMMAND noqeri-sync-runtime-test)
 
  add_executable(noqeri-build-tags-test tests/build_tags_host_test.cpp)
  target_include_directories(noqeri-build-tags-test PRIVATE Include/noqeri Compiler/bootstrap)

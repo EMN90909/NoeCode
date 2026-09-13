@@ -75,10 +75,16 @@ export function nqParserScanType(source: []u8, start: usize): usize {
     if source[index] == 42 as u8 {
         index = nqCompilerSkipTrivia(source, index + 1 as usize)
         if nqParserKeywordAt(source, index, slice([118 as u8,111 as u8,108 as u8,97 as u8,116 as u8,105 as u8,108 as u8,101 as u8])) { index = nqCompilerSkipTrivia(source, index + 8 as usize) }
-        return nqParserScanType(source, index)
+        let pointeeEnd: usize = nqParserScanType(source, index)
+        if pointeeEnd <= index { return start }
+        return pointeeEnd
     }
     if source[index] == 91 as u8 {
-        if index + 1 as usize < len(source) && source[index + 1 as usize] == 93 as u8 { return nqParserScanType(source, index + 2 as usize) }
+        if index + 1 as usize < len(source) && source[index + 1 as usize] == 93 as u8 {
+            let elementEnd: usize = nqParserScanType(source, index + 2 as usize)
+            if elementEnd <= index + 2 as usize { return start }
+            return elementEnd
+        }
         let elementEnd: usize = nqParserScanType(source, index + 1 as usize)
         if elementEnd <= index + 1 as usize { return start }
         let cursor: usize = nqCompilerSkipTrivia(source, elementEnd)

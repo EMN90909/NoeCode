@@ -1,0 +1,11 @@
+import "../../../Lib/std/fs.nqr"
+
+function main(): int {
+    let write_status: isize = fs_write_text("corpus-input.txt", "Noqeri\n")
+    if write_status < 0 as isize { return 1 }
+    let text = fs_read_text("corpus-input.txt")
+    let append_status: isize = fs_append_text("corpus-input.txt", text)
+    if append_status < 0 as isize { return 1 }
+    print(fs_read_text("corpus-input.txt"))
+    return 0
+}

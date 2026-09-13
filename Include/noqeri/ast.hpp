@@ -52,7 +52,7 @@ struct ThrowStmt final : Stmt { ExprPtr value; };
 struct Parameter { std::string name; std::optional<std::string> annotation; Span span; };
 struct FunctionStmt final : Stmt { std::string name; std::vector<std::string> genericParams; std::unordered_map<std::string,std::vector<std::string>> genericConstraints; std::vector<Parameter> params; std::optional<std::string> returnType; std::shared_ptr<BlockStmt> body; bool isExtern=false; bool isExport=false; };
 struct RecordField { std::string name,typeName; Span span; std::size_t offset=0,size=0; };
-struct RecordStmt final : Stmt { std::string name; std::vector<RecordField> fields; std::size_t size=0,alignment=1; };
+struct RecordStmt final : Stmt { std::string name; std::vector<std::string> genericParams; std::vector<RecordField> fields; std::size_t size=0,alignment=1; };
 struct ImportStmt final : Stmt { std::string path; };
 struct ModuleStmt final : Stmt { std::string name; };
 struct Program { std::vector<StmtPtr> statements; };

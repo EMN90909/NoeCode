@@ -1,0 +1,55 @@
+module noqeri.std.math.advanced
+
+import "../math.nqr"
+
+export function nqAtanSeries(value: float): float {
+    let x2: float = value * value
+    let term: float = value
+    let sum: float = value
+    let denominator: int = 3
+    let subtract: bool = true
+    let iteration: int = 0
+    while iteration < 18 {
+        term = term * x2
+        if subtract { sum = sum - term / denominator as float } else { sum = sum + term / denominator as float }
+        subtract = !subtract
+        denominator = denominator + 2
+        iteration = iteration + 1
+    }
+    return sum
+}
+
+export function nqAtanFloat(value: float): float {
+    if value == 0.0 { return 0.0 }
+    let sign: float = 1.0
+    let x: float = value
+    if x < 0.0 { sign = -1.0 x = -x }
+    if x > 1.0 { return sign * (nqPi() / 2.0 - nqAtanSeries(1.0 / x)) }
+    if x > 0.5 {
+        let reduced: float = (x - 1.0) / (x + 1.0)
+        return sign * (nqPi() / 4.0 + nqAtanSeries(reduced))
+    }
+    return sign * nqAtanSeries(x)
+}
+
+export function nqAtan2Float(y: float, x: float): float {
+    if x > 0.0 { return nqAtanFloat(y / x) }
+    if x < 0.0 && y >= 0.0 { return nqAtanFloat(y / x) + nqPi() }
+    if x < 0.0 && y < 0.0 { return nqAtanFloat(y / x) - nqPi() }
+    if x == 0.0 && y > 0.0 { return nqPi() / 2.0 }
+    if x == 0.0 && y < 0.0 { return -nqPi() / 2.0 }
+    return 0.0
+}
+
+export function nqAsinFloat(value: float): float {
+    let x: float = nqClampFloat(value, -1.0, 1.0)
+    if x == 1.0 { return nqPi() / 2.0 }
+    if x == -1.0 { return -nqPi() / 2.0 }
+    return nqAtanFloat(x / nqSqrtFloat(1.0 - x * x))
+}
+
+export function nqAcosFloat(value: float): float { return nqPi() / 2.0 - nqAsinFloat(value) }
+
+export function nqSinhFloat(value: float): float { return (nqExpFloat(value) - nqExpFloat(-value)) / 2.0 }
+export function nqCoshFloat(value: float): float { return (nqExpFloat(value) + nqExpFloat(-value)) / 2.0 }
+export function nqTanhFloat(value: float): float { let denominator: float = nqCoshFloat(value) if denominator == 0.0 { return 0.0 } return nqSinhFloat(value) / denominator }

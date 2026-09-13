@@ -73,7 +73,11 @@ Type TypeChecker::resolveType(const std::string& name,Span span){
         if(semi!=std::string::npos){Type t;t.kind=TypeKind::Array;t.element=std::make_shared<Type>(resolveType(name.substr(1,semi-1),span));try{t.count=static_cast<std::size_t>(std::stoull(name.substr(semi+1,name.size()-semi-2),nullptr,0));}catch(...){t.count=0;}if(t.count==0)diagnostics_.error("NOE-T3030",span,"fixed array length must be greater than zero");return t;}
     }
     Type t=typeFromName(name);
-    if(t.kind==TypeKind::Record&&!records_.count(t.recordName))diagnostics_.error("NOE-T3000",span,"unknown type '"+name+"'");
+    if(t.kind==TypeKind::Record){
+        auto record=records_.find(t.recordName);
+        if(record==records_.end())diagnostics_.error("NOE-T3000",span,"unknown type '"+name+"'");
+        else{t.recordSize=record->second.size;t.recordAlignment=record->second.alignment;}
+    }
     return t;
 }
 

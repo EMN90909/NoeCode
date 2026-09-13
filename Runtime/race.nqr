@@ -99,7 +99,7 @@ export function nqRaceConflicts(previous: *NqRaceSlot, address: u64, size: usize
     if previous == null || !previous.occupied { return false }
     if !nqRaceRangesOverlap(previous.address, previous.size, address, size) { return false }
     if previous.task == task { return false }
-    if previous.atomicAccess || atomicAccess { return false }
+    if previous.atomicAccess && atomicAccess { return false }
     if !previous.write && !write { return false }
     if syncEpoch > previous.syncEpoch { return false }
     return true

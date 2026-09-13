@@ -18,6 +18,8 @@ reject() {
 "$NQ" check tests/stdlib_catalog.nqr >/dev/null
 "$NQ" check tests/stdlib_maturity.nqr >/dev/null
 "$NQ" run tests/stdlib_maturity.nqr >/dev/null
+"$NQ" check tests/time_modules.nqr >/dev/null
+"$NQ" run tests/time_modules.nqr >/dev/null
 
 cat > build/invalid_pointer_escape.nqr <<'EOF'
 function bad_pointer(): *u32 {

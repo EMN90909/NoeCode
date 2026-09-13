@@ -1,6 +1,369 @@
 module noqeri.std.deque
 
+// A fixed-capacity, caller-owned ring deque. No hidden allocation is performed.
+// head is the physical slot containing logical index 0.
+record Deque<T> {
+    data: *T
+    length: usize
+    capacity: usize
+    head: usize
+}
+
+export function deque_init<T>(deque: *Deque<T>, data: *T, capacity: usize): bool {
+    if deque == null { return false }
+    if capacity > 0 as usize && data == null { return false }
+    deque.data = data
+    deque.length = 0 as usize
+    deque.capacity = capacity
+    deque.head = 0 as usize
+    return true
+}
+
+export function deque_invariant<T>(deque: *Deque<T>): bool {
+    if deque == null { return false }
+    if deque.length > deque.capacity { return false }
+    if deque.capacity > 0 as usize && deque.data == null { return false }
+    if deque.capacity == 0 as usize { return deque.head == 0 as usize }
+    return deque.head < deque.capacity
+}
+
+export function deque_length<T>(deque: *Deque<T>): usize {
+    if deque == null { return 0 as usize }
+    return deque.length
+}
+
+export function deque_capacity<T>(deque: *Deque<T>): usize {
+    if deque == null { return 0 as usize }
+    return deque.capacity
+}
+
+export function deque_remaining<T>(deque: *Deque<T>): usize {
+    if deque == null || deque.length >= deque.capacity { return 0 as usize }
+    return deque.capacity - deque.length
+}
+
+export function deque_empty<T>(deque: *Deque<T>): bool {
+    return deque == null || deque.length == 0 as usize
+}
+
+export function deque_full<T>(deque: *Deque<T>): bool {
+    return deque != null && deque.length >= deque.capacity
+}
+
+export function deque_index_valid<T>(deque: *Deque<T>, logical_index: usize): bool {
+    return deque != null && logical_index < deque.length
+}
+
+function deque_physical_index<T>(deque: *Deque<T>, logical_index: usize): usize {
+    if deque.capacity == 0 as usize { return 0 as usize }
+    return (deque.head + logical_index) % deque.capacity
+}
+
+function deque_previous_slot<T>(deque: *Deque<T>, slot: usize): usize {
+    if deque.capacity == 0 as usize { return 0 as usize }
+    if slot == 0 as usize { return deque.capacity - 1 as usize }
+    return slot - 1 as usize
+}
+
+export function deque_ref<T>(deque: *Deque<T>, logical_index: usize): *T {
+    if !deque_index_valid(deque, logical_index) || deque.data == null { return null as *T }
+    return &deque.data[deque_physical_index(deque, logical_index)]
+}
+
+export function deque_get_or<T: Copy>(deque: *Deque<T>, logical_index: usize, fallback: T): T {
+    let value: *T = deque_ref(deque, logical_index)
+    if value == null { return fallback }
+    return *value
+}
+
+export function deque_set<T: Copy>(deque: *Deque<T>, logical_index: usize, value: T): bool {
+    let target: *T = deque_ref(deque, logical_index)
+    if target == null { return false }
+    *target = value
+    return true
+}
+
+export function deque_front_ref<T>(deque: *Deque<T>): *T {
+    return deque_ref(deque, 0 as usize)
+}
+
+export function deque_back_ref<T>(deque: *Deque<T>): *T {
+    if deque == null || deque.length == 0 as usize { return null as *T }
+    return deque_ref(deque, deque.length - 1 as usize)
+}
+
+export function deque_front_or<T: Copy>(deque: *Deque<T>, fallback: T): T {
+    return deque_get_or(deque, 0 as usize, fallback)
+}
+
+export function deque_back_or<T: Copy>(deque: *Deque<T>, fallback: T): T {
+    if deque == null || deque.length == 0 as usize { return fallback }
+    return deque_get_or(deque, deque.length - 1 as usize, fallback)
+}
+
+export function deque_push_back<T: Copy>(deque: *Deque<T>, value: T): bool {
+    if !deque_invariant(deque) || deque_full(deque) || deque.data == null { return false }
+    let slot: usize = deque_physical_index(deque, deque.length)
+    deque.data[slot] = value
+    deque.length = deque.length + 1 as usize
+    return true
+}
+
+export function deque_push_front<T: Copy>(deque: *Deque<T>, value: T): bool {
+    if !deque_invariant(deque) || deque_full(deque) || deque.data == null { return false }
+    if deque.capacity == 0 as usize { return false }
+    deque.head = deque_previous_slot(deque, deque.head)
+    deque.data[deque.head] = value
+    deque.length = deque.length + 1 as usize
+    return true
+}
+
+export function deque_pop_front_or<T: Copy>(deque: *Deque<T>, fallback: T): T {
+    if !deque_invariant(deque) || deque.length == 0 as usize || deque.data == null { return fallback }
+    let value: T = deque.data[deque.head]
+    deque.length = deque.length - 1 as usize
+    if deque.length == 0 as usize {
+        deque.head = 0 as usize
+    } else {
+        deque.head = (deque.head + 1 as usize) % deque.capacity
+    }
+    return value
+}
+
+export function deque_pop_back_or<T: Copy>(deque: *Deque<T>, fallback: T): T {
+    if !deque_invariant(deque) || deque.length == 0 as usize || deque.data == null { return fallback }
+    let slot: usize = deque_physical_index(deque, deque.length - 1 as usize)
+    let value: T = deque.data[slot]
+    deque.length = deque.length - 1 as usize
+    if deque.length == 0 as usize { deque.head = 0 as usize }
+    return value
+}
+
+export function deque_clear<T>(deque: *Deque<T>): bool {
+    if deque == null { return false }
+    deque.length = 0 as usize
+    deque.head = 0 as usize
+    return true
+}
+
+export function deque_contains<T: Eq + Copy>(deque: *Deque<T>, value: T): bool {
+    if !deque_invariant(deque) { return false }
+    let i: usize = 0 as usize
+    while i < deque.length {
+        let pointer: *T = deque_ref(deque, i)
+        if pointer != null && *pointer == value { return true }
+        i = i + 1 as usize
+    }
+    return false
+}
+
+export function deque_index_of<T: Eq + Copy>(deque: *Deque<T>, value: T): isize {
+    if !deque_invariant(deque) { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < deque.length {
+        let pointer: *T = deque_ref(deque, i)
+        if pointer != null && *pointer == value { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function deque_last_index_of<T: Eq + Copy>(deque: *Deque<T>, value: T): isize {
+    if !deque_invariant(deque) { return -1 as isize }
+    let i: usize = deque.length
+    while i > 0 as usize {
+        i = i - 1 as usize
+        let pointer: *T = deque_ref(deque, i)
+        if pointer != null && *pointer == value { return i as isize }
+    }
+    return -1 as isize
+}
+
+export function deque_count<T: Eq + Copy>(deque: *Deque<T>, value: T): usize {
+    if !deque_invariant(deque) { return 0 as usize }
+    let count: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < deque.length {
+        let pointer: *T = deque_ref(deque, i)
+        if pointer != null && *pointer == value { count = count + 1 as usize }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function deque_copy_to<T: Copy>(deque: *Deque<T>, out: []T): usize {
+    if !deque_invariant(deque) || len(out) < deque.length { return 0 as usize }
+    let i: usize = 0 as usize
+    while i < deque.length {
+        let pointer: *T = deque_ref(deque, i)
+        if pointer == null { return 0 as usize }
+        out[i] = *pointer
+        i = i + 1 as usize
+    }
+    return deque.length
+}
+
+export function deque_copy_reverse_to<T: Copy>(deque: *Deque<T>, out: []T): usize {
+    if !deque_invariant(deque) || len(out) < deque.length { return 0 as usize }
+    let i: usize = 0 as usize
+    while i < deque.length {
+        let pointer: *T = deque_ref(deque, deque.length - 1 as usize - i)
+        if pointer == null { return 0 as usize }
+        out[i] = *pointer
+        i = i + 1 as usize
+    }
+    return deque.length
+}
+
+export function deque_rotate_left<T: Copy>(deque: *Deque<T>, count: usize): bool {
+    if !deque_invariant(deque) { return false }
+    if deque.length <= 1 as usize { return true }
+    let turns: usize = count % deque.length
+    let i: usize = 0 as usize
+    while i < turns {
+        let first: T = deque.data[deque.head]
+        let logical_last: usize = deque.length - 1 as usize
+        deque.head = (deque.head + 1 as usize) % deque.capacity
+        let slot: usize = deque_physical_index(deque, logical_last)
+        deque.data[slot] = first
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function deque_rotate_right<T: Copy>(deque: *Deque<T>, count: usize): bool {
+    if !deque_invariant(deque) { return false }
+    if deque.length <= 1 as usize { return true }
+    let turns: usize = count % deque.length
+    let i: usize = 0 as usize
+    while i < turns {
+        let last_slot: usize = deque_physical_index(deque, deque.length - 1 as usize)
+        let last: T = deque.data[last_slot]
+        deque.head = deque_previous_slot(deque, deque.head)
+        deque.data[deque.head] = last
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function deque_swap<T: Copy>(deque: *Deque<T>, left: usize, right: usize): bool {
+    if !deque_index_valid(deque, left) || !deque_index_valid(deque, right) { return false }
+    if left == right { return true }
+    let left_pointer: *T = deque_ref(deque, left)
+    let right_pointer: *T = deque_ref(deque, right)
+    if left_pointer == null || right_pointer == null { return false }
+    let temporary: T = *left_pointer
+    *left_pointer = *right_pointer
+    *right_pointer = temporary
+    return true
+}
+
+export function deque_reverse<T: Copy>(deque: *Deque<T>): bool {
+    if !deque_invariant(deque) { return false }
+    let i: usize = 0 as usize
+    while i < deque.length / 2 as usize {
+        if !deque_swap(deque, i, deque.length - 1 as usize - i) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function deque_remove_at<T: Copy>(deque: *Deque<T>, index: usize): bool {
+    if !deque_index_valid(deque, index) { return false }
+    if index < deque.length / 2 as usize {
+        let i: usize = index
+        while i > 0 as usize {
+            let previous: *T = deque_ref(deque, i - 1 as usize)
+            let current: *T = deque_ref(deque, i)
+            if previous == null || current == null { return false }
+            *current = *previous
+            i = i - 1 as usize
+        }
+        deque.head = (deque.head + 1 as usize) % deque.capacity
+    } else {
+        let i: usize = index
+        while i + 1 as usize < deque.length {
+            let next: *T = deque_ref(deque, i + 1 as usize)
+            let current: *T = deque_ref(deque, i)
+            if next == null || current == null { return false }
+            *current = *next
+            i = i + 1 as usize
+        }
+    }
+    deque.length = deque.length - 1 as usize
+    if deque.length == 0 as usize { deque.head = 0 as usize }
+    return true
+}
+
+export function deque_remove_first<T: Eq + Copy>(deque: *Deque<T>, value: T): bool {
+    let index: isize = deque_index_of(deque, value)
+    if index < 0 as isize { return false }
+    return deque_remove_at(deque, index as usize)
+}
+
+export function deque_remove_last<T: Eq + Copy>(deque: *Deque<T>, value: T): bool {
+    let index: isize = deque_last_index_of(deque, value)
+    if index < 0 as isize { return false }
+    return deque_remove_at(deque, index as usize)
+}
+
+export function deque_drop_front<T>(deque: *Deque<T>, count: usize): bool {
+    if !deque_invariant(deque) || count > deque.length { return false }
+    if count == deque.length { return deque_clear(deque) }
+    if deque.capacity == 0 as usize { return count == 0 as usize }
+    deque.head = (deque.head + count) % deque.capacity
+    deque.length = deque.length - count
+    return true
+}
+
+export function deque_drop_back<T>(deque: *Deque<T>, count: usize): bool {
+    if !deque_invariant(deque) || count > deque.length { return false }
+    deque.length = deque.length - count
+    if deque.length == 0 as usize { deque.head = 0 as usize }
+    return true
+}
+
+export function deque_truncate<T>(deque: *Deque<T>, new_length: usize): bool {
+    if !deque_invariant(deque) || new_length > deque.length { return false }
+    deque.length = new_length
+    if new_length == 0 as usize { deque.head = 0 as usize }
+    return true
+}
+
+export function deque_push_back_many<T: Copy>(deque: *Deque<T>, values: []T): usize {
+    if !deque_invariant(deque) { return 0 as usize }
+    let written: usize = 0 as usize
+    while written < len(values) && !deque_full(deque) {
+        if !deque_push_back(deque, values[written]) { return written }
+        written = written + 1 as usize
+    }
+    return written
+}
+
+export function deque_push_front_many<T: Copy>(deque: *Deque<T>, values: []T): usize {
+    if !deque_invariant(deque) { return 0 as usize }
+    let written: usize = 0 as usize
+    while written < len(values) && !deque_full(deque) {
+        if !deque_push_front(deque, values[written]) { return written }
+        written = written + 1 as usize
+    }
+    return written
+}
+
+export function deque_equal<T: Eq + Copy>(left: *Deque<T>, right: *Deque<T>): bool {
+    if !deque_invariant(left) || !deque_invariant(right) || left.length != right.length { return false }
+    let i: usize = 0 as usize
+    while i < left.length {
+        let a: *T = deque_ref(left, i)
+        let b: *T = deque_ref(right, i)
+        if a == null || b == null || *a != *b { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+// Compatibility helpers retained for programs that used the former placeholder.
 export function deque_len<T>(items: []T): usize { return len(items) }
 export function deque_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
-export function deque_first<T>(items: []T): T { return items[0] }
-export function deque_last<T>(items: []T): T { return items[len(items)-1] }
+export function deque_first<T: Copy>(items: []T): T { return items[0 as usize] }
+export function deque_last<T: Copy>(items: []T): T { return items[len(items)-1 as usize] }

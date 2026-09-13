@@ -1,5 +1,57 @@
 module noqeri.std.archive
 
-export function archive_tar_block_size():usize{return 512 as usize}
-export function archive_is_tar_aligned(n:usize):bool{return n%512 as usize==0 as usize}
-export function archive_zip_local_signature():u32{return 67324752 as u32}
+export function archive_tar_block_size(): usize { return 512 as usize }
+export function archive_is_tar_aligned(n: usize): bool { return n % 512 as usize == 0 as usize }
+export function archive_tar_padding(n: usize): usize { let rem: usize = n % 512 as usize if rem == 0 as usize { return 0 as usize } return 512 as usize - rem }
+export function archive_zip_local_signature(): u32 { return 67324752 as u32 }
+export function archive_zip_central_signature(): u32 { return 33639248 as u32 }
+export function archive_zip_end_signature(): u32 { return 101010256 as u32 }
+export function archive_zip_data_descriptor_signature(): u32 { return 134695760 as u32 }
+
+export function archive_read_u16_le(data: []u8, offset: usize, out: *u16): bool {
+    if offset + 2 as usize > len(data) { return false }
+    out[0 as usize] = data[offset] as u16 + ((data[offset + 1 as usize] as u16) * 256 as u16)
+    return true
+}
+
+export function archive_read_u32_le(data: []u8, offset: usize, out: *u32): bool {
+    if offset + 4 as usize > len(data) { return false }
+    out[0 as usize] = data[offset] as u32 + ((data[offset + 1 as usize] as u32) * 256 as u32) + ((data[offset + 2 as usize] as u32) * 65536 as u32) + ((data[offset + 3 as usize] as u32) * 16777216 as u32)
+    return true
+}
+
+export function archive_is_zip_local_header(data: []u8, offset: usize): bool { let sig: u32 = 0 as u32 if !archive_read_u32_le(data, offset, &sig) { return false } return sig == archive_zip_local_signature() }
+export function archive_is_zip_central_header(data: []u8, offset: usize): bool { let sig: u32 = 0 as u32 if !archive_read_u32_le(data, offset, &sig) { return false } return sig == archive_zip_central_signature() }
+
+export function archive_parse_octal(data: []u8, out: *u64): bool {
+    let value: u64 = 0 as u64
+    let seen: bool = false
+    let i: usize = 0 as usize
+    while i < len(data) {
+        let c: u8 = data[i]
+        if c == 0 as u8 || c == 32 as u8 { i = i + 1 as usize }
+        else {
+            if c < 48 as u8 || c > 55 as u8 { return false }
+            value = value * 8 as u64 + (c - 48 as u8) as u64
+            seen = true
+            i = i + 1 as usize
+        }
+    }
+    if !seen { return false }
+    out[0 as usize] = value
+    return true
+}
+
+export function archive_tar_checksum(header: []u8): u64 {
+    let sum: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < len(header) && i < 512 as usize {
+        if i >= 148 as usize && i < 156 as usize { sum = sum + 32 as u64 } else { sum = sum + header[i] as u64 }
+        i = i + 1 as usize
+    }
+    return sum
+}
+
+export function archive_tar_is_zero_block(header: []u8): bool { if len(header) < 512 as usize { return false } let i: usize = 0 as usize while i < 512 as usize { if header[i] != 0 as u8 { return false } i = i + 1 as usize } return true }
+export function archive_tar_type_is_regular(typeflag: u8): bool { return typeflag == 0 as u8 || typeflag == 48 as u8 }
+export function archive_tar_type_is_directory(typeflag: u8): bool { return typeflag == 53 as u8 }

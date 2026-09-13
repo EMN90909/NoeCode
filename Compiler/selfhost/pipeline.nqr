@@ -6,8 +6,49 @@ import "optimizer.nqr"
 import "targets.nqr"
 import "backend.nqr"
 import "linker.nqr"
+import "security.nqr"
+
+record NqCompilePlan {
+    target: int
+    optimization: int
+    linkKind: int
+    unsafeAllowed: bool
+    sourceBytes: usize
+}
+
 export function nqPipelineCheck(source: []u8): isize { return nqParserCheck(source) }
 export function nqPipelineTargetCheck(target: int): isize { if !nqBackendTargetReady(target) { return nqBackendUnsupportedTarget() } return 0 }
 export function nqPipelineCompileReady(source: []u8, target: int): bool { return nqPipelineCheck(source) == 0 && nqPipelineTargetCheck(target) == 0 }
 export function nqPipelineDefaultOptimization(debug: bool): int { if debug { return nqOptLevelNone() } return nqOptLevelSpeed() }
 export function nqPipelineDefaultLinkKind(): int { return nqLinkExecutable() }
+
+export function nqPipelinePlan(source: []u8, target: int, debug: bool, unsafeAllowed: bool, out: *NqCompilePlan): isize {
+    if out == null { return -500 }
+    let parseStatus: isize = nqPipelineCheck(source)
+    if parseStatus < 0 { return parseStatus }
+    let targetStatus: isize = nqPipelineTargetCheck(target)
+    if targetStatus < 0 { return targetStatus }
+    let policy: NqSecurityPolicy
+    nqSecurityProductionPolicy(&policy)
+    policy.allowUnsafe = unsafeAllowed
+    policy.allowInlineAsm = unsafeAllowed
+    if !nqSecuritySourceAllowed(&policy, len(source)) { return nqSecurityLimitExceeded() }
+    out.target = target
+    out.optimization = nqPipelineDefaultOptimization(debug)
+    out.linkKind = nqPipelineDefaultLinkKind()
+    out.unsafeAllowed = unsafeAllowed
+    out.sourceBytes = len(source)
+    return 0
+}
+
+export function nqPipelineOptimizeAndValidate(instructions: []NqNirInstruction, plan: *NqCompilePlan): isize {
+    if plan == null || !nqTargetValid(plan.target) { return nqBackendUnsupportedTarget() }
+    let policy: NqSecurityPolicy
+    nqSecurityProductionPolicy(&policy)
+    policy.allowUnsafe = plan.unsafeAllowed
+    policy.allowInlineAsm = plan.unsafeAllowed
+    let securityStatus: isize = nqSecurityProgramCheck(&policy, plan.target, instructions)
+    if securityStatus < 0 { return securityStatus }
+    nqOptimizerRun(instructions, plan.optimization)
+    return nqBackendProgramValid(plan.target, instructions, plan.unsafeAllowed)
+}

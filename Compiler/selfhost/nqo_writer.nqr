@@ -6,19 +6,10 @@ import "nir.nqr"
 // deliberately simple and little-endian so Stage 1 and Stage 2 can produce
 // byte-identical compiler modules without depending on a C++ object writer.
 //
-// Header (32 bytes):
-//   magic[4] = NQO2, version u32, sourceBytes u32, functions u32,
-//   instructions u32, functionRecordBytes u32, instructionRecordBytes u32,
-//   flags u32.
-// Function record (40 bytes): symbol u64, nameStart u32, nameEnd u32,
-//   firstInstruction u32, instructionCount u32, parameterCount u32, flags u32,
-//   reserved u64.
-// Instruction record (96 bytes): opcode i32, type i32, flags u32, reserved u32,
-//   dest i64, left i64, right i64, immediate i64, symbol u64, width u64,
-//   sourceStart u64, sourceEnd u64, floatSourceStart u32, floatSourceEnd u32,
-//   reserved u64.
-// Float constants are reconstructed from their source span. This deliberately
-// avoids host-specific floating bit-cast behavior in the bootstrap writer.
+// Header (32 bytes): magic/version/counts/record sizes/flags.
+// Function record (40 bytes): symbol/name span/instruction span/params/flags.
+// Instruction record (96 bytes): opcode/type/flags, SSA operands/immediate,
+// symbol/width/source span, exact IEEE-754 float bits and reserved bytes.
 
 export function nqNqoMagic0(): u8 { return 78 as u8 }
 export function nqNqoMagic1(): u8 { return 81 as u8 }
@@ -31,6 +22,8 @@ export function nqNqoInstructionBytes(): usize { return 96 as usize }
 export function nqNqoInvalid(): isize { return -800 as isize }
 export function nqNqoCapacity(): isize { return -801 as isize }
 export function nqNqoOverflow(): isize { return -802 as isize }
+
+function nqNqoUsizeMax(): usize { return 9223372036854775807 as usize }
 
 function nqNqoCanWrite(out: []u8, offset: usize, bytes: usize): bool {
     if offset > len(out) { return false }
@@ -59,7 +52,6 @@ function nqNqoWriteU64(out: []u8, offset: usize, value: u64): bool {
 }
 
 function nqNqoWriteI64(out: []u8, offset: usize, value: i64): bool {
-    // Two's-complement bytes without relying on signed->unsigned overflow casts.
     if !nqNqoCanWrite(out, offset, 8 as usize) { return false }
     let current: i64 = value
     let index: usize = 0 as usize
@@ -73,10 +65,14 @@ function nqNqoWriteI64(out: []u8, offset: usize, value: i64): bool {
     return true
 }
 
+function nqNqoFloatBits(value: *float): u64 {
+    if value == null { return 0 as u64 }
+    let bits: *u64 = value as *u64
+    return bits[0]
+}
+
 function nqNqoCheckedAdd(a: usize, b: usize, out: *usize): bool {
-    if out == null { return false }
-    let maximum: usize = -1 as isize as usize
-    if b > maximum - a { return false }
+    if out == null || b > nqNqoUsizeMax() - a { return false }
     out[0] = a + b
     return true
 }
@@ -84,8 +80,7 @@ function nqNqoCheckedAdd(a: usize, b: usize, out: *usize): bool {
 function nqNqoCheckedMul(a: usize, b: usize, out: *usize): bool {
     if out == null { return false }
     if a == 0 as usize || b == 0 as usize { out[0] = 0 as usize return true }
-    let maximum: usize = -1 as isize as usize
-    if a > maximum / b { return false }
+    if a > nqNqoUsizeMax() / b { return false }
     out[0] = a * b
     return true
 }
@@ -148,7 +143,6 @@ export function nqNqoWrite(source: []u8, functions: []NqNirFunction, instruction
     while instructionIndex < len(instructions) {
         let instruction: *NqNirInstruction = &instructions[instructionIndex]
         if !nqNirInstructionValid(instruction) || instruction.sourceEnd > len(source) { return nqNqoInvalid() }
-        if instruction.width > 18446744073709551615 as usize || instruction.sourceStart > 18446744073709551615 as usize || instruction.sourceEnd > 18446744073709551615 as usize { return nqNqoOverflow() }
         if !nqNqoWriteU32(out, offset, instruction.opcode as u32) { return nqNqoCapacity() }
         if !nqNqoWriteU32(out, offset + 4 as usize, instruction.typeCode as u32) { return nqNqoCapacity() }
         if !nqNqoWriteU32(out, offset + 8 as usize, instruction.flags) { return nqNqoCapacity() }
@@ -161,15 +155,9 @@ export function nqNqoWrite(source: []u8, functions: []NqNirFunction, instruction
         if !nqNqoWriteU64(out, offset + 56 as usize, instruction.width as u64) { return nqNqoCapacity() }
         if !nqNqoWriteU64(out, offset + 64 as usize, instruction.sourceStart as u64) { return nqNqoCapacity() }
         if !nqNqoWriteU64(out, offset + 72 as usize, instruction.sourceEnd as u64) { return nqNqoCapacity() }
-        let floatStart: u32 = 0 as u32
-        let floatEnd: u32 = 0 as u32
-        if instruction.opcode == nqNirConstF64() {
-            if instruction.sourceStart > 4294967295 as usize || instruction.sourceEnd > 4294967295 as usize { return nqNqoOverflow() }
-            floatStart = instruction.sourceStart as u32
-            floatEnd = instruction.sourceEnd as u32
-        }
-        if !nqNqoWriteU32(out, offset + 80 as usize, floatStart) { return nqNqoCapacity() }
-        if !nqNqoWriteU32(out, offset + 84 as usize, floatEnd) { return nqNqoCapacity() }
+        let floatBits: u64 = 0 as u64
+        if instruction.opcode == nqNirConstF64() { floatBits = nqNqoFloatBits(&instruction.floatImmediate) }
+        if !nqNqoWriteU64(out, offset + 80 as usize, floatBits) { return nqNqoCapacity() }
         if !nqNqoWriteU64(out, offset + 88 as usize, 0 as u64) { return nqNqoCapacity() }
         offset = offset + nqNqoInstructionBytes()
         instructionIndex = instructionIndex + 1 as usize

@@ -61,6 +61,7 @@ export function big_add_into(destination: []u8, left: []u8, right: []u8): usize 
 
 export function big_sub_into(destination: []u8, left: []u8, right: []u8): usize {
     if big_compare(left, right) < 0 { return 0 as usize }
+    if len(left) == 0 as usize { return 0 as usize }
     if len(destination) < len(left) { return 0 as usize }
     let borrow: u8 = 0 as u8
     let index: usize = 0 as usize
@@ -77,6 +78,7 @@ export function big_sub_into(destination: []u8, left: []u8, right: []u8): usize 
 export function big_mul_small_into(destination: []u8, value: []u8, multiplier: u8): usize {
     if multiplier > 9 as u8 || !big_digits_valid(value) { return 0 as usize }
     if len(destination) < len(value) + 1 as usize { return 0 as usize }
+    if len(value) == 0 as usize { destination[0 as usize] = 0 as u8 return 1 as usize }
     let carry: u32 = 0 as u32
     let index: usize = 0 as usize
     while index < len(value) {
@@ -86,11 +88,11 @@ export function big_mul_small_into(destination: []u8, value: []u8, multiplier: u
         index = index + 1 as usize
     }
     if carry > 0 as u32 { destination[len(value)] = carry as u8 return len(value) + 1 as usize }
-    if len(value) == 0 as usize { destination[0 as usize] = 0 as u8 return 1 as usize }
     return big_significant_length(slice(&destination[0 as usize], len(value)))
 }
 
 export function big_copy(destination: []u8, source: []u8): usize {
+    if len(source) == 0 as usize { return 0 as usize }
     if len(destination) < len(source) { return 0 as usize }
     let index: usize = 0 as usize
     while index < len(source) { destination[index] = source[index] index = index + 1 as usize }

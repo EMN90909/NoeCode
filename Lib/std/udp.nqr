@@ -1,5 +1,23 @@
 module noqeri.std.udp
 
-export function udp_valid_port(port:u32):bool{return port>0 as u32&&port<=65535 as u32}
-export function udp_max_payload_ipv4():usize{return 65507 as usize}
-export function udp_is_dns_port(port:u32):bool{return port==53 as u32}
+extern function udpBind(address: string, port: u32): isize
+extern function udpOpen(): isize
+extern function udpSendTo(socket: usize, host: string, port: u32, data: []u8): isize
+extern function udpReceive(socket: usize, data: []u8): isize
+extern function udpClose(socket: usize): void
+
+export function udp_valid_port(port: u32): bool { return port > 0 as u32 && port <= 65535 as u32 }
+export function udp_max_payload_ipv4(): usize { return 65507 as usize }
+export function udp_is_dns_port(port: u32): bool { return port == 53 as u32 }
+export function udp_handle_valid(handle: isize): bool { return handle >= 0 as isize }
+export function udp_payload_valid(length: usize): bool { return length <= udp_max_payload_ipv4() }
+
+export function udp_open(): isize { return udpOpen() }
+export function udp_bind(address: string, port: u32): isize { if !udp_valid_port(port) { return -2 as isize } return udpBind(address, port) }
+export function udp_send_to(socket: usize, host: string, port: u32, data: []u8): isize {
+    if textLength(host) == 0 as usize || !udp_valid_port(port) { return -2 as isize }
+    if !udp_payload_valid(len(data)) { return -3 as isize }
+    return udpSendTo(socket, host, port, data)
+}
+export function udp_receive(socket: usize, data: []u8): isize { if len(data) == 0 as usize { return -2 as isize } return udpReceive(socket, data) }
+export function udp_close(socket: usize): void { udpClose(socket) }

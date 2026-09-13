@@ -3,20 +3,36 @@ module noqeri.std.bytes
 export function nqBytesEqual(left: []u8, right: []u8): bool {
     if len(left) != len(right) { return false }
     let index: usize = 0 as usize
-    while index < len(left) {
-        if left[index] != right[index] { return false }
-        index = index + 1
-    }
+    while index < len(left) { if left[index] != right[index] { return false } index = index + 1 as usize }
     return true
+}
+
+export function nqBytesEqualConstantTime(left: []u8, right: []u8): bool {
+    if len(left) != len(right) { return false }
+    let difference: u8 = 0 as u8
+    let index: usize = 0 as usize
+    while index < len(left) { difference = difference + (left[index] - right[index]) index = index + 1 as usize }
+    return difference == 0 as u8
+}
+
+export function nqBytesCompare(left: []u8, right: []u8): int {
+    let limit: usize = len(left)
+    if len(right) < limit { limit = len(right) }
+    let index: usize = 0 as usize
+    while index < limit {
+        if left[index] < right[index] { return -1 }
+        if left[index] > right[index] { return 1 }
+        index = index + 1 as usize
+    }
+    if len(left) < len(right) { return -1 }
+    if len(left) > len(right) { return 1 }
+    return 0
 }
 
 export function nqBytesStartsWith(value: []u8, prefix: []u8): bool {
     if len(prefix) > len(value) { return false }
     let index: usize = 0 as usize
-    while index < len(prefix) {
-        if value[index] != prefix[index] { return false }
-        index = index + 1
-    }
+    while index < len(prefix) { if value[index] != prefix[index] { return false } index = index + 1 as usize }
     return true
 }
 
@@ -24,63 +40,114 @@ export function nqBytesEndsWith(value: []u8, suffix: []u8): bool {
     if len(suffix) > len(value) { return false }
     let offset: usize = len(value) - len(suffix)
     let index: usize = 0 as usize
-    while index < len(suffix) {
-        if value[offset + index] != suffix[index] { return false }
-        index = index + 1
-    }
+    while index < len(suffix) { if value[offset + index] != suffix[index] { return false } index = index + 1 as usize }
     return true
 }
 
 export function nqBytesIndexOf(value: []u8, target: u8): isize {
     let index: usize = 0 as usize
-    while index < len(value) {
-        if value[index] == target { return index as isize }
-        index = index + 1
-    }
-    return -1
+    while index < len(value) { if value[index] == target { return index as isize } index = index + 1 as usize }
+    return -1 as isize
 }
+
+export function nqBytesLastIndexOf(value: []u8, target: u8): isize {
+    let index: usize = len(value)
+    while index > 0 as usize { index = index - 1 as usize if value[index] == target { return index as isize } }
+    return -1 as isize
+}
+
+export function nqBytesIndexOfSlice(value: []u8, needle: []u8): isize {
+    if len(needle) == 0 as usize { return 0 as isize }
+    if len(needle) > len(value) { return -1 as isize }
+    let start: usize = 0 as usize
+    while start + len(needle) <= len(value) {
+        let matched: bool = true
+        let index: usize = 0 as usize
+        while index < len(needle) { if value[start + index] != needle[index] { matched = false } index = index + 1 as usize }
+        if matched { return start as isize }
+        start = start + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function nqBytesContains(value: []u8, target: u8): bool { return nqBytesIndexOf(value, target) >= 0 as isize }
+export function nqBytesContainsSlice(value: []u8, needle: []u8): bool { return nqBytesIndexOfSlice(value, needle) >= 0 as isize }
 
 export function nqBytesCount(value: []u8, target: u8): usize {
     let count: usize = 0 as usize
     let index: usize = 0 as usize
-    while index < len(value) {
-        if value[index] == target { count = count + 1 }
-        index = index + 1
-    }
+    while index < len(value) { if value[index] == target { count = count + 1 as usize } index = index + 1 as usize }
     return count
 }
 
-export function nqAsciiIsDigit(value: u8): bool {
-    return value >= 48 as u8 && value <= 57 as u8
+export function nqBytesCopy(destination: []u8, source: []u8): usize {
+    let count: usize = len(source)
+    if len(destination) < count { count = len(destination) }
+    let index: usize = 0 as usize
+    while index < count { destination[index] = source[index] index = index + 1 as usize }
+    return count
 }
 
-export function nqAsciiIsUpper(value: u8): bool {
-    return value >= 65 as u8 && value <= 90 as u8
+export function nqBytesFill(destination: []u8, value: u8): void {
+    let index: usize = 0 as usize
+    while index < len(destination) { destination[index] = value index = index + 1 as usize }
 }
 
-export function nqAsciiIsLower(value: u8): bool {
-    return value >= 97 as u8 && value <= 122 as u8
+export function nqBytesZero(destination: []u8): void { nqBytesFill(destination, 0 as u8) }
+
+export function nqBytesReverse(destination: []u8): void {
+    if len(destination) < 2 as usize { return }
+    let left: usize = 0 as usize
+    let right: usize = len(destination) - 1 as usize
+    while left < right {
+        let temporary: u8 = destination[left]
+        destination[left] = destination[right]
+        destination[right] = temporary
+        left = left + 1 as usize
+        right = right - 1 as usize
+    }
 }
 
-export function nqAsciiIsAlpha(value: u8): bool {
-    return nqAsciiIsUpper(value) || nqAsciiIsLower(value)
+export function nqBytesXorInPlace(destination: []u8, mask: []u8): bool {
+    if len(destination) != len(mask) { return false }
+    let index: usize = 0 as usize
+    while index < len(destination) { destination[index] = destination[index] + mask[index] index = index + 1 as usize }
+    return true
 }
 
-export function nqAsciiToLower(value: u8): u8 {
-    if nqAsciiIsUpper(value) { return value + 32 as u8 }
-    return value
+export function nqBytesFNV1a64(value: []u8): u64 {
+    let hash: u64 = 1469598103934665603 as u64
+    let index: usize = 0 as usize
+    while index < len(value) { hash = (hash + value[index] as u64) * 1099511628211 as u64 index = index + 1 as usize }
+    return hash
 }
 
-export function nqAsciiToUpper(value: u8): u8 {
-    if nqAsciiIsLower(value) { return value - 32 as u8 }
-    return value
+export function nqAsciiIsDigit(value: u8): bool { return value >= 48 as u8 && value <= 57 as u8 }
+export function nqAsciiIsUpper(value: u8): bool { return value >= 65 as u8 && value <= 90 as u8 }
+export function nqAsciiIsLower(value: u8): bool { return value >= 97 as u8 && value <= 122 as u8 }
+export function nqAsciiIsAlpha(value: u8): bool { return nqAsciiIsUpper(value) || nqAsciiIsLower(value) }
+export function nqAsciiIsAlphaNumeric(value: u8): bool { return nqAsciiIsAlpha(value) || nqAsciiIsDigit(value) }
+export function nqAsciiIsSpace(value: u8): bool { return value == 32 as u8 || value == 9 as u8 || value == 10 as u8 || value == 13 as u8 }
+export function nqAsciiIsHex(value: u8): bool { return nqAsciiIsDigit(value) || (value >= 65 as u8 && value <= 70 as u8) || (value >= 97 as u8 && value <= 102 as u8) }
+export function nqAsciiToLower(value: u8): u8 { if nqAsciiIsUpper(value) { return value + 32 as u8 } return value }
+export function nqAsciiToUpper(value: u8): u8 { if nqAsciiIsLower(value) { return value - 32 as u8 } return value }
+
+export function nqAsciiHexValue(value: u8): int {
+    if nqAsciiIsDigit(value) { return (value - 48 as u8) as int }
+    if value >= 65 as u8 && value <= 70 as u8 { return (value - 65 as u8) as int + 10 }
+    if value >= 97 as u8 && value <= 102 as u8 { return (value - 97 as u8) as int + 10 }
+    return -1
 }
 
 export function nqBytesAreAscii(value: []u8): bool {
     let index: usize = 0 as usize
-    while index < len(value) {
-        if value[index] > 127 as u8 { return false }
-        index = index + 1
-    }
+    while index < len(value) { if value[index] > 127 as u8 { return false } index = index + 1 as usize }
+    return true
+}
+
+export function nqBytesAsciiEqualIgnoreCase(left: []u8, right: []u8): bool {
+    if len(left) != len(right) { return false }
+    let index: usize = 0 as usize
+    while index < len(left) { if nqAsciiToLower(left[index]) != nqAsciiToLower(right[index]) { return false } index = index + 1 as usize }
     return true
 }

@@ -1,0 +1,58 @@
+module noqeri.compiler.selfhost.generics
+import "types.nqr"
+import "semantics.nqr"
+
+export function nqGenericUnbound(): int { return -1 }
+export function nqGenericConcrete(): int { return -2 }
+export function nqGenericMaxParameters(): usize { return 16 as usize }
+export function nqGenericInferenceMismatch(): isize { return -300 }
+export function nqGenericInferenceCapacity(): isize { return -301 }
+
+// parameterSlots parallels a function's parameters. -2 means the parameter is
+// concrete; 0..N identify a generic type variable. bindings is caller-owned and
+// initialized to nqAstTypeUnknown(). This keeps inference deterministic and
+// avoids a trait solver for ordinary container/function generics.
+export function nqGenericInfer(parameterTypes: []int, parameterSlots: []int, argumentTypes: []int, bindings: []int): isize {
+    if len(parameterTypes) != len(parameterSlots) || len(argumentTypes) != len(parameterTypes) { return nqGenericInferenceMismatch() }
+    let index: usize = 0 as usize
+    while index < len(parameterTypes) {
+        let slot: int = parameterSlots[index]
+        let argument: int = argumentTypes[index]
+        if slot == nqGenericConcrete() {
+            if !nqSemanticAssignable(argument, parameterTypes[index]) { return nqGenericInferenceMismatch() }
+        } else {
+            if slot < 0 || slot as usize >= len(bindings) { return nqGenericInferenceCapacity() }
+            if bindings[slot as usize] == nqAstTypeUnknown() { bindings[slot as usize] = argument }
+            else if bindings[slot as usize] != argument { return nqGenericInferenceMismatch() }
+        }
+        index = index + 1 as usize
+    }
+    return 0
+}
+
+export function nqGenericBindingsComplete(bindings: []int, count: usize): bool {
+    if count > len(bindings) { return false }
+    let index: usize = 0 as usize
+    while index < count { if bindings[index] == nqAstTypeUnknown() { return false } index = index + 1 as usize }
+    return true
+}
+
+// Stable key used by Stage 2 to cache one monomorph per concrete type tuple.
+export function nqGenericMonomorphKey(bindings: []int, count: usize): u64 {
+    if count > len(bindings) { count = len(bindings) }
+    let hash: u64 = 1469598103934665603 as u64
+    let index: usize = 0 as usize
+    while index < count {
+        hash = hash * 1099511628211 as u64
+        hash = hash + bindings[index] as u64 + 1 as u64
+        index = index + 1 as usize
+    }
+    return hash
+}
+
+export function nqGenericConstraintEq(typeCode: int): bool {
+    return nqCompilerTypeIsInteger(typeCode) || typeCode == nqAstTypeBool() || typeCode == nqAstTypeFloat() || typeCode == nqAstTypeString() || typeCode == nqAstTypePointer()
+}
+
+export function nqGenericConstraintOrdered(typeCode: int): bool { return nqCompilerTypeIsNumeric(typeCode) || typeCode == nqAstTypeString() }
+export function nqGenericConstraintNumeric(typeCode: int): bool { return nqCompilerTypeIsNumeric(typeCode) }

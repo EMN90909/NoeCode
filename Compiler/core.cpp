@@ -14,7 +14,33 @@ CompileResult compileProgram(Program program,Diagnostics diagnostics,const Compi
 }
 const char* tokenKindName(TokenKind k){switch(k){case TokenKind::Eof:return"eof";case TokenKind::Identifier:return"identifier";case TokenKind::Integer:return"integer";case TokenKind::Float:return"float";case TokenKind::String:return"string";case TokenKind::LineComment:return"line-comment";case TokenKind::BlockComment:return"block-comment";case TokenKind::Let:return"let";case TokenKind::Const:return"const";case TokenKind::Function:return"function";case TokenKind::If:return"if";case TokenKind::Else:return"else";case TokenKind::While:return"while";case TokenKind::Return:return"return";case TokenKind::True:return"true";case TokenKind::False:return"false";case TokenKind::Null:return"null";case TokenKind::Import:return"import";case TokenKind::Module:return"module";case TokenKind::Record:return"record";case TokenKind::Class:return"class";case TokenKind::Extern:return"extern";case TokenKind::Export:return"export";case TokenKind::Volatile:return"volatile";case TokenKind::Unsafe:return"unsafe";case TokenKind::As:return"as";case TokenKind::Throw:return"throw";case TokenKind::Try:return"try";case TokenKind::LParen:return"(";case TokenKind::RParen:return")";case TokenKind::LBrace:return"{";case TokenKind::RBrace:return"}";case TokenKind::LBracket:return"[";case TokenKind::RBracket:return"]";case TokenKind::Comma:return",";case TokenKind::Colon:return":";case TokenKind::Semicolon:return";";case TokenKind::Dot:return".";case TokenKind::Plus:return"+";case TokenKind::Minus:return"-";case TokenKind::Star:return"*";case TokenKind::Slash:return"/";case TokenKind::Percent:return"%";case TokenKind::Ampersand:return"&";case TokenKind::Bang:return"!";case TokenKind::BangEqual:return"!=";case TokenKind::Equal:return"=";case TokenKind::EqualEqual:return"==";case TokenKind::Less:return"<";case TokenKind::LessEqual:return"<=";case TokenKind::Greater:return">";case TokenKind::GreaterEqual:return">=";case TokenKind::AndAnd:return"&&";case TokenKind::OrOr:return"||";}return"?";}
 void Diagnostics::error(std::string code,Span span,std::string message,std::string help){if(code.rfind("NOE-",0)==0||code.rfind("RIC-",0)==0)code.replace(0,4,"NQR-");items_.push_back({std::move(code),std::move(message),span,std::move(help)});}
-void Diagnostics::print(const std::string&fallbackSourceName)const{for(const auto&d:items_){const auto source=sourceName(d.span.source,fallbackSourceName);std::cerr<<d.code<<": "<<d.message<<"\n --> "<<source<<':'<<d.span.line<<':'<<d.span.column<<"\n";if(!d.help.empty())std::cerr<<" help: "<<d.help<<"\n";}}
+void Diagnostics::print(const std::string&fallbackSourceName)const{
+    for(const auto&d:items_){
+        const auto source=sourceName(d.span.source,fallbackSourceName);
+        std::cerr<<d.code<<": "<<d.message<<"\n --> "<<source<<':'<<d.span.line<<':'<<d.span.column<<"\n";
+        if(!source.empty()&&d.span.line>0){
+            std::ifstream input(source,std::ios::binary);
+            std::string sourceLine;
+            bool found=false;
+            for(std::size_t line=1;line<=d.span.line&&std::getline(input,sourceLine);++line)if(line==d.span.line){found=true;break;}
+            if(found){
+                if(!sourceLine.empty()&&sourceLine.back()=='\r')sourceLine.pop_back();
+                const auto lineNumber=std::to_string(d.span.line);
+                const std::size_t caretColumn=d.span.column>0?d.span.column-1:0;
+                std::size_t width=1;
+                if(d.span.end>d.span.start)width=std::max<std::size_t>(1,d.span.end-d.span.start);
+                if(caretColumn<sourceLine.size())width=std::min(width,std::max<std::size_t>(1,sourceLine.size()-caretColumn));
+                else width=1;
+                std::cerr<<' '<<lineNumber<<" | "<<sourceLine<<"\n"
+                         <<std::string(lineNumber.size()+2,' ')<<"| "<<std::string(caretColumn,' ')<<'^';
+                if(width>1)std::cerr<<std::string(width-1,'~');
+                std::cerr<<"\n";
+            }
+        }
+        if(!d.help.empty())std::cerr<<" help: "<<d.help<<"\n";
+        std::cerr<<"\n";
+    }
+}
 bool Type::isInteger()const{switch(kind){case TypeKind::I8:case TypeKind::I16:case TypeKind::I32:case TypeKind::I64:case TypeKind::U8:case TypeKind::U16:case TypeKind::U32:case TypeKind::U64:case TypeKind::Isize:case TypeKind::Usize:case TypeKind::Int:return true;default:return false;}}
 std::size_t Type::size()const{switch(kind){case TypeKind::Bool:case TypeKind::I8:case TypeKind::U8:return 1;case TypeKind::I16:case TypeKind::U16:return 2;case TypeKind::I32:case TypeKind::U32:return 4;case TypeKind::I64:case TypeKind::U64:case TypeKind::Int:case TypeKind::Float:case TypeKind::Isize:case TypeKind::Usize:case TypeKind::Pointer:case TypeKind::String:case TypeKind::Null:case TypeKind::Generic:return 8;case TypeKind::Record:return recordSize;case TypeKind::Slice:return 16;case TypeKind::Array:return element?element->size()*count:0;default:return 0;}}
 std::size_t Type::alignment()const{if(kind==TypeKind::Record)return recordAlignment?recordAlignment:1;if(kind==TypeKind::Slice)return 8;if(kind==TypeKind::Array&&element)return element->alignment();auto s=size();return s?s:1;}

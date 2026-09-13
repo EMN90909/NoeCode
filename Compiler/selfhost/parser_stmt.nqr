@@ -48,11 +48,17 @@ function nqStmtParseBinding(source: []u8, start: usize, nodes: []NqAstNode, coun
         cursor = typeEnd
         nqCompilerNextToken(source, cursor, &token)
     }
-    if token.kind != nqTokenOperator() || token.first != 61 as u8 || token.end - token.start != 1 as usize { return nqAstNoNode() }
-    let expressionEnd: usize = token.end
-    let value: isize = nqParserParseExpression(source, token.end, nodes, count, &expressionEnd)
-    if value < 0 as isize { return nqAstNoNode() }
-    let end: usize = nqStmtOptionalSemicolon(source, expressionEnd)
+    let value: isize = nqAstNoNode()
+    let end: usize = cursor
+    if token.kind == nqTokenOperator() && token.first == 61 as u8 && token.end - token.start == 1 as usize {
+        let expressionEnd: usize = token.end
+        value = nqParserParseExpression(source, token.end, nodes, count, &expressionEnd)
+        if value < 0 as isize { return nqAstNoNode() }
+        end = nqStmtOptionalSemicolon(source, expressionEnd)
+    } else {
+        if typeStart == 0 as usize || isConst { return nqAstNoNode() }
+        end = nqStmtOptionalSemicolon(source, cursor)
+    }
     let binding: isize = nqAstArenaPush(nodes, count, nqAstBinding(), keyword.start, end)
     if binding < 0 as isize { return binding }
     nodes[binding as usize].left = name

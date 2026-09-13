@@ -1,34 +1,34 @@
 module noqeri.compiler.selfhost.lexer
 
-export function nqCompilerIsSpace(value: u8): bool {
-    return value == 32 as u8 || value == 9 as u8 || value == 10 as u8 || value == 13 as u8
+record NqToken {
+    kind: int
+    start: usize
+    end: usize
+    first: u8
+    second: u8
 }
 
-export function nqCompilerIsDigit(value: u8): bool {
-    return value >= 48 as u8 && value <= 57 as u8
-}
+export function nqTokenEof(): int { return 0 }
+export function nqTokenIdentifier(): int { return 1 }
+export function nqTokenInteger(): int { return 2 }
+export function nqTokenFloat(): int { return 3 }
+export function nqTokenString(): int { return 4 }
+export function nqTokenPunctuation(): int { return 5 }
+export function nqTokenOperator(): int { return 6 }
+export function nqTokenInvalid(): int { return 7 }
 
-export function nqCompilerIsAlpha(value: u8): bool {
-    return (value >= 65 as u8 && value <= 90 as u8) || (value >= 97 as u8 && value <= 122 as u8)
-}
-
-export function nqCompilerIsIdentifierStart(value: u8): bool {
-    return nqCompilerIsAlpha(value) || value == 95 as u8
-}
-
-export function nqCompilerIsIdentifierContinue(value: u8): bool {
-    return nqCompilerIsIdentifierStart(value) || nqCompilerIsDigit(value)
-}
+export function nqCompilerIsSpace(value: u8): bool { return value == 32 as u8 || value == 9 as u8 || value == 10 as u8 || value == 13 as u8 }
+export function nqCompilerIsDigit(value: u8): bool { return value >= 48 as u8 && value <= 57 as u8 }
+export function nqCompilerIsAlpha(value: u8): bool { return (value >= 65 as u8 && value <= 90 as u8) || (value >= 97 as u8 && value <= 122 as u8) }
+export function nqCompilerIsIdentifierStart(value: u8): bool { return nqCompilerIsAlpha(value) || value == 95 as u8 }
+export function nqCompilerIsIdentifierContinue(value: u8): bool { return nqCompilerIsIdentifierStart(value) || nqCompilerIsDigit(value) }
 
 export function nqCompilerSkipTrivia(source: []u8, start: usize): usize {
     let index: usize = start
     let moving: bool = true
     while moving {
         moving = false
-        while index < len(source) && nqCompilerIsSpace(source[index]) {
-            index = index + 1
-            moving = true
-        }
+        while index < len(source) && nqCompilerIsSpace(source[index]) { index = index + 1 moving = true }
         if index + 1 < len(source) && source[index] == 47 as u8 && source[index + 1] == 47 as u8 {
             index = index + 2
             while index < len(source) && source[index] != 10 as u8 { index = index + 1 }
@@ -36,9 +36,7 @@ export function nqCompilerSkipTrivia(source: []u8, start: usize): usize {
         }
         if index + 1 < len(source) && source[index] == 47 as u8 && source[index + 1] == 42 as u8 {
             index = index + 2
-            while index + 1 < len(source) && !(source[index] == 42 as u8 && source[index + 1] == 47 as u8) {
-                index = index + 1
-            }
+            while index + 1 < len(source) && !(source[index] == 42 as u8 && source[index + 1] == 47 as u8) { index = index + 1 }
             if index + 1 < len(source) { index = index + 2 }
             moving = true
         }
@@ -55,6 +53,15 @@ export function nqCompilerScanIdentifier(source: []u8, start: usize): usize {
 
 export function nqCompilerScanNumber(source: []u8, start: usize): usize {
     let index: usize = start
+    if index + 1 as usize < len(source) && source[index] == 48 as u8 && (source[index + 1 as usize] == 120 as u8 || source[index + 1 as usize] == 88 as u8) {
+        index = index + 2 as usize
+        while index < len(source) {
+            let c: u8 = source[index]
+            if !(nqCompilerIsDigit(c) || (c >= 65 as u8 && c <= 70 as u8) || (c >= 97 as u8 && c <= 102 as u8)) { return index }
+            index = index + 1 as usize
+        }
+        return index
+    }
     while index < len(source) && nqCompilerIsDigit(source[index]) { index = index + 1 }
     if index < len(source) && source[index] == 46 as u8 {
         index = index + 1
@@ -67,12 +74,8 @@ export function nqCompilerScanString(source: []u8, start: usize): usize {
     if start >= len(source) || source[start] != 34 as u8 { return start }
     let index: usize = start + 1
     while index < len(source) {
-        if source[index] == 92 as u8 {
-            index = index + 2
-        } else {
-            if source[index] == 34 as u8 { return index + 1 }
-            index = index + 1
-        }
+        if source[index] == 92 as u8 { index = index + 2 }
+        else { if source[index] == 34 as u8 { return index + 1 } index = index + 1 }
     }
     return len(source)
 }
@@ -104,3 +107,40 @@ export function nqCompilerTokenCount(source: []u8): usize {
     }
     return count
 }
+
+function nqCompilerPunctuation(value: u8): bool { return value == 40 as u8 || value == 41 as u8 || value == 91 as u8 || value == 93 as u8 || value == 123 as u8 || value == 125 as u8 || value == 44 as u8 || value == 46 as u8 || value == 58 as u8 || value == 59 as u8 }
+function nqCompilerOperator(value: u8): bool { return value == 43 as u8 || value == 45 as u8 || value == 42 as u8 || value == 47 as u8 || value == 37 as u8 || value == 61 as u8 || value == 33 as u8 || value == 60 as u8 || value == 62 as u8 || value == 38 as u8 || value == 124 as u8 }
+
+export function nqCompilerNextToken(source: []u8, start: usize, out: *NqToken): usize {
+    let index: usize = nqCompilerSkipTrivia(source, start)
+    out.start = index
+    out.end = index
+    out.first = 0 as u8
+    out.second = 0 as u8
+    if index >= len(source) { out.kind = nqTokenEof() return index }
+    out.first = source[index]
+    let end: usize = nqCompilerTokenEnd(source, index)
+    out.end = end
+    if end > index + 1 as usize { out.second = source[index + 1 as usize] }
+    if nqCompilerIsIdentifierStart(source[index]) { out.kind = nqTokenIdentifier() return end }
+    if nqCompilerIsDigit(source[index]) {
+        out.kind = nqTokenInteger()
+        let cursor: usize = index
+        while cursor < end { if source[cursor] == 46 as u8 { out.kind = nqTokenFloat() } cursor = cursor + 1 as usize }
+        return end
+    }
+    if source[index] == 34 as u8 { out.kind = nqTokenString() return end }
+    if nqCompilerPunctuation(source[index]) { out.kind = nqTokenPunctuation() return end }
+    if nqCompilerOperator(source[index]) { out.kind = nqTokenOperator() return end }
+    out.kind = nqTokenInvalid()
+    return end
+}
+
+export function nqTokenTextEqual(source: []u8, token: *NqToken, text: []u8): bool {
+    if token == null || token.end < token.start || token.end - token.start != len(text) { return false }
+    let index: usize = 0 as usize
+    while index < len(text) { if source[token.start + index] != text[index] { return false } index = index + 1 as usize }
+    return true
+}
+
+export function nqTokenIs(source: []u8, token: *NqToken, text: []u8): bool { return token != null && token.kind != nqTokenEof() && nqTokenTextEqual(source, token, text) }

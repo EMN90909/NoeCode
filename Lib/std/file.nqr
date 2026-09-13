@@ -5,11 +5,76 @@ extern function fileClose(handle: usize): isize
 extern function fileRead(handle: usize, data: *u8, count: usize): isize
 extern function fileWrite(handle: usize, data: *u8, count: usize): isize
 extern function fileSeek(handle: usize, offset: i64, origin: int): isize
+extern function fileFlush(handle: usize): isize
+extern function fileTruncate(handle: usize, length: u64): isize
 
-export function file_open_read(path: string): isize { return fileOpen(path, 1 as u32) }
-export function file_open_write(path: string): isize { return fileOpen(path, 2 as u32) }
+export function file_flag_read(): u32 { return 1 as u32 }
+export function file_flag_write(): u32 { return 2 as u32 }
+export function file_flag_create(): u32 { return 4 as u32 }
+export function file_flag_truncate(): u32 { return 8 as u32 }
+export function file_flag_append(): u32 { return 16 as u32 }
+export function file_seek_start(): int { return 0 }
+export function file_seek_current(): int { return 1 }
+export function file_seek_end(): int { return 2 }
+
+export function file_open_read(path: string): isize { return fileOpen(path, file_flag_read()) }
+export function file_open_write(path: string): isize { return fileOpen(path, file_flag_write()) }
+export function file_open_create(path: string): isize { return fileOpen(path, file_flag_write() + file_flag_create()) }
+export function file_open_replace(path: string): isize { return fileOpen(path, file_flag_write() + file_flag_create() + file_flag_truncate()) }
+export function file_open_append(path: string): isize { return fileOpen(path, file_flag_write() + file_flag_create() + file_flag_append()) }
 export function file_close(handle: usize): isize { return fileClose(handle) }
-export function file_read_into(handle: usize, buffer: []u8): isize { if len(buffer)==0 as usize { return 0 as isize } return fileRead(handle,&buffer[0],len(buffer)) }
-export function file_write_from(handle: usize, buffer: []u8): isize { if len(buffer)==0 as usize { return 0 as isize } return fileWrite(handle,&buffer[0],len(buffer)) }
-export function file_rewind(handle: usize): isize { return fileSeek(handle,0 as i64,0) }
+export function file_flush(handle: usize): isize { return fileFlush(handle) }
+export function file_truncate(handle: usize, length: u64): isize { return fileTruncate(handle, length) }
+export function file_handle_valid(handle: isize): bool { return handle >= 0 as isize }
+
+export function file_read_into(handle: usize, buffer: []u8): isize {
+    if len(buffer) == 0 as usize { return 0 as isize }
+    return fileRead(handle, &buffer[0 as usize], len(buffer))
+}
+
+export function file_write_from(handle: usize, buffer: []u8): isize {
+    if len(buffer) == 0 as usize { return 0 as isize }
+    return fileWrite(handle, &buffer[0 as usize], len(buffer))
+}
+
+export function file_read_exact(handle: usize, buffer: []u8): isize {
+    let offset: usize = 0 as usize
+    while offset < len(buffer) {
+        let status: isize = fileRead(handle, &buffer[offset], len(buffer) - offset)
+        if status < 0 as isize { return status }
+        if status == 0 as isize { return -2 as isize }
+        offset = offset + status as usize
+    }
+    return offset as isize
+}
+
+export function file_write_all(handle: usize, buffer: []u8): isize {
+    let offset: usize = 0 as usize
+    while offset < len(buffer) {
+        let status: isize = fileWrite(handle, &buffer[offset], len(buffer) - offset)
+        if status < 0 as isize { return status }
+        if status == 0 as isize { return -3 as isize }
+        offset = offset + status as usize
+    }
+    return offset as isize
+}
+
+export function file_seek(handle: usize, offset: i64, origin: int): isize {
+    if origin < file_seek_start() || origin > file_seek_end() { return -4 as isize }
+    return fileSeek(handle, offset, origin)
+}
+
+export function file_rewind(handle: usize): isize { return fileSeek(handle, 0 as i64, file_seek_start()) }
+export function file_position(handle: usize): isize { return fileSeek(handle, 0 as i64, file_seek_current()) }
+export function file_size(handle: usize): isize {
+    let current: isize = file_position(handle)
+    if current < 0 as isize { return current }
+    let end: isize = fileSeek(handle, 0 as i64, file_seek_end())
+    if end < 0 as isize { return end }
+    let restored: isize = fileSeek(handle, current as i64, file_seek_start())
+    if restored < 0 as isize { return restored }
+    return end
+}
+
 export function file_status_ok(status: isize): bool { return status >= 0 as isize }
+export function file_status_error(status: isize): bool { return status < 0 as isize }

@@ -67,7 +67,7 @@ function audit(file) {
   const codeLines = nonBlankLines(code);
   const exports = countMatches(code, /^\s*export\s+function\s+[A-Za-z_][A-Za-z0-9_]*\s*</gm) +
     countMatches(code, /^\s*export\s+function\s+[A-Za-z_][A-Za-z0-9_]*\s*\(/gm);
-  const records = countMatches(code, /^\s*record\s+[A-Za-z_][A-Za-z0-9_]*(?:\s*</gm);
+  const records = countMatches(code, /^\s*record\s+[A-Za-z_][A-Za-z0-9_]*/gm);
   const privateFunctions = countMatches(code, /^\s*function\s+[A-Za-z_][A-Za-z0-9_]*\s*</gm) +
     countMatches(code, /^\s*function\s+[A-Za-z_][A-Za-z0-9_]*\s*\(/gm);
   const loops = countMatches(code, /\bwhile\b/gm);

@@ -1,0 +1,16 @@
+import "../../../Lib/std/websocket.nqr"
+
+extern function websocketHostServe(address: string, handler: string): isize
+
+function frame_handler(): int {
+    if !websocket_is_data_opcode(1 as u8) { return 1 }
+    return 0
+}
+
+function main(): int {
+    unsafe {
+        let server: isize = websocketHostServe("127.0.0.1:8082", "frame_handler")
+        if server < 0 as isize { return 1 }
+    }
+    return 0
+}

@@ -7,11 +7,25 @@ record AtomicU64 {
     value: u64
 }
 
-export function atomic_u64_init(value: *AtomicU64, initial: u64): void { atomic.store(&value.value, initial) }
-export function atomic_u64_load(value: *AtomicU64): u64 { return atomic.load(&value.value) }
-export function atomic_u64_store(value: *AtomicU64, next: u64): void { atomic.store(&value.value, next) }
-export function atomic_u64_exchange(value: *AtomicU64, next: u64): u64 { return atomic.exchange(&value.value, next) }
-export function atomic_u64_compare_exchange(value: *AtomicU64, expected: u64, next: u64): u64 { return atomic.compareExchange(&value.value, expected, next) }
+export function atomic_u64_init(value: *AtomicU64, initial: u64): void {
+    unsafe { atomic.store(&value.value, initial) }
+}
+
+export function atomic_u64_load(value: *AtomicU64): u64 {
+    unsafe { return atomic.load(&value.value) }
+}
+
+export function atomic_u64_store(value: *AtomicU64, next: u64): void {
+    unsafe { atomic.store(&value.value, next) }
+}
+
+export function atomic_u64_exchange(value: *AtomicU64, next: u64): u64 {
+    unsafe { return atomic.exchange(&value.value, next) }
+}
+
+export function atomic_u64_compare_exchange(value: *AtomicU64, expected: u64, next: u64): u64 {
+    unsafe { return atomic.compareExchange(&value.value, expected, next) }
+}
 
 export function atomic_load_u64(value: *u64): u64 { return atomic.load(value) }
 export function atomic_store_u64(value: *u64, next: u64): void { atomic.store(value, next) }
@@ -42,10 +56,22 @@ export function atomic_sub_u64(value: *u64, amount: u64): u64 {
 
 export function atomic_increment_u64(value: *u64): u64 { return atomic_add_u64(value, 1 as u64) }
 export function atomic_decrement_u64(value: *u64): u64 { return atomic_sub_u64(value, 1 as u64) }
-export function atomic_u64_add(value: *AtomicU64, amount: u64): u64 { return atomic_add_u64(&value.value, amount) }
-export function atomic_u64_sub(value: *AtomicU64, amount: u64): u64 { return atomic_sub_u64(&value.value, amount) }
-export function atomic_u64_increment(value: *AtomicU64): u64 { return atomic_increment_u64(&value.value) }
-export function atomic_u64_decrement(value: *AtomicU64): u64 { return atomic_decrement_u64(&value.value) }
+
+export function atomic_u64_add(value: *AtomicU64, amount: u64): u64 {
+    unsafe { return atomic_add_u64(&value.value, amount) }
+}
+
+export function atomic_u64_sub(value: *AtomicU64, amount: u64): u64 {
+    unsafe { return atomic_sub_u64(&value.value, amount) }
+}
+
+export function atomic_u64_increment(value: *AtomicU64): u64 {
+    unsafe { return atomic_increment_u64(&value.value) }
+}
+
+export function atomic_u64_decrement(value: *AtomicU64): u64 {
+    unsafe { return atomic_decrement_u64(&value.value) }
+}
 
 export function atomic_update_max_u64(value: *u64, candidate: u64): u64 {
     let current: u64 = atomic.load(value)
@@ -67,8 +93,13 @@ export function atomic_update_min_u64(value: *u64, candidate: u64): u64 {
     return current
 }
 
-export function atomic_u64_update_max(value: *AtomicU64, candidate: u64): u64 { return atomic_update_max_u64(&value.value, candidate) }
-export function atomic_u64_update_min(value: *AtomicU64, candidate: u64): u64 { return atomic_update_min_u64(&value.value, candidate) }
+export function atomic_u64_update_max(value: *AtomicU64, candidate: u64): u64 {
+    unsafe { return atomic_update_max_u64(&value.value, candidate) }
+}
+
+export function atomic_u64_update_min(value: *AtomicU64, candidate: u64): u64 {
+    unsafe { return atomic_update_min_u64(&value.value, candidate) }
+}
 
 export function atomic_flag_try_set(value: *u64): bool { return atomic.compareExchange(value, 0 as u64, 1 as u64) == 0 as u64 }
 export function atomic_flag_clear(value: *u64): void { atomic.store(value, 0 as u64) }

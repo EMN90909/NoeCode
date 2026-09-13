@@ -1,28 +1,24 @@
 module noqeri.std.result
 
-// Result<T> is the application-facing error carrier. The low-level ABI may keep
-// negative status codes, but library APIs can pair a value with an explicit
-// error code without sentinel values or nullable success paths.
+// Result<T> is an application-facing result record. Noqeri requires initialized
+// locals, so callers pass storage to result_init_* rather than relying on an
+// implicit uninitialized record constructor.
 record Result<T> {
     value: T
     error: isize
     ok: bool
 }
 
-export function result_ok<T>(value: T): Result<T> {
-    let result: Result<T>
-    result.value = value
-    result.error = 0 as isize
-    result.ok = true
-    return result
+export function result_init_ok<T>(out: *Result<T>, value: T): void {
+    out.value = value
+    out.error = 0 as isize
+    out.ok = true
 }
 
-export function result_error<T>(fallback: T, error: isize): Result<T> {
-    let result: Result<T>
-    result.value = fallback
-    result.error = error
-    result.ok = false
-    return result
+export function result_init_error<T>(out: *Result<T>, fallback: T, error: isize): void {
+    out.value = fallback
+    out.error = error
+    out.ok = false
 }
 
 export function result_is_ok<T>(result: *Result<T>): bool { return result.ok }
@@ -30,9 +26,9 @@ export function result_is_error<T>(result: *Result<T>): bool { return !result.ok
 export function result_value_or<T>(result: *Result<T>, fallback: T): T { if result.ok { return result.value } return fallback }
 export function result_error_or<T>(result: *Result<T>, fallback: isize): isize { if result.ok { return fallback } return result.error }
 
-export function result_from_status<T>(value: T, fallback: T, status: isize): Result<T> {
-    if status < 0 as isize { return result_error(fallback, status) }
-    return result_ok(value)
+export function result_init_from_status<T>(out: *Result<T>, value: T, fallback: T, status: isize): void {
+    if status < 0 as isize { result_init_error(out, fallback, status) return }
+    result_init_ok(out, value)
 }
 
 // Low-level compatibility helpers remain for freestanding/ABI code.

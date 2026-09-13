@@ -12,22 +12,34 @@ export function stack_empty<T>(stack: *Stack<T>): bool { return stack.length == 
 export function stack_full<T>(stack: *Stack<T>): bool { return stack.length >= stack.capacity }
 export function stack_invariant<T>(stack: *Stack<T>): bool { return stack.length <= stack.capacity && (stack.capacity == 0 as usize || stack.data != null) }
 
-export function stack_push<T>(stack: *Stack<T>, value: T): bool {
+export function stack_peek_ref<T>(stack: *Stack<T>): *T {
+    if stack.data == null || stack.length == 0 as usize { return null as *T }
+    return &stack.data[stack.length - 1 as usize]
+}
+
+export function stack_push<T: Copy>(stack: *Stack<T>, value: T): bool {
     if stack.data == null || stack.length >= stack.capacity { return false }
     stack.data[stack.length] = value
     stack.length = stack.length + 1 as usize
     return true
 }
 
-export function stack_peek_or<T>(stack: *Stack<T>, fallback: T): T {
-    if stack.data == null || stack.length == 0 as usize { return fallback }
-    return stack.data[stack.length - 1 as usize]
+export function stack_peek_or<T: Copy>(stack: *Stack<T>, fallback: T): T {
+    let value: *T = stack_peek_ref(stack)
+    if value == null { return fallback }
+    return *value
 }
 
-export function stack_pop_or<T>(stack: *Stack<T>, fallback: T): T {
+export function stack_pop_or<T: Copy>(stack: *Stack<T>, fallback: T): T {
     if stack.data == null || stack.length == 0 as usize { return fallback }
     stack.length = stack.length - 1 as usize
     return stack.data[stack.length]
+}
+
+export function stack_drop<T>(stack: *Stack<T>): bool {
+    if stack.length == 0 as usize { return false }
+    stack.length = stack.length - 1 as usize
+    return true
 }
 
 export function stack_clear<T>(stack: *Stack<T>): void { stack.length = 0 as usize }
@@ -35,4 +47,4 @@ export function stack_clear<T>(stack: *Stack<T>): void { stack.length = 0 as usi
 // Slice compatibility helpers.
 export function stack_len<T>(items: []T): usize { return len(items) }
 export function stack_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
-export function stack_peek<T>(items: []T): T { return items[len(items)-1 as usize] }
+export function stack_peek<T: Copy>(items: []T): T { return items[len(items)-1 as usize] }

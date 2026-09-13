@@ -1,0 +1,174 @@
+module noqeri.compiler.selfhost.record_layout
+import "ast.nqr"
+import "type_ref.nqr"
+import "types.nqr"
+
+record NqRecordInfo {
+    symbol: u64
+    nameStart: usize
+    nameEnd: usize
+    firstField: usize
+    fieldCount: usize
+    size: usize
+    alignment: usize
+}
+
+record NqFieldInfo {
+    recordSymbol: u64
+    symbol: u64
+    nameStart: usize
+    nameEnd: usize
+    typeCode: int
+    typeSymbol: u64
+    elementTypeCode: int
+    elementTypeSymbol: u64
+    arrayLength: usize
+    offset: usize
+    size: usize
+    alignment: usize
+}
+
+export function nqRecordLayoutOk(): isize { return 0 }
+export function nqRecordLayoutCapacity(): isize { return -250 }
+export function nqRecordLayoutIncomplete(): isize { return -251 }
+export function nqRecordLayoutDuplicate(): isize { return -252 }
+
+export function nqRecordFind(records: []NqRecordInfo, count: usize, symbol: u64): isize {
+    let index: usize = 0 as usize
+    while index < count && index < len(records) { if records[index].symbol == symbol { return index as isize } index = index + 1 as usize }
+    return -1 as isize
+}
+
+export function nqRecordFieldFind(records: []NqRecordInfo, recordCount: usize, fields: []NqFieldInfo, recordSymbol: u64, fieldSymbol: u64): isize {
+    let recordIndex: isize = nqRecordFind(records, recordCount, recordSymbol)
+    if recordIndex < 0 as isize { return -1 as isize }
+    let record: *NqRecordInfo = &records[recordIndex as usize]
+    let index: usize = 0 as usize
+    while index < record.fieldCount {
+        let fieldIndex: usize = record.firstField + index
+        if fieldIndex >= len(fields) { return -1 as isize }
+        if fields[fieldIndex].symbol == fieldSymbol { return fieldIndex as isize }
+        index = index + 1 as usize
+    }
+    return -1 as isize
+}
+
+function nqRecordAlignUp(value: usize, alignment: usize): usize {
+    if alignment <= 1 as usize { return value }
+    let remainder: usize = value % alignment
+    if remainder == 0 as usize { return value }
+    return value + alignment - remainder
+}
+
+function nqRecordTypeStorage(value: *NqTypeRef, records: []NqRecordInfo, recordCount: usize, pointerBytes: usize, outAlign: *usize): usize {
+    if value == null || outAlign == null { return 0 as usize }
+    if value.code == nqAstTypeRecord() {
+        let index: isize = nqRecordFind(records, recordCount, value.nameSymbol)
+        if index < 0 as isize || records[index as usize].size == 0 as usize { return 0 as usize }
+        outAlign[0] = records[index as usize].alignment
+        return records[index as usize].size
+    }
+    if value.code == nqAstTypeArray() {
+        let element: NqTypeRef
+        element.code = value.elementCode
+        element.nameSymbol = value.elementSymbol
+        element.elementCode = nqAstTypeUnknown()
+        element.elementSymbol = 0 as u64
+        element.arrayLength = 0 as usize
+        element.genericArgCount = 0 as usize
+        element.firstGenericCode = nqAstTypeUnknown()
+        element.firstGenericSymbol = 0 as u64
+        element.start = value.start
+        element.end = value.end
+        element.flags = 0 as u32
+        let elementAlign: usize = 1 as usize
+        let elementSize: usize = nqRecordTypeStorage(&element, records, recordCount, pointerBytes, &elementAlign)
+        if elementSize == 0 as usize || value.arrayLength > 9223372036854775807 as usize / elementSize { return 0 as usize }
+        outAlign[0] = elementAlign
+        return elementSize * value.arrayLength
+    }
+    let size: usize = nqCompilerTypeStorageBytes(value.code, pointerBytes)
+    if size == 0 as usize { return 0 as usize }
+    let align: usize = size
+    if align > pointerBytes { align = pointerBytes }
+    outAlign[0] = align
+    return size
+}
+
+export function nqRecordBuild(source: []u8, nodes: []NqAstNode, first: isize, records: []NqRecordInfo, recordCount: *usize, fields: []NqFieldInfo, fieldCount: *usize, pointerBytes: usize): isize {
+    if recordCount == null || fieldCount == null || pointerBytes == 0 as usize { return nqRecordLayoutCapacity() }
+    recordCount[0] = 0 as usize
+    fieldCount[0] = 0 as usize
+    let cursor: isize = first
+    while cursor >= 0 as isize {
+        if cursor as usize >= len(nodes) { return nqRecordLayoutIncomplete() }
+        let node: *NqAstNode = &nodes[cursor as usize]
+        if node.tag == nqAstRecord() {
+            if recordCount[0] >= len(records) || node.left < 0 as isize { return nqRecordLayoutCapacity() }
+            let name: *NqAstNode = &nodes[node.left as usize]
+            let symbol: u64 = nqTypeNameSymbol(source, name.start, name.end)
+            if nqRecordFind(records, recordCount[0], symbol) >= 0 as isize { return nqRecordLayoutDuplicate() }
+            let index: usize = recordCount[0]
+            records[index].symbol = symbol
+            records[index].nameStart = name.start
+            records[index].nameEnd = name.end
+            records[index].firstField = 0 as usize
+            records[index].fieldCount = 0 as usize
+            records[index].size = 0 as usize
+            records[index].alignment = 1 as usize
+            recordCount[0] = index + 1 as usize
+        }
+        cursor = node.next
+    }
+    cursor = first
+    while cursor >= 0 as isize {
+        let node: *NqAstNode = &nodes[cursor as usize]
+        if node.tag == nqAstRecord() {
+            let name: *NqAstNode = &nodes[node.left as usize]
+            let recordSymbol: u64 = nqTypeNameSymbol(source, name.start, name.end)
+            let recordIndex: isize = nqRecordFind(records, recordCount[0], recordSymbol)
+            if recordIndex < 0 as isize { return nqRecordLayoutIncomplete() }
+            let record: *NqRecordInfo = &records[recordIndex as usize]
+            record.firstField = fieldCount[0]
+            let offset: usize = 0 as usize
+            let maxAlign: usize = 1 as usize
+            let fieldNode: isize = node.right
+            while fieldNode >= 0 as isize {
+                if fieldNode as usize >= len(nodes) || fieldCount[0] >= len(fields) { return nqRecordLayoutCapacity() }
+                let fieldAst: *NqAstNode = &nodes[fieldNode as usize]
+                if fieldAst.tag != nqAstField() || fieldAst.left < 0 as isize || fieldAst.extra < 0 as isize { return nqRecordLayoutIncomplete() }
+                let fieldName: *NqAstNode = &nodes[fieldAst.left as usize]
+                let typeRef: NqTypeRef
+                let typeEnd: usize = nqTypeRefParse(source, fieldAst.extra as usize, &typeRef)
+                if typeEnd <= fieldAst.extra as usize || !nqTypeRefValid(&typeRef) { return nqRecordLayoutIncomplete() }
+                let alignment: usize = 1 as usize
+                let size: usize = nqRecordTypeStorage(&typeRef, records, recordCount[0], pointerBytes, &alignment)
+                if size == 0 as usize { return nqRecordLayoutIncomplete() }
+                offset = nqRecordAlignUp(offset, alignment)
+                let fieldIndex: usize = fieldCount[0]
+                fields[fieldIndex].recordSymbol = recordSymbol
+                fields[fieldIndex].symbol = nqTypeNameSymbol(source, fieldName.start, fieldName.end)
+                fields[fieldIndex].nameStart = fieldName.start
+                fields[fieldIndex].nameEnd = fieldName.end
+                fields[fieldIndex].typeCode = typeRef.code
+                fields[fieldIndex].typeSymbol = typeRef.nameSymbol
+                fields[fieldIndex].elementTypeCode = typeRef.elementCode
+                fields[fieldIndex].elementTypeSymbol = typeRef.elementSymbol
+                fields[fieldIndex].arrayLength = typeRef.arrayLength
+                fields[fieldIndex].offset = offset
+                fields[fieldIndex].size = size
+                fields[fieldIndex].alignment = alignment
+                fieldCount[0] = fieldIndex + 1 as usize
+                record.fieldCount = record.fieldCount + 1 as usize
+                offset = offset + size
+                if alignment > maxAlign { maxAlign = alignment }
+                fieldNode = fieldAst.next
+            }
+            record.alignment = maxAlign
+            record.size = nqRecordAlignUp(offset, maxAlign)
+            if record.size == 0 as usize { record.size = 1 as usize }
+        }
+        cursor = node.next
+    }
+    return nqRecordLayoutOk()
+}

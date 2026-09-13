@@ -43,8 +43,6 @@ export function nqUnsafeLooksLikeDereference(source: []u8, start: usize): bool {
     let previous: u8 = nqUnsafePreviousSignificant(source, start)
     if previous == 0 as u8 || previous == 61 as u8 || previous == 40 as u8 || previous == 123 as u8 || previous == 91 as u8 || previous == 44 as u8 || previous == 59 as u8 { return true }
 
-    // `return *ptr` is common and the preceding significant byte is the final
-    // `n`, so inspect the previous token explicitly.
     let scan: usize = 0 as usize
     let last: usize = 0 as usize
     while scan < start {
@@ -78,7 +76,7 @@ export function nqUnsafeBoundaryCheck(source: []u8): isize {
         if value == 123 as u8 {
             braceDepth = braceDepth + 1
             if pendingUnsafe {
-                unsafeDepth = braceDepth
+                if unsafeDepth < 0 { unsafeDepth = braceDepth }
                 pendingUnsafe = false
             }
         } else if value == 125 as u8 {

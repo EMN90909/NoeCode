@@ -10,6 +10,7 @@
 #include "targets.hpp"
 #include "database.hpp"
 #include "runtime_checks.hpp"
+#include "profile.hpp"
 #include "runtime.hpp"
 #include "compiler.hpp"
 #include "tools.hpp"

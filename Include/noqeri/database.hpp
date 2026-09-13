@@ -15,10 +15,14 @@ public:
                  std::ostream& output,
                  Diagnostics& diagnostics) const;
 
-    // SQL is an adapter over the same .nqdb storage engine. The supported
-    // application subset is CREATE TABLE, INSERT, SELECT, UPDATE, DELETE and
-    // BEGIN/COMMIT/ROLLBACK boundaries, with equality WHERE clauses and simple
-    // ORDER BY/projection. Unsupported SQL fails closed with a diagnostic.
+    // SQL is an adapter over the same .nqdb storage engine. The bootstrap
+    // application surface includes CREATE TABLE, INSERT, SELECT, UPDATE,
+    // DELETE and BEGIN/COMMIT/ROLLBACK boundaries; equality WHERE predicates;
+    // qualified inner equality JOINs; projection; GROUP BY; COUNT/SUM/MIN/MAX;
+    // and ORDER BY selected columns or aliases. The adapter is deliberately
+    // fail-closed for unsupported SQL instead of silently changing semantics.
+    // More advanced DDL and planner/index optimisation belong to the database
+    // engine maturity gates rather than being approximated in this adapter.
     bool executeSql(const std::filesystem::path& script,
                     const std::filesystem::path& databaseOverride,
                     std::ostream& output,

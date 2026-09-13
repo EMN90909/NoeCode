@@ -1,0 +1,52 @@
+import "../Lib/std/crc.nqr"
+import "../Lib/std/hash.nqr"
+
+function main(): int {
+    let digits: [u8; 9] = [49 as u8,50 as u8,51 as u8,52 as u8,53 as u8,54 as u8,55 as u8,56 as u8,57 as u8]
+    let hello: [u8; 5] = [104 as u8,101 as u8,108 as u8,108 as u8,111 as u8]
+
+    // Published check values for the ASCII string "123456789".
+    if crc32(slice(digits)) != 3421780262 as u64 { return 1 }
+    if crc32c(slice(digits)) != 3808858755 as u64 { return 2 }
+    if crc16_ccitt(slice(digits)) != 10673 as u64 { return 3 }
+    if crc8(slice(digits)) != 244 as u64 { return 4 }
+    if !crc32_matches(slice(digits), 3421780262 as u64) { return 5 }
+    if !crc32c_matches(slice(digits), 3808858755 as u64) { return 6 }
+
+    let crcState: Crc32State
+    if !crc32_state_init(&crcState) { return 7 }
+    let first: [u8; 4] = [49 as u8,50 as u8,51 as u8,52 as u8]
+    let second: [u8; 5] = [53 as u8,54 as u8,55 as u8,56 as u8,57 as u8]
+    if !crc32_state_update(&crcState, slice(first)) { return 8 }
+    if !crc32_state_update(&crcState, slice(second)) { return 9 }
+    if crc32_state_value(&crcState) != 3421780262 as u64 || crc32_state_bytes(&crcState) != 9 as usize { return 10 }
+
+    let encoded: [u8; 4] = [0 as u8,0 as u8,0 as u8,0 as u8]
+    if !crc32_write_big_endian(3421780262 as u64, slice(encoded), 0 as usize) { return 11 }
+    if crc32_read_big_endian(slice(encoded), 0 as usize) != 3421780262 as u64 { return 12 }
+    if !crc32_write_little_endian(3421780262 as u64, slice(encoded), 0 as usize) { return 13 }
+    if crc32_read_little_endian(slice(encoded), 0 as usize) != 3421780262 as u64 { return 14 }
+
+    // Deterministic non-cryptographic hash vectors.
+    if hash_fnv1a32(slice(hello)) != 1335831723 as u64 { return 20 }
+    if hash_fnv132(slice(hello)) != 3069866343 as u64 { return 21 }
+    if hash_djb2(slice(hello)) != 261238937 as u64 { return 22 }
+    if hash_sdbm(slice(hello)) != 684824882 as u64 { return 23 }
+    if hash_fnv1a32(slice(digits)) != 3146166556 as u64 { return 24 }
+
+    let hashState: Hash32State
+    if !hash_fnv1a_state_init(&hashState) { return 25 }
+    if !hash_fnv1a_state_update(&hashState, slice(hello)) { return 26 }
+    if hash_fnv1a_state_value(&hashState) != 1335831723 as u64 || hash_state_bytes(&hashState) != 5 as usize { return 27 }
+
+    if hash_fnv1a_bucket(slice(hello), 16 as usize) != (1335831723 as u64 % 16 as u64) as usize { return 28 }
+    if !hash_equal_bytes(slice(hello), slice(hello)) { return 29 }
+
+    let values: [u64; 5] = [1 as u64,2 as u64,3 as u64,4 as u64,5 as u64]
+    let buckets: [usize; 4] = [0 as usize,0 as usize,0 as usize,0 as usize]
+    if !hash_distribution_counts(slice(values), slice(buckets)) { return 30 }
+    if buckets[0 as usize] != 1 as usize || buckets[1 as usize] != 2 as usize || buckets[2 as usize] != 1 as usize || buckets[3 as usize] != 1 as usize { return 31 }
+    if hash_max_bucket_load(slice(buckets)) != 2 as usize || hash_nonempty_bucket_count(slice(buckets)) != 4 as usize { return 32 }
+
+    return 0
+}

@@ -1,5 +1,17 @@
 module noqeri.std.option
 
+record Option<T> {
+    value: T
+    some: bool
+}
+
+export function option_init_some<T>(out: *Option<T>, value: T): void { out.value = value out.some = true }
+export function option_init_none<T>(out: *Option<T>, fallback: T): void { out.value = fallback out.some = false }
+export function option_is_some<T>(option: *Option<T>): bool { return option.some }
+export function option_is_none<T>(option: *Option<T>): bool { return !option.some }
+export function option_value_or<T>(option: *Option<T>, fallback: T): T { if option.some { return option.value } return fallback }
+
+// Compatibility helpers for status-oriented code.
 export function option_status_ok(status: isize): bool { return status >= 0 as isize }
 export function option_status_error(status: isize): bool { return status < 0 as isize }
 export function option_error_code(status: isize): isize { if status < 0 as isize { return -status } return 0 as isize }

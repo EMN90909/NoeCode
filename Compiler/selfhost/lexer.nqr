@@ -74,7 +74,7 @@ export function nqCompilerScanString(source: []u8, start: usize): usize {
     if start >= len(source) || source[start] != 34 as u8 { return start }
     let index: usize = start + 1
     while index < len(source) {
-        if source[index] == 92 as u8 { index = index + 2 }
+        if source[index] == 92 as u8 { if index + 1 as usize >= len(source) { return len(source) } index = index + 2 }
         else { if source[index] == 34 as u8 { return index + 1 } index = index + 1 }
     }
     return len(source)
@@ -100,8 +100,9 @@ export function nqCompilerTokenCount(source: []u8): usize {
     let count: usize = 0 as usize
     let index: usize = nqCompilerSkipTrivia(source, 0 as usize)
     while index < len(source) {
-        let next: usize = nqCompilerTokenEnd(source, index)
-        if next <= index { return count }
+        let token: NqToken
+        let next: usize = nqCompilerNextToken(source, index, &token)
+        if next <= index || token.kind == nqTokenInvalid() { return count }
         count = count + 1
         index = nqCompilerSkipTrivia(source, next)
     }
@@ -113,6 +114,7 @@ function nqCompilerOperator(value: u8): bool { return value == 43 as u8 || value
 
 export function nqCompilerNextToken(source: []u8, start: usize, out: *NqToken): usize {
     let index: usize = nqCompilerSkipTrivia(source, start)
+    if out == null { return index }
     out.start = index
     out.end = index
     out.first = 0 as u8
@@ -124,12 +126,20 @@ export function nqCompilerNextToken(source: []u8, start: usize, out: *NqToken): 
     if end > index + 1 as usize { out.second = source[index + 1 as usize] }
     if nqCompilerIsIdentifierStart(source[index]) { out.kind = nqTokenIdentifier() return end }
     if nqCompilerIsDigit(source[index]) {
+        if source[index] == 48 as u8 && index + 1 as usize < len(source) && (source[index + 1 as usize] == 120 as u8 || source[index + 1 as usize] == 88 as u8) && end == index + 2 as usize { out.kind = nqTokenInvalid() return end }
         out.kind = nqTokenInteger()
         let cursor: usize = index
-        while cursor < end { if source[cursor] == 46 as u8 { out.kind = nqTokenFloat() } cursor = cursor + 1 as usize }
+        let dot: bool = false
+        while cursor < end { if source[cursor] == 46 as u8 { dot = true } cursor = cursor + 1 as usize }
+        if dot {
+            if end == index + 1 as usize || source[end - 1 as usize] == 46 as u8 { out.kind = nqTokenInvalid() } else { out.kind = nqTokenFloat() }
+        }
         return end
     }
-    if source[index] == 34 as u8 { out.kind = nqTokenString() return end }
+    if source[index] == 34 as u8 {
+        if end <= index + 1 as usize || end > len(source) || source[end - 1 as usize] != 34 as u8 { out.kind = nqTokenInvalid() } else { out.kind = nqTokenString() }
+        return end
+    }
     if nqCompilerPunctuation(source[index]) { out.kind = nqTokenPunctuation() return end }
     if nqCompilerOperator(source[index]) { out.kind = nqTokenOperator() return end }
     out.kind = nqTokenInvalid()
@@ -143,4 +153,4 @@ export function nqTokenTextEqual(source: []u8, token: *NqToken, text: []u8): boo
     return true
 }
 
-export function nqTokenIs(source: []u8, token: *NqToken, text: []u8): bool { return token != null && token.kind != nqTokenEof() && nqTokenTextEqual(source, token, text) }
+export function nqTokenIs(source: []u8, token: *NqToken, text: []u8): bool { return token != null && token.kind != nqTokenEof() && token.kind != nqTokenInvalid() && nqTokenTextEqual(source, token, text) }

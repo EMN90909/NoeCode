@@ -2,4 +2,96 @@ module noqeri.std.format
 
 export function format_digit(value: u8): u8 { if value < 10 as u8 { return 48 as u8 + value } return 63 as u8 }
 export function format_hex_digit(value: u8): u8 { if value < 10 as u8 { return 48 as u8 + value } if value < 16 as u8 { return 87 as u8 + value } return 63 as u8 }
+export function format_hex_digit_upper(value: u8): u8 { if value < 10 as u8 { return 48 as u8 + value } if value < 16 as u8 { return 55 as u8 + value } return 63 as u8 }
 export function format_bool_len(value: bool): usize { if value { return 4 as usize } return 5 as usize }
+
+export function format_reverse_range(buffer: []u8, start: usize, endExclusive: usize): bool {
+    if start > endExclusive || endExclusive > len(buffer) { return false }
+    if endExclusive - start < 2 as usize { return true }
+    let left: usize = start
+    let right: usize = endExclusive - 1 as usize
+    while left < right {
+        let temporary: u8 = buffer[left]
+        buffer[left] = buffer[right]
+        buffer[right] = temporary
+        left = left + 1 as usize
+        right = right - 1 as usize
+    }
+    return true
+}
+
+export function format_u64_decimal(value: u64, buffer: []u8): isize {
+    if len(buffer) == 0 as usize { return -1 as isize }
+    if value == 0 as u64 { buffer[0 as usize] = 48 as u8 return 1 as isize }
+    let current: u64 = value
+    let length: usize = 0 as usize
+    while current > 0 as u64 {
+        if length >= len(buffer) { return -1 as isize }
+        buffer[length] = format_digit((current % 10 as u64) as u8)
+        current = current / 10 as u64
+        length = length + 1 as usize
+    }
+    format_reverse_range(buffer, 0 as usize, length)
+    return length as isize
+}
+
+export function format_i64_decimal(value: i64, buffer: []u8): isize {
+    if len(buffer) == 0 as usize { return -1 as isize }
+    if value >= 0 as i64 { return format_u64_decimal(value as u64, buffer) }
+    if len(buffer) < 2 as usize { return -1 as isize }
+    buffer[0 as usize] = 45 as u8
+    let current: i64 = value
+    let length: usize = 1 as usize
+    while current < 0 as i64 {
+        if length >= len(buffer) { return -1 as isize }
+        let remainder: i64 = current % 10 as i64
+        buffer[length] = format_digit((-remainder) as u8)
+        current = current / 10 as i64
+        length = length + 1 as usize
+    }
+    format_reverse_range(buffer, 1 as usize, length)
+    return length as isize
+}
+
+export function format_u64_hex(value: u64, buffer: []u8, uppercase: bool): isize {
+    if len(buffer) == 0 as usize { return -1 as isize }
+    if value == 0 as u64 { buffer[0 as usize] = 48 as u8 return 1 as isize }
+    let current: u64 = value
+    let length: usize = 0 as usize
+    while current > 0 as u64 {
+        if length >= len(buffer) { return -1 as isize }
+        let digit: u8 = (current % 16 as u64) as u8
+        if uppercase { buffer[length] = format_hex_digit_upper(digit) } else { buffer[length] = format_hex_digit(digit) }
+        current = current / 16 as u64
+        length = length + 1 as usize
+    }
+    format_reverse_range(buffer, 0 as usize, length)
+    return length as isize
+}
+
+export function format_bool(value: bool, buffer: []u8): isize {
+    let required: usize = format_bool_len(value)
+    if len(buffer) < required { return -1 as isize }
+    if value {
+        buffer[0 as usize] = 116 as u8
+        buffer[1 as usize] = 114 as u8
+        buffer[2 as usize] = 117 as u8
+        buffer[3 as usize] = 101 as u8
+        return 4 as isize
+    }
+    buffer[0 as usize] = 102 as u8
+    buffer[1 as usize] = 97 as u8
+    buffer[2 as usize] = 108 as u8
+    buffer[3 as usize] = 115 as u8
+    buffer[4 as usize] = 101 as u8
+    return 5 as isize
+}
+
+export function format_bytes_required_i64(value: i64): usize {
+    if value == 0 as i64 { return 1 as usize }
+    let current: i64 = value
+    let length: usize = 0 as usize
+    if current < 0 as i64 { length = 1 as usize }
+    while current != 0 as i64 { current = current / 10 as i64 length = length + 1 as usize }
+    return length
+}

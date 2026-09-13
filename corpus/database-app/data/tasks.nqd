@@ -1,0 +1,6 @@
+table tasks { id: int key, title: text required, done: bool required }
+delete tasks
+insert tasks { id: 1, title: "write practical corpus", done: false }
+insert tasks { id: 2, title: "run conformance", done: true }
+update tasks set { done: true } where id = 1
+select tasks where done = true

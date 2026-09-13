@@ -1,4 +1,48 @@
 module noqeri.std.set
-export function set_contains<T: Eq>(items: []T, value: T): bool { let i: usize = 0 as usize while i < len(items) { if items[i] == value { return true } i = i + 1 } return false }
-export function set_count_unique<T: Eq>(items: []T): usize { let unique: usize = 0 as usize let i: usize = 0 as usize while i < len(items) { let seen: bool = false let j: usize = 0 as usize while j < i { if items[j] == items[i] { seen = true } j = j + 1 } if !seen { unique = unique + 1 } i = i + 1 } return unique }
-export function set_is_subset<T: Eq>(left: []T, right: []T): bool { let i: usize = 0 as usize while i < len(left) { if !set_contains(right,left[i]) { return false } i = i + 1 } return true }
+
+record Set<T> {
+    data: *T
+    length: usize
+    capacity: usize
+}
+
+export function set_length<T>(set: *Set<T>): usize { return set.length }
+export function set_capacity<T>(set: *Set<T>): usize { return set.capacity }
+export function set_empty<T>(set: *Set<T>): bool { return set.length == 0 as usize }
+export function set_invariant<T>(set: *Set<T>): bool { return set.length <= set.capacity && (set.capacity == 0 as usize || set.data != null) }
+
+export function set_has<T: Eq>(set: *Set<T>, value: T): bool {
+    if set.data == null { return false }
+    let i: usize = 0 as usize
+    while i < set.length { if set.data[i] == value { return true } i = i + 1 as usize }
+    return false
+}
+
+export function set_insert<T: Eq>(set: *Set<T>, value: T): bool {
+    if set.data == null { return false }
+    if set_has(set, value) { return true }
+    if set.length >= set.capacity { return false }
+    set.data[set.length] = value
+    set.length = set.length + 1 as usize
+    return true
+}
+
+export function set_remove<T: Eq>(set: *Set<T>, value: T): bool {
+    if set.data == null { return false }
+    let i: usize = 0 as usize
+    while i < set.length {
+        if set.data[i] == value {
+            let j: usize = i
+            while j + 1 as usize < set.length { set.data[j] = set.data[j + 1 as usize] j = j + 1 as usize }
+            set.length = set.length - 1 as usize
+            return true
+        }
+        i = i + 1 as usize
+    }
+    return false
+}
+
+export function set_clear<T>(set: *Set<T>): void { set.length = 0 as usize }
+export function set_contains<T: Eq>(items: []T, value: T): bool { let i: usize = 0 as usize while i < len(items) { if items[i] == value { return true } i = i + 1 as usize } return false }
+export function set_count_unique<T: Eq>(items: []T): usize { let unique: usize = 0 as usize let i: usize = 0 as usize while i < len(items) { let seen: bool = false let j: usize = 0 as usize while j < i { if items[j] == items[i] { seen = true } j = j + 1 as usize } if !seen { unique = unique + 1 as usize } i = i + 1 as usize } return unique }
+export function set_is_subset<T: Eq>(left: []T, right: []T): bool { let i: usize = 0 as usize while i < len(left) { if !set_contains(right,left[i]) { return false } i = i + 1 as usize } return true }

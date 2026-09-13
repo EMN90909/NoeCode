@@ -10,3 +10,153 @@ export function nqOptimizerCanFold(opcode: int): bool { return nqNirIsPureArithm
 export function nqOptimizerCanEliminate(opcode: int, resultUsed: bool): bool { return !resultUsed && !nqNirHasSideEffect(opcode) }
 export function nqOptimizerShouldInline(instructions: usize, level: int): bool { if level == nqOptLevelNone() { return false } if level == nqOptLevelSize() { return instructions <= 6 as usize } if level == nqOptLevelSpeed() { return instructions <= 24 as usize } return instructions <= 64 as usize }
 export function nqOptimizerPassBudget(level: int): int { if level <= 0 { return 0 } if level == 1 { return 2 } if level == 2 { return 5 } return 8 }
+
+function nqOptimizerI64Max(): i64 { return 9223372036854775807 as i64 }
+function nqOptimizerI64Min(): i64 { return -9223372036854775807 as i64 - 1 as i64 }
+
+function nqOptimizerSafeAdd(a: i64, b: i64): bool {
+    if b > 0 as i64 && a > nqOptimizerI64Max() - b { return false }
+    if b < 0 as i64 && a < nqOptimizerI64Min() - b { return false }
+    return true
+}
+function nqOptimizerSafeSub(a: i64, b: i64): bool {
+    if b < 0 as i64 && a > nqOptimizerI64Max() + b { return false }
+    if b > 0 as i64 && a < nqOptimizerI64Min() + b { return false }
+    return true
+}
+function nqOptimizerSafeMul(a: i64, b: i64): bool {
+    if a == 0 as i64 || b == 0 as i64 { return true }
+    if a == -1 as i64 { return b != nqOptimizerI64Min() }
+    if b == -1 as i64 { return a != nqOptimizerI64Min() }
+    if a > 0 as i64 {
+        if b > 0 as i64 { return a <= nqOptimizerI64Max() / b }
+        return b >= nqOptimizerI64Min() / a
+    }
+    if b > 0 as i64 { return a >= nqOptimizerI64Min() / b }
+    return a >= nqOptimizerI64Max() / b
+}
+
+// Returns 1 when folded and writes the result; 0 means "leave it for runtime".
+export function nqOptimizerFoldI64(opcode: int, a: i64, b: i64, out: *i64): isize {
+    if out == null { return 0 }
+    if opcode == nqNirAdd() { if !nqOptimizerSafeAdd(a, b) { return 0 } out[0] = a + b return 1 }
+    if opcode == nqNirSub() { if !nqOptimizerSafeSub(a, b) { return 0 } out[0] = a - b return 1 }
+    if opcode == nqNirMul() { if !nqOptimizerSafeMul(a, b) { return 0 } out[0] = a * b return 1 }
+    if opcode == nqNirDiv() { if b == 0 as i64 || (a == nqOptimizerI64Min() && b == -1 as i64) { return 0 } out[0] = a / b return 1 }
+    if opcode == nqNirMod() { if b == 0 as i64 || (a == nqOptimizerI64Min() && b == -1 as i64) { return 0 } out[0] = a % b return 1 }
+    if opcode == nqNirEq() { if a == b { out[0] = 1 as i64 } else { out[0] = 0 as i64 } return 1 }
+    if opcode == nqNirNe() { if a != b { out[0] = 1 as i64 } else { out[0] = 0 as i64 } return 1 }
+    if opcode == nqNirLt() { if a < b { out[0] = 1 as i64 } else { out[0] = 0 as i64 } return 1 }
+    if opcode == nqNirLe() { if a <= b { out[0] = 1 as i64 } else { out[0] = 0 as i64 } return 1 }
+    if opcode == nqNirGt() { if a > b { out[0] = 1 as i64 } else { out[0] = 0 as i64 } return 1 }
+    if opcode == nqNirGe() { if a >= b { out[0] = 1 as i64 } else { out[0] = 0 as i64 } return 1 }
+    return 0
+}
+
+function nqOptimizerFindConstBefore(instructions: []NqNirInstruction, before: usize, value: isize, out: *i64): bool {
+    if value < 0 as isize || out == null || before == 0 as usize { return false }
+    let cursor: isize = before as isize - 1 as isize
+    while cursor >= 0 as isize {
+        let item: *NqNirInstruction = &instructions[cursor as usize]
+        if item.dest == value {
+            if item.opcode == nqNirConstI64() { out[0] = item.immediate return true }
+            return false
+        }
+        cursor = cursor - 1 as isize
+    }
+    return false
+}
+
+function nqOptimizerValueUsedAfter(instructions: []NqNirInstruction, after: usize, value: isize): bool {
+    let index: usize = after + 1 as usize
+    while index < len(instructions) {
+        if nqNirInstructionUses(&instructions[index], value) { return true }
+        // A redefinition closes this value's live range in the simple Stage-2 SSA form.
+        if instructions[index].dest == value { return false }
+        index = index + 1 as usize
+    }
+    return false
+}
+
+export function nqOptimizerConstantFold(instructions: []NqNirInstruction): usize {
+    let changes: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(instructions) {
+        let item: *NqNirInstruction = &instructions[index]
+        if nqOptimizerCanFold(item.opcode) && item.dest >= 0 as isize {
+            let leftValue: i64 = 0 as i64
+            let rightValue: i64 = 0 as i64
+            if nqOptimizerFindConstBefore(instructions, index, item.left, &leftValue) && nqOptimizerFindConstBefore(instructions, index, item.right, &rightValue) {
+                let folded: i64 = 0 as i64
+                if nqOptimizerFoldI64(item.opcode, leftValue, rightValue, &folded) > 0 {
+                    item.opcode = nqNirConstI64()
+                    item.left = nqNirNoValue()
+                    item.right = nqNirNoValue()
+                    item.immediate = folded
+                    changes = changes + 1 as usize
+                }
+            }
+        } else if item.opcode == nqNirMove() && item.dest >= 0 as isize {
+            let moved: i64 = 0 as i64
+            if nqOptimizerFindConstBefore(instructions, index, item.left, &moved) {
+                item.opcode = nqNirConstI64()
+                item.left = nqNirNoValue()
+                item.immediate = moved
+                changes = changes + 1 as usize
+            }
+        }
+        index = index + 1 as usize
+    }
+    return changes
+}
+
+export function nqOptimizerAlgebraicSimplify(instructions: []NqNirInstruction): usize {
+    let changes: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(instructions) {
+        let item: *NqNirInstruction = &instructions[index]
+        if item.opcode == nqNirMove() && item.dest == item.left { item.opcode = nqNirNop() changes = changes + 1 as usize }
+        else if (item.opcode == nqNirAdd() || item.opcode == nqNirSub() || item.opcode == nqNirMul() || item.opcode == nqNirDiv()) && item.dest >= 0 as isize {
+            let rightValue: i64 = 0 as i64
+            if nqOptimizerFindConstBefore(instructions, index, item.right, &rightValue) {
+                if (item.opcode == nqNirAdd() || item.opcode == nqNirSub()) && rightValue == 0 as i64 { item.opcode = nqNirMove() item.right = nqNirNoValue() changes = changes + 1 as usize }
+                else if (item.opcode == nqNirMul() || item.opcode == nqNirDiv()) && rightValue == 1 as i64 { item.opcode = nqNirMove() item.right = nqNirNoValue() changes = changes + 1 as usize }
+                else if item.opcode == nqNirMul() && rightValue == 0 as i64 { item.opcode = nqNirConstI64() item.left = nqNirNoValue() item.right = nqNirNoValue() item.immediate = 0 as i64 changes = changes + 1 as usize }
+            }
+        }
+        index = index + 1 as usize
+    }
+    return changes
+}
+
+export function nqOptimizerDeadCodeEliminate(instructions: []NqNirInstruction): usize {
+    let changes: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(instructions) {
+        let item: *NqNirInstruction = &instructions[index]
+        if item.dest >= 0 as isize && nqOptimizerCanEliminate(item.opcode, nqOptimizerValueUsedAfter(instructions, index, item.dest)) {
+            item.opcode = nqNirNop()
+            item.left = nqNirNoValue()
+            item.right = nqNirNoValue()
+            changes = changes + 1 as usize
+        }
+        index = index + 1 as usize
+    }
+    return changes
+}
+
+export function nqOptimizerRun(instructions: []NqNirInstruction, level: int): usize {
+    if !nqOptimizerLevelValid(level) || level == nqOptLevelNone() { return 0 as usize }
+    let total: usize = 0 as usize
+    let round: int = 0
+    let budget: int = nqOptimizerPassBudget(level)
+    while round < budget {
+        let changed: usize = nqOptimizerConstantFold(instructions)
+        changed = changed + nqOptimizerAlgebraicSimplify(instructions)
+        changed = changed + nqOptimizerDeadCodeEliminate(instructions)
+        total = total + changed
+        if changed == 0 as usize { return total }
+        round = round + 1
+    }
+    return total
+}

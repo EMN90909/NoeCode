@@ -1,5 +1,7 @@
 import "../Lib/std/math.nqr"
 import "../Lib/std/math/big.nqr"
+import "../Lib/std/math/checked.nqr"
+import "../Lib/std/math/advanced.nqr"
 import "../Lib/std/path.nqr"
 import "../Lib/std/result.nqr"
 import "../Lib/std/random.nqr"
@@ -50,6 +52,12 @@ function main(): int {
     if time_second_part(90061 as i64) != 1 as i64 { return 21 }
     if string_repeat("ab", 3 as usize) != "ababab" { return 22 }
     if string_center("x", 3 as usize, "-") != "-x-" { return 23 }
+
+    let checked: i64 = 0 as i64
+    if !checked_add_i64(40 as i64, 2 as i64, &checked) || checked != 42 as i64 { return 24 }
+    if checked_add_i64(checked_i64_max(), 1 as i64, &checked) { return 25 }
+    if !nqAlmostEqualFloat(nqAtanFloat(1.0), nqPi() / 4.0, 0.0001) { return 26 }
+    if !nqAlmostEqualFloat(nqAsinFloat(1.0), nqPi() / 2.0, 0.0001) { return 27 }
 
     return 0
 }

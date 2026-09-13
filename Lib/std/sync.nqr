@@ -1,8 +1,69 @@
 module noqeri.std.sync
 
+unsafe extern function syncHostYield(): void
+
 export function sync_unlocked(): u64 { return 0 as u64 }
 export function sync_locked(): u64 { return 1 as u64 }
-export function sync_try_lock(state: *u64): bool { let old:u64=atomic.compareExchange(state,0 as u64,1 as u64) return old==0 as u64 }
-export function sync_unlock(state: *u64): void { atomic.store(state,0 as u64) }
-export function sync_is_locked(state: *u64): bool { return atomic.load(state)!=0 as u64 }
-export function sync_spin_pause(): void { intrinsic("x86.pause") }
+
+export function sync_try_lock(state: *u64): bool {
+    unsafe {
+        let old:u64=atomic.compareExchange(state,0 as u64,1 as u64)
+        return old==0 as u64
+    }
+}
+
+export function sync_lock(state: *u64): void {
+    while !sync_try_lock(state) {
+        unsafe { syncHostYield() }
+    }
+}
+
+export function sync_unlock(state: *u64): void {
+    unsafe { atomic.store(state,0 as u64) }
+}
+
+export function sync_is_locked(state: *u64): bool {
+    unsafe { return atomic.load(state)!=0 as u64 }
+}
+
+// RW lock layout: bit 63 is the writer flag; lower bits are the reader count.
+export function rwlock_writer_mask(): u64 { return 9223372036854775808 as u64 }
+export function rwlock_reader_mask(): u64 { return 9223372036854775807 as u64 }
+
+export function rwlock_try_read(state: *u64): bool {
+    unsafe {
+        let current:u64=atomic.load(state)
+        if (current & rwlock_writer_mask())!=0 as u64 { return false }
+        if (current & rwlock_reader_mask())==rwlock_reader_mask() { return false }
+        return atomic.compareExchange(state,current,current+1 as u64)==current
+    }
+}
+
+export function rwlock_read_lock(state: *u64): void {
+    while !rwlock_try_read(state) { unsafe { syncHostYield() } }
+}
+
+export function rwlock_read_unlock(state: *u64): void {
+    unsafe {
+        let current:u64=atomic.load(state)
+        while current>0 as u64 && atomic.compareExchange(state,current,current-1 as u64)!=current {
+            current=atomic.load(state)
+        }
+    }
+}
+
+export function rwlock_try_write(state: *u64): bool {
+    unsafe { return atomic.compareExchange(state,0 as u64,rwlock_writer_mask())==0 as u64 }
+}
+
+export function rwlock_write_lock(state: *u64): void {
+    while !rwlock_try_write(state) { unsafe { syncHostYield() } }
+}
+
+export function rwlock_write_unlock(state: *u64): void {
+    unsafe { atomic.store(state,0 as u64) }
+}
+
+export function sync_spin_pause(): void {
+    unsafe { syncHostYield() }
+}

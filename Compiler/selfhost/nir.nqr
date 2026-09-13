@@ -2,7 +2,6 @@ module noqeri.compiler.selfhost.nir
 
 // Stable, host-independent NIR. Registers are integer arena ids; -1 means
 // "no value". New operations are appended so existing opcode ids stay stable.
-// Symbol ids are deterministic source-name ids rather than host-language strings.
 record NqNirInstruction {
     opcode: int
     dest: isize
@@ -12,6 +11,14 @@ record NqNirInstruction {
     symbol: u64
     width: usize
     typeCode: int
+    flags: u32
+}
+
+record NqNirFunction {
+    symbol: u64
+    firstInstruction: usize
+    instructionCount: usize
+    parameterCount: usize
     flags: u32
 }
 
@@ -68,15 +75,16 @@ export function nqNirCast(): int { return 43 }
 export function nqNirLabel(): int { return 44 }
 export function nqNirConstString(): int { return 45 }
 export function nqNirCallArg(): int { return 46 }
+export function nqNirParameter(): int { return 47 }
 
-export function nqNirOpcodeValid(opcode: int): bool { return opcode >= nqNirNop() && opcode <= nqNirCallArg() }
+export function nqNirOpcodeValid(opcode: int): bool { return opcode >= nqNirNop() && opcode <= nqNirParameter() }
 export function nqNirHasSideEffect(opcode: int): bool {
-    return opcode == nqNirStore() || opcode == nqNirStoreMemory() || opcode == nqNirCall() || opcode == nqNirCallArg() || opcode == nqNirReturn() || opcode == nqNirJump() || opcode == nqNirBranch() || opcode == nqNirTry() || opcode == nqNirThrow() || opcode == nqNirBoundsCheck() || opcode == nqNirOverflowCheck() || (opcode >= nqNirAtomicStore() && opcode <= nqNirAsm())
+    return opcode == nqNirStore() || opcode == nqNirStoreMemory() || opcode == nqNirCall() || opcode == nqNirCallArg() || opcode == nqNirParameter() || opcode == nqNirReturn() || opcode == nqNirJump() || opcode == nqNirBranch() || opcode == nqNirTry() || opcode == nqNirThrow() || opcode == nqNirBoundsCheck() || opcode == nqNirOverflowCheck() || (opcode >= nqNirAtomicStore() && opcode <= nqNirAsm())
 }
 export function nqNirIsTerminator(opcode: int): bool { return opcode == nqNirJump() || opcode == nqNirBranch() || opcode == nqNirReturn() || opcode == nqNirThrow() }
 export function nqNirIsPureArithmetic(opcode: int): bool { return opcode >= nqNirAdd() && opcode <= nqNirGe() }
 export function nqNirDefinesValue(opcode: int): bool {
-    return opcode == nqNirConstI64() || opcode == nqNirConstF64() || opcode == nqNirConstString() || opcode == nqNirMove() || opcode == nqNirLoad() || nqNirIsPureArithmetic(opcode) || opcode == nqNirNeg() || opcode == nqNirNot() || opcode == nqNirPhi() || opcode == nqNirAddr() || opcode == nqNirPtrAdd() || opcode == nqNirAtomicLoad() || opcode == nqNirAtomicExchange() || opcode == nqNirCmpXchg() || opcode == nqNirIntrinsic() || opcode == nqNirTry() || opcode == nqNirStackAlloc() || opcode == nqNirLoadMemory() || opcode == nqNirSliceData() || opcode == nqNirSliceLen() || opcode == nqNirMakeSlice() || opcode == nqNirCast()
+    return opcode == nqNirConstI64() || opcode == nqNirConstF64() || opcode == nqNirConstString() || opcode == nqNirMove() || opcode == nqNirLoad() || nqNirIsPureArithmetic(opcode) || opcode == nqNirNeg() || opcode == nqNirNot() || opcode == nqNirPhi() || opcode == nqNirAddr() || opcode == nqNirPtrAdd() || opcode == nqNirAtomicLoad() || opcode == nqNirAtomicExchange() || opcode == nqNirCmpXchg() || opcode == nqNirIntrinsic() || opcode == nqNirTry() || opcode == nqNirStackAlloc() || opcode == nqNirLoadMemory() || opcode == nqNirSliceData() || opcode == nqNirSliceLen() || opcode == nqNirMakeSlice() || opcode == nqNirCast() || opcode == nqNirParameter()
 }
 
 export function nqNirInstructionInit(out: *NqNirInstruction, opcode: int, dest: isize): void {
@@ -108,6 +116,7 @@ export function nqNirInstructionValid(instruction: *NqNirInstruction): bool {
     if instruction.opcode == nqNirBranch() && instruction.left < 0 as isize { return false }
     if instruction.opcode == nqNirCall() && instruction.symbol == 0 as u64 { return false }
     if instruction.opcode == nqNirCallArg() && instruction.left < 0 as isize { return false }
+    if instruction.opcode == nqNirParameter() && instruction.symbol == 0 as u64 { return false }
     return true
 }
 
@@ -125,6 +134,11 @@ export function nqNirProgramValid(instructions: []NqNirInstruction): bool {
     return true
 }
 
+export function nqNirFunctionValid(function: *NqNirFunction, instructionCount: usize): bool {
+    if function == null || function.symbol == 0 as u64 || function.firstInstruction > instructionCount { return false }
+    return function.instructionCount <= instructionCount - function.firstInstruction
+}
+
 export function nqNirMakeConst(out: *NqNirInstruction, dest: isize, value: i64, typeCode: int): void {
     nqNirInstructionInit(out, nqNirConstI64(), dest)
     out.immediate = value
@@ -138,8 +152,6 @@ export function nqNirMakeBinary(out: *NqNirInstruction, opcode: int, dest: isize
     out.typeCode = typeCode
 }
 
-// Overflow-free deterministic identifier for symbol names. The modulus keeps
-// every intermediate below signed 64-bit limits even with checked arithmetic.
 export function nqNirSymbolId(source: []u8, start: usize, end: usize): u64 {
     if start >= end || end > len(source) { return 0 as u64 }
     let hash: u64 = 2166136261 as u64

@@ -1,9 +1,31 @@
 module noqeri.std.crypto.ed25519
 
-export function ed25519_public_key_size():usize{return 32 as usize}
-export function ed25519_private_seed_size():usize{return 32 as usize}
-export function ed25519_signature_size():usize{return 64 as usize}
-export function ed25519_public_key_length_valid(length:usize):bool{return length==32 as usize}
-export function ed25519_private_seed_length_valid(length:usize):bool{return length==32 as usize}
-export function ed25519_signature_length_valid(length:usize):bool{return length==64 as usize}
-export function ed25519_context_length_valid(length:usize):bool{return length<=255 as usize}
+extern function cryptoEd25519PublicFromSeed(seed: []u8, publicKey: []u8): isize
+extern function cryptoEd25519Sign(seed: []u8, message: []u8, signature: []u8): isize
+extern function cryptoEd25519Verify(publicKey: []u8, message: []u8, signature: []u8): bool
+
+export function ed25519_public_key_size(): usize { return 32 as usize }
+export function ed25519_private_seed_size(): usize { return 32 as usize }
+export function ed25519_signature_size(): usize { return 64 as usize }
+export function ed25519_public_key_length_valid(length: usize): bool { return length == ed25519_public_key_size() }
+export function ed25519_private_seed_length_valid(length: usize): bool { return length == ed25519_private_seed_size() }
+export function ed25519_signature_length_valid(length: usize): bool { return length == ed25519_signature_size() }
+export function ed25519_context_length_valid(length: usize): bool { return length <= 255 as usize }
+
+export function ed25519_public_from_seed(seed: []u8, publicKey: []u8): isize {
+    if !ed25519_private_seed_length_valid(len(seed)) { return -2 as isize }
+    if len(publicKey) < ed25519_public_key_size() { return -3 as isize }
+    return cryptoEd25519PublicFromSeed(seed, publicKey)
+}
+
+export function ed25519_sign(seed: []u8, message: []u8, signature: []u8): isize {
+    if !ed25519_private_seed_length_valid(len(seed)) { return -2 as isize }
+    if len(signature) < ed25519_signature_size() { return -3 as isize }
+    return cryptoEd25519Sign(seed, message, signature)
+}
+
+export function ed25519_verify(publicKey: []u8, message: []u8, signature: []u8): bool {
+    if !ed25519_public_key_length_valid(len(publicKey)) { return false }
+    if !ed25519_signature_length_valid(len(signature)) { return false }
+    return cryptoEd25519Verify(publicKey, message, signature)
+}

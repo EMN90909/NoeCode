@@ -9,6 +9,7 @@
 #include "packages.hpp"
 #include "targets.hpp"
 #include "database.hpp"
+#include "runtime_checks.hpp"
 #include "runtime.hpp"
 #include "compiler.hpp"
 #include "tools.hpp"

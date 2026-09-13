@@ -1,51 +1,32 @@
 # Noqeri self-hosting model
 
-Noqeri uses a conventional staged bootstrap. A compiler cannot compile its own source on a machine that has never had any compiler binary, so the project distinguishes **provenance** from the **normal build**.
+Noqeri uses staged bootstrap with a strict provenance boundary.
 
-## Stage 0 — trusted seed
+## Stage 0 — archival seed
 
-The final C++17 bootstrap source before the migration is preserved at branch `bootstrap/cpp17-stage0`, commit `82101a29de8ef75054e96bc13552b60f787dbc2e`.
+The historical C++17 compiler remains only on `bootstrap/cpp17-stage0`. It is provenance: a trusted seed capable of creating the first Noqeri compiler object on a machine that has no Noqeri compiler yet. It is not the intended implementation language of `main` and the normal compiler source does not grow new C++ features.
 
-Stage 0 exists only to create the first stage-1 portable object. It is not invoked after stage 1 has been produced and is not part of the normal compiler implementation path on `main`.
+## Stage 1 — Noqeri compiler source
 
-## Stage 1 — Noqeri-owned compiler kernel
+`Compiler/selfhost/` contains Noqeri-owned modules for lexical scanning, AST/type tags, structural parser policy, semantic conversion rules, NIR opcodes, optimisation policy, package imports, target/ABI selection, PE/COFF/ELF/Mach-O format policy, backend/link policy, formatter policy and LSP diagnostics. The normal bootstrap entry point is `Compiler/selfhost/bootstrap.nqr`.
 
-`Compiler/selfhost/` is written in Noqeri and owns the first migrated compiler responsibilities:
+## Host boundary
 
-- lexical classification and token boundaries;
-- whitespace/comment/string scanning;
-- delimiter and comment/string syntax validation;
-- primitive integer type-width/sign rules;
-- source token counting and deterministic source fingerprinting.
+Filesystem, process, terminal, network and executable-page services may be supplied by a portable host adapter. Compiler language semantics and code-generation policy belong in `.nqr`. A host adapter must not silently reimplement the frontend in JavaScript or C++.
 
-`./scripts/build.sh` and `scripts/build.ps1` use a trusted Noqeri stage-0 executable to compile `Compiler/selfhost/main.nqr` to `build/noqeri-stage1.nqo`. The checked-in Node launcher is a host adapter for portable filesystem/terminal access; language/compiler rules remain in Noqeri.
+## Stage-1 → stage-2 completion gate
 
-## Cross-platform boundary
+Full self-hosting is reached only when all are true:
 
-The stage-1 artifact is `.nqo`, so the same compiled compiler kernel can run on Windows, Linux, macOS and any other platform that provides the portable Noqeri web-object host contract. The included reference launcher uses Node.js 20+.
+1. stage 0 builds stage 1;
+2. stage 1 compiles the complete compiler source into stage 2;
+3. stage 2 rebuilds the same source;
+4. stage-1/stage-2 outputs are byte-identical where reproducibility permits, or pass semantic-equivalence checks where platform metadata differs;
+5. parser, type checker, NIR, optimiser, native/object writers, formatter, LSP and package-manager conformance suites pass without calling the archival C++ seed;
+6. the normal release process no longer needs CMake/C++.
 
-Native code generation, linking, package resolution, NoqeriDB tooling, formatter and LSP are being moved subsystem-by-subsystem. Until a subsystem reaches parity, the preserved stage-0 seed is the reference implementation; it is intentionally not hidden behind the stage-1 launcher.
+The repository must not claim this gate passed until an actual Noqeri compiler binary executes these steps. Source ownership and architecture can move ahead of the bootstrap proof; documentation cannot substitute for that proof.
 
-## Build locally
+## Local verification
 
-POSIX:
-
-```sh
-NOQERI_STAGE0=/path/to/trusted/noqeri ./scripts/build.sh
-./build/noqeri selftest
-./build/noqeri check examples/hello.nqr
-```
-
-PowerShell:
-
-```powershell
-$env:NOQERI_STAGE0 = 'C:\path\to\trusted\noqeri.exe'
-.\scripts\build.ps1
-.\build\noqeri.cmd selftest
-```
-
-No GitHub Actions are required. Local build/test is the canonical verification path during this migration.
-
-## Completion criterion
-
-The migration is complete when a stage-1 compiler can rebuild a byte-for-byte or semantically equivalent stage-2 compiler and all compiler commands pass the same conformance suite without calling the historical C++ seed. Until then, claims of a fully self-hosted compiler would be misleading.
+GitHub Actions are not required. Release scripts should run locally or on self-managed target machines and retain equivalence hashes, conformance results and native-object validation reports as release evidence.

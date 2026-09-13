@@ -1,5 +1,129 @@
 module noqeri.std.json
 
-export function json_is_whitespace(c:u8):bool{return c==32 as u8||c==9 as u8||c==10 as u8||c==13 as u8}
-export function json_is_digit(c:u8):bool{return c>=48 as u8&&c<=57 as u8}
-export function json_is_value_start(c:u8):bool{return c==34 as u8||c==123 as u8||c==91 as u8||c==116 as u8||c==102 as u8||c==110 as u8||c==45 as u8||json_is_digit(c)}
+export function json_token_invalid(): int { return 0 }
+export function json_token_object_begin(): int { return 1 }
+export function json_token_object_end(): int { return 2 }
+export function json_token_array_begin(): int { return 3 }
+export function json_token_array_end(): int { return 4 }
+export function json_token_colon(): int { return 5 }
+export function json_token_comma(): int { return 6 }
+export function json_token_string(): int { return 7 }
+export function json_token_number(): int { return 8 }
+export function json_token_true(): int { return 9 }
+export function json_token_false(): int { return 10 }
+export function json_token_null(): int { return 11 }
+
+export function json_is_whitespace(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
+export function json_is_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
+export function json_is_nonzero_digit(c: u8): bool { return c >= 49 as u8 && c <= 57 as u8 }
+export function json_is_hex(c: u8): bool { return json_is_digit(c) || (c >= 65 as u8 && c <= 70 as u8) || (c >= 97 as u8 && c <= 102 as u8) }
+export function json_is_value_start(c: u8): bool { return c == 34 as u8 || c == 123 as u8 || c == 91 as u8 || c == 116 as u8 || c == 102 as u8 || c == 110 as u8 || c == 45 as u8 || json_is_digit(c) }
+
+export function json_skip_whitespace(value: []u8, start: usize): usize {
+    let index: usize = start
+    while index < len(value) && json_is_whitespace(value[index]) { index = index + 1 as usize }
+    return index
+}
+
+export function json_string_end(value: []u8, start: usize): isize {
+    if start >= len(value) || value[start] != 34 as u8 { return -1 as isize }
+    let index: usize = start + 1 as usize
+    while index < len(value) {
+        let c: u8 = value[index]
+        if c == 34 as u8 { return (index + 1 as usize) as isize }
+        if c < 32 as u8 { return -1 as isize }
+        if c == 92 as u8 {
+            index = index + 1 as usize
+            if index >= len(value) { return -1 as isize }
+            let escaped: u8 = value[index]
+            if escaped == 34 as u8 || escaped == 92 as u8 || escaped == 47 as u8 || escaped == 98 as u8 || escaped == 102 as u8 || escaped == 110 as u8 || escaped == 114 as u8 || escaped == 116 as u8 {
+                index = index + 1 as usize
+            } else if escaped == 117 as u8 {
+                if index + 4 as usize >= len(value) { return -1 as isize }
+                let digit: usize = 1 as usize
+                while digit <= 4 as usize { if !json_is_hex(value[index + digit]) { return -1 as isize } digit = digit + 1 as usize }
+                index = index + 5 as usize
+            } else { return -1 as isize }
+        } else { index = index + 1 as usize }
+    }
+    return -1 as isize
+}
+
+export function json_number_end(value: []u8, start: usize): isize {
+    if start >= len(value) { return -1 as isize }
+    let index: usize = start
+    if value[index] == 45 as u8 { index = index + 1 as usize if index >= len(value) { return -1 as isize } }
+
+    if value[index] == 48 as u8 { index = index + 1 as usize }
+    else {
+        if !json_is_nonzero_digit(value[index]) { return -1 as isize }
+        while index < len(value) && json_is_digit(value[index]) { index = index + 1 as usize }
+    }
+
+    if index < len(value) && value[index] == 46 as u8 {
+        index = index + 1 as usize
+        if index >= len(value) || !json_is_digit(value[index]) { return -1 as isize }
+        while index < len(value) && json_is_digit(value[index]) { index = index + 1 as usize }
+    }
+
+    if index < len(value) && (value[index] == 101 as u8 || value[index] == 69 as u8) {
+        index = index + 1 as usize
+        if index < len(value) && (value[index] == 43 as u8 || value[index] == 45 as u8) { index = index + 1 as usize }
+        if index >= len(value) || !json_is_digit(value[index]) { return -1 as isize }
+        while index < len(value) && json_is_digit(value[index]) { index = index + 1 as usize }
+    }
+    return index as isize
+}
+
+export function json_match_literal(value: []u8, start: usize, literal: []u8): isize {
+    if start + len(literal) > len(value) { return -1 as isize }
+    let index: usize = 0 as usize
+    while index < len(literal) { if value[start + index] != literal[index] { return -1 as isize } index = index + 1 as usize }
+    return (start + len(literal)) as isize
+}
+
+export function json_token_at(value: []u8, start: usize, endOut: *usize): int {
+    if endOut == null { return json_token_invalid() }
+    let index: usize = json_skip_whitespace(value, start)
+    if index >= len(value) { endOut[0 as usize] = index return json_token_invalid() }
+    let c: u8 = value[index]
+    if c == 123 as u8 { endOut[0 as usize] = index + 1 as usize return json_token_object_begin() }
+    if c == 125 as u8 { endOut[0 as usize] = index + 1 as usize return json_token_object_end() }
+    if c == 91 as u8 { endOut[0 as usize] = index + 1 as usize return json_token_array_begin() }
+    if c == 93 as u8 { endOut[0 as usize] = index + 1 as usize return json_token_array_end() }
+    if c == 58 as u8 { endOut[0 as usize] = index + 1 as usize return json_token_colon() }
+    if c == 44 as u8 { endOut[0 as usize] = index + 1 as usize return json_token_comma() }
+    if c == 34 as u8 {
+        let ending: isize = json_string_end(value, index)
+        if ending < 0 as isize { return json_token_invalid() }
+        endOut[0 as usize] = ending as usize
+        return json_token_string()
+    }
+    if c == 45 as u8 || json_is_digit(c) {
+        let ending: isize = json_number_end(value, index)
+        if ending < 0 as isize { return json_token_invalid() }
+        endOut[0 as usize] = ending as usize
+        return json_token_number()
+    }
+    let trueText: [u8; 4] = [116 as u8,114 as u8,117 as u8,101 as u8]
+    let falseText: [u8; 5] = [102 as u8,97 as u8,108 as u8,115 as u8,101 as u8]
+    let nullText: [u8; 4] = [110 as u8,117 as u8,108 as u8,108 as u8]
+    let ending: isize = -1 as isize
+    if c == 116 as u8 { ending = json_match_literal(value, index, slice(trueText)) if ending >= 0 as isize { endOut[0 as usize] = ending as usize return json_token_true() } }
+    if c == 102 as u8 { ending = json_match_literal(value, index, slice(falseText)) if ending >= 0 as isize { endOut[0 as usize] = ending as usize return json_token_false() } }
+    if c == 110 as u8 { ending = json_match_literal(value, index, slice(nullText)) if ending >= 0 as isize { endOut[0 as usize] = ending as usize return json_token_null() } }
+    return json_token_invalid()
+}
+
+export function json_token_count(value: []u8): isize {
+    let count: usize = 0 as usize
+    let index: usize = 0 as usize
+    while json_skip_whitespace(value, index) < len(value) {
+        let end: usize = index
+        let token: int = json_token_at(value, index, &end)
+        if token == json_token_invalid() || end <= index { return -1 as isize }
+        count = count + 1 as usize
+        index = end
+    }
+    return count as isize
+}

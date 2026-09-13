@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "study_name": "Noqeri beginner usability benchmark",
+  "languages": ["noqeri", "python", "go", "lua", "javascript"],
+  "protocol": {
+    "timer_start": "Start immediately after the participant sees the task card and has a clean working directory.",
+    "timer_stop": "Stop only after the observable acceptance condition passes.",
+    "setup": "Install and verify the assigned language toolchain before the timed task. Use the same editor and comparable machine for a cohort.",
+    "resources": "Official language and standard-library documentation is allowed. Log documentation, hint and assistance events. Run assisted/AI cohorts separately from unassisted cohorts.",
+    "privacy": "Use an opaque participant code. Do not record names, email addresses, source code, terminal history or unrelated personal information.",
+    "comparison": "Publish sample counts, failures and raw aggregate timing evidence. Do not claim one language is easier or faster from an unbalanced or tiny cohort."
+  },
+  "tasks": [
+    {
+      "id": "first-program",
+      "category": "time-to-first-program",
+      "title": "Print a first program",
+      "goal": "Create and run a program that prints exactly: Hello, world!",
+      "acceptance": "The program exits successfully and stdout contains exactly one line: Hello, world!",
+      "languages": ["noqeri", "python", "go", "lua", "javascript"],
+      "advanced_features_required": false
+    },
+    {
+      "id": "cli-app",
+      "category": "time-to-first-real-app",
+      "title": "Build a small CLI",
+      "goal": "Build a command-line program that accepts a name argument and prints: Hello, <name>!",
+      "acceptance": "Running the program with Ada as the argument exits successfully and prints exactly: Hello, Ada!",
+      "languages": ["noqeri", "python", "go", "lua", "javascript"],
+      "advanced_features_required": false
+    },
+    {
+      "id": "http-api",
+      "category": "time-to-first-real-app",
+      "title": "Build a tiny HTTP API",
+      "goal": "Start an HTTP server with GET /health returning a JSON object whose ok field is true.",
+      "acceptance": "A local HTTP request to /health returns status 200, Content-Type application/json, and parseable JSON with ok=true.",
+      "languages": ["noqeri", "python", "go", "lua", "javascript"],
+      "advanced_features_required": false
+    },
+    {
+      "id": "json-tool",
+      "category": "time-to-first-real-app",
+      "title": "Build a JSON transformation tool",
+      "goal": "Read a JSON file containing an array of records and write the count of records whose active field is true.",
+      "acceptance": "Given the study fixture with three records, two active, the program exits successfully and prints exactly: 2",
+      "languages": ["noqeri", "python", "go", "lua", "javascript"],
+      "advanced_features_required": false
+    },
+    {
+      "id": "database-crud",
+      "category": "time-to-first-real-app",
+      "title": "Build local database CRUD",
+      "goal": "Create a local users store, insert Ada, read Ada, update the name to Ada Lovelace, then delete the record.",
+      "acceptance": "The observer can verify create, read, update and delete in one run or documented sequence, with the final lookup returning no Ada record.",
+      "languages": ["noqeri", "python", "go", "lua", "javascript"],
+      "advanced_features_required": false
+    }
+  ]
+}

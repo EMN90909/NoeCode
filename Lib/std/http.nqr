@@ -1,5 +1,46 @@
 module noqeri.std.http
 
-export function http_is_token_char(c:u8):bool{return c>32 as u8&&c<127 as u8&&c!=40 as u8&&c!=41 as u8&&c!=60 as u8&&c!=62 as u8&&c!=64 as u8&&c!=44 as u8&&c!=59 as u8&&c!=58 as u8&&c!=92 as u8&&c!=34 as u8&&c!=47 as u8&&c!=91 as u8&&c!=93 as u8&&c!=63 as u8&&c!=61 as u8&&c!=123 as u8&&c!=125 as u8}
-export function http_status_has_body(status:int):bool{return status!=204&&status!=304&&(status<100||status>=200)}
-export function http_status_is_success(status:int):bool{return status>=200&&status<300}
+extern function httpHostGet(url: string, timeoutMillis: i64): string
+extern function httpHostPost(url: string, contentType: string, body: string, timeoutMillis: i64): string
+extern function httpHostRequest(method: string, url: string, headers: string, body: string, timeoutMillis: i64): string
+extern function httpHostServe(address: string, handlerEntry: string): isize
+extern function httpHostShutdown(server: usize, timeoutMillis: i64): bool
+
+export function http_default_timeout_millis(): i64 { return 30000 as i64 }
+export function http_timeout_valid(timeoutMillis: i64): bool { return timeoutMillis > 0 as i64 && timeoutMillis <= 300000 as i64 }
+
+export function http_is_token_char(c: u8): bool {
+    return c > 32 as u8 && c < 127 as u8 && c != 40 as u8 && c != 41 as u8 && c != 60 as u8 && c != 62 as u8 && c != 64 as u8 && c != 44 as u8 && c != 59 as u8 && c != 58 as u8 && c != 92 as u8 && c != 34 as u8 && c != 47 as u8 && c != 91 as u8 && c != 93 as u8 && c != 63 as u8 && c != 61 as u8 && c != 123 as u8 && c != 125 as u8
+}
+
+export function http_status_has_body(status: int): bool { return status != 204 && status != 304 && (status < 100 || status >= 200) }
+export function http_status_is_success(status: int): bool { return status >= 200 && status < 300 }
+
+// The simple path: fetch the response body with a sensible default timeout.
+export function get(url: string): string {
+    unsafe { return httpHostGet(url, http_default_timeout_millis()) }
+}
+
+export function get_timeout(url: string, timeoutMillis: i64): string {
+    if !http_timeout_valid(timeoutMillis) { return "" }
+    unsafe { return httpHostGet(url, timeoutMillis) }
+}
+
+export function post(url: string, contentType: string, body: string): string {
+    unsafe { return httpHostPost(url, contentType, body, http_default_timeout_millis()) }
+}
+
+export function request(method: string, url: string, headers: string, body: string, timeoutMillis: i64): string {
+    if !http_timeout_valid(timeoutMillis) { return "" }
+    unsafe { return httpHostRequest(method, url, headers, body, timeoutMillis) }
+}
+
+// Until first-class function values are available, handlerEntry names an
+// exported Noqeri function. This keeps socket/TLS details out of applications
+// while preserving a migration path to `serve(address, handler)` later.
+export function serve(address: string, handlerEntry: string): isize {
+    unsafe { return httpHostServe(address, handlerEntry) }
+}
+
+export function http_get(url: string): string { return get(url) }
+export function http_serve(address: string, handlerEntry: string): isize { return serve(address, handlerEntry) }

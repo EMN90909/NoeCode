@@ -1,0 +1,14 @@
+workspace {
+    members: [
+        "cli-app",
+        "web-server",
+        "rest-api",
+        "database-app",
+        "websocket-server",
+        "file-processor",
+        "tcp-service",
+        "gui-app",
+        "game-tool",
+        "embedded-app"
+    ]
+}

@@ -259,13 +259,37 @@ export function createPackageManager(options = {}) {
     await writeFile(join(dirname(projectPath), 'noqeri.lock'), output, { mode: 0o600 })
   }
 
-  async function installProject() {
-    const projectPath = await findProject(), text = await readFile(projectPath, 'utf8'), deps = dependencies(text), installed = []
-    for (const dep of deps) {
+  async function packageDependencies(pkg) {
+    const manifest = await readFile(join(pkg.path, 'package.nqr'), 'utf8')
+    return dependencies(manifest)
+  }
+
+  async function installGraph(rootDeps) {
+    const resolved = new Map(), visiting = new Set()
+    async function visit(dep, depth) {
+      if (depth > 32) throw new Error(`dependency depth limit exceeded at ${dep.coordinate}`)
+      const prior = resolved.get(dep.coordinate)
+      if (prior) {
+        if (prior.version !== dep.version) throw new Error(`dependency version conflict for ${dep.coordinate}: ${prior.version} vs ${dep.version}`)
+        return
+      }
+      const key = `${dep.coordinate}@${dep.version}`
+      if (visiting.has(key)) throw new Error(`dependency cycle detected at ${key}`)
+      visiting.add(key)
       const pkg = await fetchPackage(dep.coordinate, dep.version)
-      installed.push({ ...dep, ...pkg })
-      console.log(`installed ${dep.coordinate}@${dep.version}`)
+      const item = { alias: dep.alias || packageAlias(dep.coordinate), coordinate: dep.coordinate, version: pkg.version, ...pkg }
+      resolved.set(dep.coordinate, item)
+      for (const child of await packageDependencies(pkg)) await visit(child, depth + 1)
+      visiting.delete(key)
+      console.log(`installed ${dep.coordinate}@${pkg.version}`)
     }
+    for (const dep of rootDeps) await visit(dep, 0)
+    return [...resolved.values()]
+  }
+
+  async function installProject() {
+    const projectPath = await findProject(), text = await readFile(projectPath, 'utf8'), deps = dependencies(text)
+    const installed = await installGraph(deps)
     await writeLock(projectPath, installed)
     return installed
   }

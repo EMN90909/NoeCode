@@ -12,7 +12,9 @@ export function exercise(): isize {
     let ptr: *u64 = &counter
     atomic.store(ptr, 2)
     let observed: u64 = atomic.load(ptr)
-    intrinsic("x86.pause")
-    asm("nop")
+    unsafe {
+        intrinsic("x86.pause")
+        asm("nop")
+    }
     return identity((first as isize) + (observed as isize) + (len(view) as isize))
 }

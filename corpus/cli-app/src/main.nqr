@@ -1,0 +1,13 @@
+function classify(value: int): string {
+    if value < 0 { return "negative" }
+    if value == 0 { return "zero" }
+    return "positive"
+}
+
+function main(): int {
+    let value: int = 42
+    print("value")
+    print(value)
+    print(classify(value))
+    return 0
+}

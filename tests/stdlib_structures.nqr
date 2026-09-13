@@ -1,0 +1,90 @@
+import "../Lib/std/bitset.nqr"
+import "../Lib/std/bloom.nqr"
+import "../Lib/std/deque.nqr"
+import "../Lib/std/heap.nqr"
+import "../Lib/std/priority_queue.nqr"
+
+function test_bitset(): int {
+    let stateBytes: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let storage: [u8; 4] = [0 as u8,0 as u8,0 as u8,0 as u8]
+    let set: *BitSet = (&stateBytes[0 as usize]) as *BitSet
+    if !bitset_init(set, &storage[0 as usize], 24 as usize, 4 as usize) { return 1 }
+    if !bitset_set(set, 0 as usize) || !bitset_set(set, 7 as usize) || !bitset_set(set, 23 as usize) { return 2 }
+    if bitset_count_ones(set) != 3 as usize { return 3 }
+    if !bitset_test(set, 7 as usize) || bitset_test(set, 8 as usize) { return 4 }
+    if bitset_rank(set, 8 as usize) != 2 as usize { return 5 }
+    if bitset_select(set, 2 as usize) != 23 as isize { return 6 }
+    if bitset_set(set, 24 as usize) { return 7 }
+    if !bitset_toggle_range(set, 6 as usize, 9 as usize) { return 8 }
+    if bitset_count_range(set, 6 as usize, 9 as usize) != 2 as usize { return 9 }
+    return 0
+}
+
+function test_bloom(): int {
+    let stateBytes: [u8; 64] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let storage: [u8; 32] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let filter: *BloomFilter = (&stateBytes[0 as usize]) as *BloomFilter
+    if !bloom_init(filter, &storage[0 as usize], 256 as usize, 32 as usize, 4 as usize, 17 as u64) { return 1 }
+    if !bloom_add_u64(filter, 42 as u64) || !bloom_add_u64(filter, 99 as u64) { return 2 }
+    if !bloom_might_contain_u64(filter, 42 as u64) || !bloom_might_contain_u64(filter, 99 as u64) { return 3 }
+    if bloom_inserted_count(filter) != 2 as usize { return 4 }
+    if bloom_count_set_bits(filter) == 0 as usize { return 5 }
+    if !bloom_clear(filter) || !bloom_empty_filter(filter) { return 6 }
+    return 0
+}
+
+function test_deque(): int {
+    let stateBytes: [u8; 64] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let storage: [i64; 5] = [0 as i64,0 as i64,0 as i64,0 as i64,0 as i64]
+    let deque: *Deque<i64> = (&stateBytes[0 as usize]) as *Deque<i64>
+    if !deque_init(deque, &storage[0 as usize], 5 as usize) { return 1 }
+    if !deque_push_back(deque, 2 as i64) || !deque_push_back(deque, 3 as i64) || !deque_push_front(deque, 1 as i64) { return 2 }
+    if deque_length(deque) != 3 as usize || deque_front_or(deque, -1 as i64) != 1 as i64 || deque_back_or(deque, -1 as i64) != 3 as i64 { return 3 }
+    if deque_pop_front_or(deque, -1 as i64) != 1 as i64 { return 4 }
+    if !deque_push_back(deque, 4 as i64) || !deque_rotate_right(deque, 1 as usize) { return 5 }
+    if deque_front_or(deque, -1 as i64) != 4 as i64 { return 6 }
+    if !deque_reverse(deque) || deque_back_or(deque, -1 as i64) != 4 as i64 { return 7 }
+    return 0
+}
+
+function test_heap(): int {
+    let stateBytes: [u8; 64] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let storage: [i64; 8] = [0 as i64,0 as i64,0 as i64,0 as i64,0 as i64,0 as i64,0 as i64,0 as i64]
+    let heap: *Heap<i64> = (&stateBytes[0 as usize]) as *Heap<i64>
+    if !heap_init(heap, &storage[0 as usize], 8 as usize, true) { return 1 }
+    if !heap_push(heap, 9 as i64) || !heap_push(heap, 3 as i64) || !heap_push(heap, 7 as i64) || !heap_push(heap, 1 as i64) { return 2 }
+    if !heap_is_valid(heap) || heap_peek_or(heap, -1 as i64) != 1 as i64 { return 3 }
+    if heap_pop_or(heap, -1 as i64) != 1 as i64 || heap_pop_or(heap, -1 as i64) != 3 as i64 { return 4 }
+    if !heap_update_at(heap, 0 as usize, 2 as i64) || heap_peek_or(heap, -1 as i64) != 2 as i64 { return 5 }
+    return 0
+}
+
+function test_priority_queue(): int {
+    let stateBytes: [u8; 96] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let values: [i64; 6] = [0 as i64,0 as i64,0 as i64,0 as i64,0 as i64,0 as i64]
+    let priorities: [i64; 6] = [0 as i64,0 as i64,0 as i64,0 as i64,0 as i64,0 as i64]
+    let sequences: [u64; 6] = [0 as u64,0 as u64,0 as u64,0 as u64,0 as u64,0 as u64]
+    let queue: *PriorityQueue<i64> = (&stateBytes[0 as usize]) as *PriorityQueue<i64>
+    if !priority_queue_init(queue, &values[0 as usize], &priorities[0 as usize], &sequences[0 as usize], 6 as usize, false) { return 1 }
+    if !priority_queue_push(queue, 10 as i64, 2 as i64) || !priority_queue_push(queue, 20 as i64, 9 as i64) || !priority_queue_push(queue, 30 as i64, 9 as i64) { return 2 }
+    if !priority_queue_is_valid(queue) || priority_queue_peek_or(queue, -1 as i64) != 20 as i64 { return 3 }
+    if priority_queue_pop_or(queue, -1 as i64) != 20 as i64 { return 4 }
+    if priority_queue_pop_or(queue, -1 as i64) != 30 as i64 { return 5 }
+    if !priority_queue_update_priority(queue, 10 as i64, 12 as i64) { return 6 }
+    if priority_queue_best_priority(queue, -1 as i64) != 12 as i64 { return 7 }
+    return 0
+}
+
+function main(): int {
+    let result: int = test_bitset()
+    if result != 0 { return 10 + result }
+    result = test_bloom()
+    if result != 0 { return 20 + result }
+    result = test_deque()
+    if result != 0 { return 30 + result }
+    result = test_heap()
+    if result != 0 { return 40 + result }
+    result = test_priority_queue()
+    if result != 0 { return 50 + result }
+    return 0
+}

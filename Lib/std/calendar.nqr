@@ -1,6 +1,409 @@
 module noqeri.std.calendar
 
-export function calendar_seconds_to_millis(value:i64):i64{return value*1000 as i64}
-export function calendar_minutes_to_seconds(value:i64):i64{return value*60 as i64}
-export function calendar_hours_to_seconds(value:i64):i64{return value*3600 as i64}
-export function calendar_nonnegative(value:i64):bool{return value>=0 as i64}
+// Calendar is about civil dates: years, months, weekdays and calendar layout.
+// It deliberately does not read the system clock and it does not apply time
+// zones. Weekdays use ISO numbering: Monday=1 ... Sunday=7.
+record CalendarDate {
+    year: int
+    month: int
+    day: int
+}
+
+export function calendar_months_per_year(): int { return 12 }
+export function calendar_days_per_week(): int { return 7 }
+export function calendar_iso_monday(): int { return 1 }
+export function calendar_iso_friday(): int { return 5 }
+export function calendar_iso_saturday(): int { return 6 }
+export function calendar_iso_sunday(): int { return 7 }
+
+export function calendar_is_leap_year(year: int): bool {
+    if year % 400 == 0 { return true }
+    if year % 100 == 0 { return false }
+    return year % 4 == 0
+}
+
+export function calendar_days_in_year(year: int): int {
+    if calendar_is_leap_year(year) { return 366 }
+    return 365
+}
+
+export function calendar_month_valid(month: int): bool {
+    return month >= 1 && month <= 12
+}
+
+export function calendar_days_in_month(year: int, month: int): int {
+    if month == 2 {
+        if calendar_is_leap_year(year) { return 29 }
+        return 28
+    }
+    if month == 4 || month == 6 || month == 9 || month == 11 { return 30 }
+    if calendar_month_valid(month) { return 31 }
+    return 0
+}
+
+export function calendar_date_valid(year: int, month: int, day: int): bool {
+    if year == 0 || !calendar_month_valid(month) { return false }
+    return day >= 1 && day <= calendar_days_in_month(year, month)
+}
+
+export function calendar_value_valid(value: *CalendarDate): bool {
+    return value != null && calendar_date_valid(value.year, value.month, value.day)
+}
+
+export function calendar_set(value: *CalendarDate, year: int, month: int, day: int): bool {
+    if value == null || !calendar_date_valid(year, month, day) { return false }
+    value.year = year
+    value.month = month
+    value.day = day
+    return true
+}
+
+export function calendar_copy(destination: *CalendarDate, source: *CalendarDate): bool {
+    if destination == null || source == null { return false }
+    destination.year = source.year
+    destination.month = source.month
+    destination.day = source.day
+    return true
+}
+
+export function calendar_day_of_year(year: int, month: int, day: int): int {
+    if !calendar_date_valid(year, month, day) { return 0 }
+    let total: int = day
+    let current: int = 1
+    while current < month {
+        total = total + calendar_days_in_month(year, current)
+        current = current + 1
+    }
+    return total
+}
+
+export function calendar_days_remaining_in_year(year: int, month: int, day: int): int {
+    let ordinal: int = calendar_day_of_year(year, month, day)
+    if ordinal == 0 { return 0 }
+    return calendar_days_in_year(year) - ordinal
+}
+
+export function calendar_quarter(month: int): int {
+    if !calendar_month_valid(month) { return 0 }
+    return (month - 1) / 3 + 1
+}
+
+export function calendar_month_in_quarter(month: int): int {
+    if !calendar_month_valid(month) { return 0 }
+    return (month - 1) % 3 + 1
+}
+
+export function calendar_quarter_start_month(quarter: int): int {
+    if quarter < 1 || quarter > 4 { return 0 }
+    return (quarter - 1) * 3 + 1
+}
+
+export function calendar_quarter_end_month(quarter: int): int {
+    let start: int = calendar_quarter_start_month(quarter)
+    if start == 0 { return 0 }
+    return start + 2
+}
+
+export function calendar_days_from_civil(year: int, month: int, day: int): i64 {
+    if !calendar_date_valid(year, month, day) { return 0 as i64 }
+    let y: i64 = year as i64
+    let m: i64 = month as i64
+    let d: i64 = day as i64
+    if m <= 2 as i64 { y = y - 1 as i64 }
+    let era: i64 = y / 400 as i64
+    if y < 0 as i64 && y % 400 as i64 != 0 as i64 { era = era - 1 as i64 }
+    let yoe: i64 = y - era * 400 as i64
+    let mp: i64 = m
+    if m > 2 as i64 { mp = m - 3 as i64 } else { mp = m + 9 as i64 }
+    let doy: i64 = (153 as i64 * mp + 2 as i64) / 5 as i64 + d - 1 as i64
+    let doe: i64 = yoe * 365 as i64 + yoe / 4 as i64 - yoe / 100 as i64 + doy
+    return era * 146097 as i64 + doe - 719468 as i64
+}
+
+export function calendar_iso_weekday(year: int, month: int, day: int): int {
+    if !calendar_date_valid(year, month, day) { return 0 }
+    let days: i64 = calendar_days_from_civil(year, month, day)
+    let weekday: i64 = (days + 3 as i64) % 7 as i64
+    if weekday < 0 as i64 { weekday = weekday + 7 as i64 }
+    return (weekday + 1 as i64) as int
+}
+
+export function calendar_is_weekend_iso(weekday: int): bool {
+    return weekday == calendar_iso_saturday() || weekday == calendar_iso_sunday()
+}
+
+export function calendar_is_weekday_iso(weekday: int): bool {
+    return weekday >= calendar_iso_monday() && weekday <= calendar_iso_friday()
+}
+
+export function calendar_is_weekend_date(year: int, month: int, day: int): bool {
+    return calendar_is_weekend_iso(calendar_iso_weekday(year, month, day))
+}
+
+export function calendar_is_weekday_date(year: int, month: int, day: int): bool {
+    return calendar_is_weekday_iso(calendar_iso_weekday(year, month, day))
+}
+
+export function calendar_compare(left: *CalendarDate, right: *CalendarDate): int {
+    if left == null && right == null { return 0 }
+    if left == null { return -1 }
+    if right == null { return 1 }
+    if left.year < right.year { return -1 }
+    if left.year > right.year { return 1 }
+    if left.month < right.month { return -1 }
+    if left.month > right.month { return 1 }
+    if left.day < right.day { return -1 }
+    if left.day > right.day { return 1 }
+    return 0
+}
+
+export function calendar_equal(left: *CalendarDate, right: *CalendarDate): bool {
+    return calendar_compare(left, right) == 0
+}
+
+export function calendar_same_month(left: *CalendarDate, right: *CalendarDate): bool {
+    if left == null || right == null { return false }
+    return left.year == right.year && left.month == right.month
+}
+
+export function calendar_same_year(left: *CalendarDate, right: *CalendarDate): bool {
+    if left == null || right == null { return false }
+    return left.year == right.year
+}
+
+export function calendar_days_between(left: *CalendarDate, right: *CalendarDate): i64 {
+    if !calendar_value_valid(left) || !calendar_value_valid(right) { return 0 as i64 }
+    return calendar_days_from_civil(right.year, right.month, right.day) - calendar_days_from_civil(left.year, left.month, left.day)
+}
+
+export function calendar_first_weekday_of_month(year: int, month: int): int {
+    if !calendar_month_valid(month) || year == 0 { return 0 }
+    return calendar_iso_weekday(year, month, 1)
+}
+
+export function calendar_last_weekday_of_month(year: int, month: int): int {
+    let days: int = calendar_days_in_month(year, month)
+    if days == 0 { return 0 }
+    return calendar_iso_weekday(year, month, days)
+}
+
+export function calendar_leading_days_monday(year: int, month: int): int {
+    let first: int = calendar_first_weekday_of_month(year, month)
+    if first == 0 { return 0 }
+    return first - 1
+}
+
+export function calendar_trailing_days_monday(year: int, month: int): int {
+    let days: int = calendar_days_in_month(year, month)
+    if days == 0 { return 0 }
+    let leading: int = calendar_leading_days_monday(year, month)
+    let used: int = leading + days
+    let remainder: int = used % 7
+    if remainder == 0 { return 0 }
+    return 7 - remainder
+}
+
+export function calendar_weeks_in_month_grid(year: int, month: int): int {
+    let days: int = calendar_days_in_month(year, month)
+    if days == 0 { return 0 }
+    let cells: int = calendar_leading_days_monday(year, month) + days + calendar_trailing_days_monday(year, month)
+    return cells / 7
+}
+
+export function calendar_grid_cell_for_day(year: int, month: int, day: int): int {
+    if !calendar_date_valid(year, month, day) { return -1 }
+    return calendar_leading_days_monday(year, month) + day - 1
+}
+
+export function calendar_grid_row_for_day(year: int, month: int, day: int): int {
+    let cell: int = calendar_grid_cell_for_day(year, month, day)
+    if cell < 0 { return -1 }
+    return cell / 7
+}
+
+export function calendar_grid_column_for_day(year: int, month: int, day: int): int {
+    let cell: int = calendar_grid_cell_for_day(year, month, day)
+    if cell < 0 { return -1 }
+    return cell % 7
+}
+
+export function calendar_nth_weekday_of_month(year: int, month: int, weekday: int, occurrence: int): int {
+    if occurrence < 1 || weekday < 1 || weekday > 7 { return 0 }
+    let first: int = calendar_first_weekday_of_month(year, month)
+    if first == 0 { return 0 }
+    let offset: int = weekday - first
+    if offset < 0 { offset = offset + 7 }
+    let day: int = 1 + offset + (occurrence - 1) * 7
+    if day > calendar_days_in_month(year, month) { return 0 }
+    return day
+}
+
+export function calendar_last_weekday_day_of_month(year: int, month: int, weekday: int): int {
+    if weekday < 1 || weekday > 7 { return 0 }
+    let lastDay: int = calendar_days_in_month(year, month)
+    if lastDay == 0 { return 0 }
+    let lastWeekday: int = calendar_iso_weekday(year, month, lastDay)
+    let offset: int = lastWeekday - weekday
+    if offset < 0 { offset = offset + 7 }
+    return lastDay - offset
+}
+
+export function calendar_weekday_occurrences_in_month(year: int, month: int, weekday: int): int {
+    let first: int = calendar_nth_weekday_of_month(year, month, weekday, 1)
+    if first == 0 { return 0 }
+    return 1 + (calendar_days_in_month(year, month) - first) / 7
+}
+
+export function calendar_business_days_in_month(year: int, month: int): int {
+    let days: int = calendar_days_in_month(year, month)
+    if days == 0 { return 0 }
+    let total: int = 0
+    let day: int = 1
+    while day <= days {
+        if calendar_is_weekday_date(year, month, day) { total = total + 1 }
+        day = day + 1
+    }
+    return total
+}
+
+export function calendar_weekend_days_in_month(year: int, month: int): int {
+    let days: int = calendar_days_in_month(year, month)
+    if days == 0 { return 0 }
+    return days - calendar_business_days_in_month(year, month)
+}
+
+export function calendar_add_days_in_place(value: *CalendarDate, delta: int): bool {
+    if !calendar_value_valid(value) { return false }
+    let remaining: int = delta
+    while remaining > 0 {
+        value.day = value.day + 1
+        if value.day > calendar_days_in_month(value.year, value.month) {
+            value.day = 1
+            value.month = value.month + 1
+            if value.month > 12 {
+                value.month = 1
+                value.year = value.year + 1
+                if value.year == 0 { value.year = 1 }
+            }
+        }
+        remaining = remaining - 1
+    }
+    while remaining < 0 {
+        value.day = value.day - 1
+        if value.day < 1 {
+            value.month = value.month - 1
+            if value.month < 1 {
+                value.month = 12
+                value.year = value.year - 1
+                if value.year == 0 { value.year = -1 }
+            }
+            value.day = calendar_days_in_month(value.year, value.month)
+        }
+        remaining = remaining + 1
+    }
+    return true
+}
+
+export function calendar_add_months_in_place(value: *CalendarDate, delta: int): bool {
+    if !calendar_value_valid(value) { return false }
+    let remaining: int = delta
+    while remaining > 0 {
+        value.month = value.month + 1
+        if value.month > 12 {
+            value.month = 1
+            value.year = value.year + 1
+            if value.year == 0 { value.year = 1 }
+        }
+        remaining = remaining - 1
+    }
+    while remaining < 0 {
+        value.month = value.month - 1
+        if value.month < 1 {
+            value.month = 12
+            value.year = value.year - 1
+            if value.year == 0 { value.year = -1 }
+        }
+        remaining = remaining + 1
+    }
+    let maximumDay: int = calendar_days_in_month(value.year, value.month)
+    if value.day > maximumDay { value.day = maximumDay }
+    return true
+}
+
+export function calendar_add_years_in_place(value: *CalendarDate, delta: int): bool {
+    if !calendar_value_valid(value) { return false }
+    let target: int = value.year + delta
+    if target == 0 { if delta >= 0 { target = 1 } else { target = -1 } }
+    value.year = target
+    let maximumDay: int = calendar_days_in_month(value.year, value.month)
+    if value.day > maximumDay { value.day = maximumDay }
+    return true
+}
+
+export function calendar_start_of_month(value: *CalendarDate): bool {
+    if !calendar_value_valid(value) { return false }
+    value.day = 1
+    return true
+}
+
+export function calendar_end_of_month(value: *CalendarDate): bool {
+    if !calendar_value_valid(value) { return false }
+    value.day = calendar_days_in_month(value.year, value.month)
+    return true
+}
+
+export function calendar_start_of_year(value: *CalendarDate): bool {
+    if !calendar_value_valid(value) { return false }
+    value.month = 1
+    value.day = 1
+    return true
+}
+
+export function calendar_end_of_year(value: *CalendarDate): bool {
+    if !calendar_value_valid(value) { return false }
+    value.month = 12
+    value.day = 31
+    return true
+}
+
+export function calendar_next_weekday_in_place(value: *CalendarDate): bool {
+    if !calendar_value_valid(value) { return false }
+    if !calendar_add_days_in_place(value, 1) { return false }
+    while calendar_is_weekend_date(value.year, value.month, value.day) {
+        if !calendar_add_days_in_place(value, 1) { return false }
+    }
+    return true
+}
+
+export function calendar_previous_weekday_in_place(value: *CalendarDate): bool {
+    if !calendar_value_valid(value) { return false }
+    if !calendar_add_days_in_place(value, -1) { return false }
+    while calendar_is_weekend_date(value.year, value.month, value.day) {
+        if !calendar_add_days_in_place(value, -1) { return false }
+    }
+    return true
+}
+
+export function calendar_fiscal_year_for_month(year: int, month: int, fiscalStartMonth: int): int {
+    if !calendar_month_valid(month) || !calendar_month_valid(fiscalStartMonth) { return 0 }
+    if month >= fiscalStartMonth { return year }
+    return year - 1
+}
+
+export function calendar_fiscal_month(month: int, fiscalStartMonth: int): int {
+    if !calendar_month_valid(month) || !calendar_month_valid(fiscalStartMonth) { return 0 }
+    let value: int = month - fiscalStartMonth
+    if value < 0 { value = value + 12 }
+    return value + 1
+}
+
+export function calendar_fiscal_quarter(month: int, fiscalStartMonth: int): int {
+    let fiscalMonth: int = calendar_fiscal_month(month, fiscalStartMonth)
+    if fiscalMonth == 0 { return 0 }
+    return (fiscalMonth - 1) / 3 + 1
+}
+
+export function calendar_seconds_to_millis(value: i64): i64 { return value * 1000 as i64 }
+export function calendar_minutes_to_seconds(value: i64): i64 { return value * 60 as i64 }
+export function calendar_hours_to_seconds(value: i64): i64 { return value * 3600 as i64 }
+export function calendar_nonnegative(value: i64): bool { return value >= 0 as i64 }

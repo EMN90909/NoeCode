@@ -25,6 +25,9 @@
     {"id":"bloom","group":"foundational-structures","threshold_percent":8,"evidence":"unmeasured","fixture":"Benchmarks/structures.nqr"},
     {"id":"deque","group":"foundational-structures","threshold_percent":8,"evidence":"unmeasured","fixture":"Benchmarks/structures.nqr"},
     {"id":"heap","group":"foundational-structures","threshold_percent":8,"evidence":"unmeasured","fixture":"Benchmarks/structures.nqr"},
-    {"id":"priority-queue","group":"foundational-structures","threshold_percent":8,"evidence":"unmeasured","fixture":"Benchmarks/structures.nqr"}
+    {"id":"priority-queue","group":"foundational-structures","threshold_percent":8,"evidence":"unmeasured","fixture":"Benchmarks/structures.nqr"},
+    {"id":"ring","group":"storage-structures","threshold_percent":8,"evidence":"unmeasured","fixture":"Benchmarks/storage_structures.nqr"},
+    {"id":"pool","group":"storage-structures","threshold_percent":8,"evidence":"unmeasured","fixture":"Benchmarks/storage_structures.nqr"},
+    {"id":"cache-lru","group":"storage-structures","threshold_percent":8,"evidence":"unmeasured","fixture":"Benchmarks/storage_structures.nqr"}
   ]
 }

@@ -1,5 +1,106 @@
 module noqeri.std.path
 
 export function path_is_separator(c: u8): bool { return c == 47 as u8 || c == 92 as u8 }
-export function path_has_drive_prefix(value: []u8): bool { return len(value)>=2 as usize && value[1]==58 as u8 }
-export function path_is_absolute(value: []u8): bool { if len(value)==0 as usize { return false } return path_is_separator(value[0]) || path_has_drive_prefix(value) }
+export function path_is_dot(c: u8): bool { return c == 46 as u8 }
+export function path_has_drive_prefix(value: []u8): bool { return len(value) >= 2 as usize && value[1 as usize] == 58 as u8 }
+
+export function path_is_absolute(value: []u8): bool {
+    if len(value) == 0 as usize { return false }
+    if path_is_separator(value[0 as usize]) { return true }
+    return path_has_drive_prefix(value) && len(value) >= 3 as usize && path_is_separator(value[2 as usize])
+}
+
+export function path_is_relative(value: []u8): bool { return !path_is_absolute(value) }
+export function path_has_trailing_separator(value: []u8): bool { return len(value) > 0 as usize && path_is_separator(value[len(value) - 1 as usize]) }
+
+export function path_root_length(value: []u8): usize {
+    if len(value) == 0 as usize { return 0 as usize }
+    if path_has_drive_prefix(value) {
+        if len(value) >= 3 as usize && path_is_separator(value[2 as usize]) { return 3 as usize }
+        return 2 as usize
+    }
+    if path_is_separator(value[0 as usize]) { return 1 as usize }
+    return 0 as usize
+}
+
+export function path_filename_offset(value: []u8): usize {
+    let root: usize = path_root_length(value)
+    let i: usize = len(value)
+    while i > root {
+        if path_is_separator(value[i - 1 as usize]) { return i }
+        i = i - 1 as usize
+    }
+    return root
+}
+
+export function path_extension_offset(value: []u8): isize {
+    let start: usize = path_filename_offset(value)
+    let i: usize = len(value)
+    while i > start {
+        let c: u8 = value[i - 1 as usize]
+        if path_is_separator(c) { return -1 as isize }
+        if path_is_dot(c) {
+            if i - 1 as usize == start { return -1 as isize }
+            return (i - 1 as usize) as isize
+        }
+        i = i - 1 as usize
+    }
+    return -1 as isize
+}
+
+export function path_has_extension(value: []u8): bool { return path_extension_offset(value) >= 0 as isize }
+
+export function path_parent_end(value: []u8): usize {
+    let root: usize = path_root_length(value)
+    let end: usize = len(value)
+    while end > root && path_is_separator(value[end - 1 as usize]) { end = end - 1 as usize }
+    while end > root && !path_is_separator(value[end - 1 as usize]) { end = end - 1 as usize }
+    while end > root && path_is_separator(value[end - 1 as usize]) { end = end - 1 as usize }
+    return end
+}
+
+export function path_component_count(value: []u8): usize {
+    let count: usize = 0 as usize
+    let in_component: bool = false
+    let i: usize = path_root_length(value)
+    while i < len(value) {
+        if path_is_separator(value[i]) { in_component = false }
+        else if !in_component { count = count + 1 as usize in_component = true }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function path_contains_double_separator(value: []u8): bool {
+    let i: usize = 1 as usize
+    while i < len(value) {
+        if path_is_separator(value[i - 1 as usize]) && path_is_separator(value[i]) { return true }
+        i = i + 1 as usize
+    }
+    return false
+}
+
+export function path_contains_nul(value: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(value) { if value[i] == 0 as u8 { return true } i = i + 1 as usize }
+    return false
+}
+
+export function path_is_safe_component(value: []u8): bool {
+    if len(value) == 0 as usize { return false }
+    if len(value) == 1 as usize && value[0 as usize] == 46 as u8 { return false }
+    if len(value) == 2 as usize && value[0 as usize] == 46 as u8 && value[1 as usize] == 46 as u8 { return false }
+    let i: usize = 0 as usize
+    while i < len(value) {
+        if path_is_separator(value[i]) || value[i] == 0 as u8 { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function path_join_required(left: []u8, right: []u8): usize {
+    if len(left) == 0 as usize { return len(right) }
+    if len(right) == 0 as usize { return len(left) }
+    if path_has_trailing_separator(left) || path_is_separator(right[0 as usize]) { return len(left) + len(right) }
+    return len(left) + 1 as usize + len(right)
+}

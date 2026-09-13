@@ -17,41 +17,48 @@ export function list_invariant<T>(list: *List<T>): bool { return list.length <= 
 export function list_index_valid<T>(list: *List<T>, index: usize): bool { return index < list.length }
 export function list_remaining<T>(list: *List<T>): usize { if list.length >= list.capacity { return 0 as usize } return list.capacity - list.length }
 
-export function list_get_or<T>(list: *List<T>, index: usize, fallback: T): T {
+// Reference access works for scalars and aggregate records alike; callers can
+// mutate record fields in place without forcing an unsupported aggregate copy.
+export function list_ref<T>(list: *List<T>, index: usize): *T {
+    if index >= list.length || list.data == null { return null as *T }
+    return &list.data[index]
+}
+
+export function list_get_or<T: Copy>(list: *List<T>, index: usize, fallback: T): T {
     if index >= list.length || list.data == null { return fallback }
     return list.data[index]
 }
 
-export function list_set<T>(list: *List<T>, index: usize, value: T): bool {
+export function list_set<T: Copy>(list: *List<T>, index: usize, value: T): bool {
     if index >= list.length || list.data == null { return false }
     list.data[index] = value
     return true
 }
 
-export function list_push<T>(list: *List<T>, value: T): bool {
+export function list_push<T: Copy>(list: *List<T>, value: T): bool {
     if list.data == null || list.length >= list.capacity { return false }
     list.data[list.length] = value
     list.length = list.length + 1 as usize
     return true
 }
 
-export function list_pop_or<T>(list: *List<T>, fallback: T): T {
+export function list_pop_or<T: Copy>(list: *List<T>, fallback: T): T {
     if list.data == null || list.length == 0 as usize { return fallback }
     list.length = list.length - 1 as usize
     return list.data[list.length]
 }
 
-export function list_first_or<T>(list: *List<T>, fallback: T): T { return list_get_or(list, 0 as usize, fallback) }
-export function list_last_or<T>(list: *List<T>, fallback: T): T { if list.length == 0 as usize { return fallback } return list_get_or(list, list.length - 1 as usize, fallback) }
+export function list_first_or<T: Copy>(list: *List<T>, fallback: T): T { return list_get_or(list, 0 as usize, fallback) }
+export function list_last_or<T: Copy>(list: *List<T>, fallback: T): T { if list.length == 0 as usize { return fallback } return list_get_or(list, list.length - 1 as usize, fallback) }
 
-export function list_contains_value<T: Eq>(list: *List<T>, value: T): bool {
+export function list_contains_value<T: Eq + Copy>(list: *List<T>, value: T): bool {
     if list.data == null { return false }
     let i: usize = 0 as usize
     while i < list.length { if list.data[i] == value { return true } i = i + 1 as usize }
     return false
 }
 
-export function list_index_of<T: Eq>(list: *List<T>, value: T): isize {
+export function list_index_of<T: Eq + Copy>(list: *List<T>, value: T): isize {
     if list.data == null { return -1 as isize }
     let i: usize = 0 as usize
     while i < list.length { if list.data[i] == value { return i as isize } i = i + 1 as usize }
@@ -61,7 +68,7 @@ export function list_index_of<T: Eq>(list: *List<T>, value: T): isize {
 export function list_clear<T>(list: *List<T>): void { list.length = 0 as usize }
 export function list_truncate<T>(list: *List<T>, length: usize): bool { if length > list.length { return false } list.length = length return true }
 
-export function list_remove_at<T>(list: *List<T>, index: usize): bool {
+export function list_remove_at<T: Copy>(list: *List<T>, index: usize): bool {
     if list.data == null || index >= list.length { return false }
     let i: usize = index
     while i + 1 as usize < list.length { list.data[i] = list.data[i + 1 as usize] i = i + 1 as usize }
@@ -72,6 +79,6 @@ export function list_remove_at<T>(list: *List<T>, index: usize): bool {
 // Slice-oriented compatibility helpers retained for existing Noqeri programs.
 export function list_len<T>(items: []T): usize { return len(items) }
 export function list_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
-export function list_first<T>(items: []T): T { return items[0 as usize] }
-export function list_last<T>(items: []T): T { return items[len(items)-1 as usize] }
-export function list_contains<T: Eq>(items: []T, value: T): bool { let i: usize = 0 as usize while i < len(items) { if items[i] == value { return true } i = i + 1 as usize } return false }
+export function list_first<T: Copy>(items: []T): T { return items[0 as usize] }
+export function list_last<T: Copy>(items: []T): T { return items[len(items)-1 as usize] }
+export function list_contains<T: Eq + Copy>(items: []T, value: T): bool { let i: usize = 0 as usize while i < len(items) { if items[i] == value { return true } i = i + 1 as usize } return false }

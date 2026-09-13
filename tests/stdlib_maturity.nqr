@@ -1,0 +1,33 @@
+import "../Lib/std/math.nqr"
+import "../Lib/std/path.nqr"
+import "../Lib/std/result.nqr"
+import "../Lib/std/random.nqr"
+import "../Lib/std/list.nqr"
+import "../Lib/std/map.nqr"
+import "../Lib/std/set.nqr"
+
+function main(): int {
+    if nqGcdI64(462 as i64, 1071 as i64) != 21 as i64 { return 1 }
+    if nqIntegerSqrtU64(1849 as u64) != 43 as u64 { return 2 }
+    if !nqIsPrimeI64(7919 as i64) { return 3 }
+    if result_encode_error(7 as isize) != -8 as isize { return 4 }
+    if result_error_code(-8 as isize) != 7 as isize { return 5 }
+
+    let unix: [u8; 16] = [47 as u8,104 as u8,111 as u8,109 as u8,101 as u8,47 as u8,110 as u8,111 as u8,113 as u8,101 as u8,114 as u8,105 as u8,47 as u8,97 as u8,46 as u8,110 as u8]
+    let unixView: []u8 = slice(unix)
+    if !path_is_absolute(unixView) { return 6 }
+    if path_filename_offset(unixView) != 13 as usize { return 7 }
+    if path_extension_offset(unixView) != 14 as isize { return 8 }
+    if path_component_count(unixView) != 3 as usize { return 9 }
+
+    let component: [u8; 6] = [110 as u8,111 as u8,113 as u8,101 as u8,114 as u8,105 as u8]
+    if !path_is_safe_component(slice(component)) { return 10 }
+    let parent: [u8; 2] = [46 as u8,46 as u8]
+    if path_is_safe_component(slice(parent)) { return 11 }
+
+    let seed: u64 = 12345 as u64
+    if random_range(seed, 10 as u64, 20 as u64) < 10 as u64 { return 12 }
+    if random_range(seed, 10 as u64, 20 as u64) >= 20 as u64 { return 13 }
+
+    return 0
+}

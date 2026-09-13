@@ -66,15 +66,17 @@ export function nqNirSliceLen(): int { return 41 }
 export function nqNirMakeSlice(): int { return 42 }
 export function nqNirCast(): int { return 43 }
 export function nqNirLabel(): int { return 44 }
+export function nqNirConstString(): int { return 45 }
+export function nqNirCallArg(): int { return 46 }
 
-export function nqNirOpcodeValid(opcode: int): bool { return opcode >= nqNirNop() && opcode <= nqNirLabel() }
+export function nqNirOpcodeValid(opcode: int): bool { return opcode >= nqNirNop() && opcode <= nqNirCallArg() }
 export function nqNirHasSideEffect(opcode: int): bool {
-    return opcode == nqNirStore() || opcode == nqNirStoreMemory() || opcode == nqNirCall() || opcode == nqNirReturn() || opcode == nqNirJump() || opcode == nqNirBranch() || opcode == nqNirTry() || opcode == nqNirThrow() || opcode == nqNirBoundsCheck() || opcode == nqNirOverflowCheck() || (opcode >= nqNirAtomicStore() && opcode <= nqNirAsm())
+    return opcode == nqNirStore() || opcode == nqNirStoreMemory() || opcode == nqNirCall() || opcode == nqNirCallArg() || opcode == nqNirReturn() || opcode == nqNirJump() || opcode == nqNirBranch() || opcode == nqNirTry() || opcode == nqNirThrow() || opcode == nqNirBoundsCheck() || opcode == nqNirOverflowCheck() || (opcode >= nqNirAtomicStore() && opcode <= nqNirAsm())
 }
 export function nqNirIsTerminator(opcode: int): bool { return opcode == nqNirJump() || opcode == nqNirBranch() || opcode == nqNirReturn() || opcode == nqNirThrow() }
 export function nqNirIsPureArithmetic(opcode: int): bool { return opcode >= nqNirAdd() && opcode <= nqNirGe() }
 export function nqNirDefinesValue(opcode: int): bool {
-    return opcode == nqNirConstI64() || opcode == nqNirConstF64() || opcode == nqNirMove() || opcode == nqNirLoad() || nqNirIsPureArithmetic(opcode) || opcode == nqNirNeg() || opcode == nqNirNot() || opcode == nqNirPhi() || opcode == nqNirAddr() || opcode == nqNirPtrAdd() || opcode == nqNirAtomicLoad() || opcode == nqNirAtomicExchange() || opcode == nqNirCmpXchg() || opcode == nqNirIntrinsic() || opcode == nqNirTry() || opcode == nqNirStackAlloc() || opcode == nqNirLoadMemory() || opcode == nqNirSliceData() || opcode == nqNirSliceLen() || opcode == nqNirMakeSlice() || opcode == nqNirCast()
+    return opcode == nqNirConstI64() || opcode == nqNirConstF64() || opcode == nqNirConstString() || opcode == nqNirMove() || opcode == nqNirLoad() || nqNirIsPureArithmetic(opcode) || opcode == nqNirNeg() || opcode == nqNirNot() || opcode == nqNirPhi() || opcode == nqNirAddr() || opcode == nqNirPtrAdd() || opcode == nqNirAtomicLoad() || opcode == nqNirAtomicExchange() || opcode == nqNirCmpXchg() || opcode == nqNirIntrinsic() || opcode == nqNirTry() || opcode == nqNirStackAlloc() || opcode == nqNirLoadMemory() || opcode == nqNirSliceData() || opcode == nqNirSliceLen() || opcode == nqNirMakeSlice() || opcode == nqNirCast()
 }
 
 export function nqNirInstructionInit(out: *NqNirInstruction, opcode: int, dest: isize): void {
@@ -105,6 +107,7 @@ export function nqNirInstructionValid(instruction: *NqNirInstruction): bool {
     if instruction.opcode == nqNirMakeSlice() && (instruction.left < 0 as isize || instruction.right < 0 as isize) { return false }
     if instruction.opcode == nqNirBranch() && instruction.left < 0 as isize { return false }
     if instruction.opcode == nqNirCall() && instruction.symbol == 0 as u64 { return false }
+    if instruction.opcode == nqNirCallArg() && instruction.left < 0 as isize { return false }
     return true
 }
 

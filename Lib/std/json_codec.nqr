@@ -8,11 +8,11 @@ extern function jsonStreamBegin(text: string): isize
 extern function jsonStreamNext(stream: isize): string
 extern function jsonStreamEnd(stream: isize): isize
 
-export function encode(value: string): string { return jsonEncode(value) }
-export function decode(text: string): string { return jsonDecode(text) }
-export function stream_begin(text: string): isize { return jsonStreamBegin(text) }
-export function stream_next(stream: isize): string { return jsonStreamNext(stream) }
-export function stream_end(stream: isize): isize { return jsonStreamEnd(stream) }
+export function encode(value: string): string { unsafe { return jsonEncode(value) } }
+export function decode(text: string): string { unsafe { return jsonDecode(text) } }
+export function stream_begin(text: string): isize { unsafe { return jsonStreamBegin(text) } }
+export function stream_next(stream: isize): string { unsafe { return jsonStreamNext(stream) } }
+export function stream_end(stream: isize): isize { unsafe { return jsonStreamEnd(stream) } }
 
 export function is_whitespace(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
 export function is_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }

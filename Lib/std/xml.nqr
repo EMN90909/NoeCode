@@ -1,5 +1,84 @@
 module noqeri.std.xml
 
-export function xml_is_name_start(c:u8):bool{return (c>=65 as u8&&c<=90 as u8)||(c>=97 as u8&&c<=122 as u8)||c==95 as u8||c==58 as u8}
-export function xml_is_name_char(c:u8):bool{return xml_is_name_start(c)||(c>=48 as u8&&c<=57 as u8)||c==45 as u8||c==46 as u8}
-export function xml_needs_escape(c:u8):bool{return c==38 as u8||c==60 as u8||c==62 as u8||c==34 as u8||c==39 as u8}
+export function xml_is_name_start(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) || c == 95 as u8 || c == 58 as u8 }
+export function xml_is_name_char(c: u8): bool { return xml_is_name_start(c) || (c >= 48 as u8 && c <= 57 as u8) || c == 45 as u8 || c == 46 as u8 }
+export function xml_needs_escape(c: u8): bool { return c == 38 as u8 || c == 60 as u8 || c == 62 as u8 || c == 34 as u8 || c == 39 as u8 }
+
+export function xml_name_valid(name: []u8): bool {
+    if len(name) == 0 as usize || !xml_is_name_start(name[0 as usize]) { return false }
+    let index: usize = 1 as usize
+    while index < len(name) { if !xml_is_name_char(name[index]) { return false } index = index + 1 as usize }
+    return true
+}
+
+export function xml_text_escaped_length(value: []u8): usize {
+    let length: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(value) {
+        let c: u8 = value[index]
+        if c == 38 as u8 { length = length + 5 as usize }
+        else if c == 60 as u8 || c == 62 as u8 { length = length + 4 as usize }
+        else if c == 34 as u8 || c == 39 as u8 { length = length + 6 as usize }
+        else { length = length + 1 as usize }
+        index = index + 1 as usize
+    }
+    return length
+}
+
+export function xml_write_entity(destination: []u8, offset: usize, c: u8): isize {
+    let a: u8 = 0 as u8
+    let b: u8 = 0 as u8
+    let d: u8 = 0 as u8
+    let e: u8 = 0 as u8
+    let f: u8 = 0 as u8
+    let length: usize = 0 as usize
+    if c == 38 as u8 { a=38 as u8 b=97 as u8 d=109 as u8 e=112 as u8 f=59 as u8 length=5 as usize }
+    else if c == 60 as u8 { a=38 as u8 b=108 as u8 d=116 as u8 e=59 as u8 length=4 as usize }
+    else if c == 62 as u8 { a=38 as u8 b=103 as u8 d=116 as u8 e=59 as u8 length=4 as usize }
+    else { return -1 as isize }
+    if offset + length > len(destination) { return -1 as isize }
+    destination[offset] = a destination[offset+1 as usize] = b destination[offset+2 as usize] = d destination[offset+3 as usize] = e
+    if length == 5 as usize { destination[offset+4 as usize] = f }
+    return length as isize
+}
+
+export function xml_escape_text_into(value: []u8, destination: []u8): isize {
+    let required: usize = xml_text_escaped_length(value)
+    if len(destination) < required { return -1 as isize }
+    let input: usize = 0 as usize
+    let output: usize = 0 as usize
+    while input < len(value) {
+        let c: u8 = value[input]
+        if c == 38 as u8 || c == 60 as u8 || c == 62 as u8 {
+            let wrote: isize = xml_write_entity(destination, output, c)
+            if wrote < 0 as isize { return -1 as isize }
+            output = output + wrote as usize
+        } else if c == 34 as u8 {
+            let entity: [u8; 6] = [38 as u8,113 as u8,117 as u8,111 as u8,116 as u8,59 as u8]
+            let i: usize = 0 as usize while i < 6 as usize { destination[output+i] = entity[i] i=i+1 as usize }
+            output = output + 6 as usize
+        } else if c == 39 as u8 {
+            let entity: [u8; 6] = [38 as u8,97 as u8,112 as u8,111 as u8,115 as u8,59 as u8]
+            let i: usize = 0 as usize while i < 6 as usize { destination[output+i] = entity[i] i=i+1 as usize }
+            output = output + 6 as usize
+        } else { destination[output] = c output = output + 1 as usize }
+        input = input + 1 as usize
+    }
+    return output as isize
+}
+
+export function xml_tag_end(value: []u8, start: usize): isize {
+    if start >= len(value) || value[start] != 60 as u8 { return -1 as isize }
+    let quote: u8 = 0 as u8
+    let index: usize = start + 1 as usize
+    while index < len(value) {
+        let c: u8 = value[index]
+        if quote != 0 as u8 { if c == quote { quote = 0 as u8 } }
+        else {
+            if c == 34 as u8 || c == 39 as u8 { quote = c }
+            else if c == 62 as u8 { return (index + 1 as usize) as isize }
+        }
+        index = index + 1 as usize
+    }
+    return -1 as isize
+}

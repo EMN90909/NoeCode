@@ -4,6 +4,10 @@ record NqSymbol {
     nameStart: usize
     nameEnd: usize
     typeCode: int
+    typeSymbol: u64
+    elementTypeCode: int
+    elementTypeSymbol: u64
+    arrayLength: usize
     scopeDepth: usize
     flags: u32
 }
@@ -49,7 +53,7 @@ export function nqSymbolsLookup(source: []u8, symbols: []NqSymbol, count: usize,
     return nqSymbolNotFound()
 }
 
-export function nqSymbolsDefine(source: []u8, symbols: []NqSymbol, count: *usize, start: usize, end: usize, typeCode: int, scopeDepth: usize, flags: u32): isize {
+export function nqSymbolsDefineTyped(source: []u8, symbols: []NqSymbol, count: *usize, start: usize, end: usize, typeCode: int, typeSymbol: u64, elementTypeCode: int, elementTypeSymbol: u64, arrayLength: usize, scopeDepth: usize, flags: u32): isize {
     if count == null || start >= end || end > len(source) { return nqSymbolCapacity() }
     if nqSymbolsFindInScope(source, symbols, count[0], start, end, scopeDepth) >= 0 as isize { return nqSymbolDuplicate() }
     if count[0] >= len(symbols) { return nqSymbolCapacity() }
@@ -57,10 +61,18 @@ export function nqSymbolsDefine(source: []u8, symbols: []NqSymbol, count: *usize
     symbols[index].nameStart = start
     symbols[index].nameEnd = end
     symbols[index].typeCode = typeCode
+    symbols[index].typeSymbol = typeSymbol
+    symbols[index].elementTypeCode = elementTypeCode
+    symbols[index].elementTypeSymbol = elementTypeSymbol
+    symbols[index].arrayLength = arrayLength
     symbols[index].scopeDepth = scopeDepth
     symbols[index].flags = flags
     count[0] = index + 1 as usize
     return index as isize
+}
+
+export function nqSymbolsDefine(source: []u8, symbols: []NqSymbol, count: *usize, start: usize, end: usize, typeCode: int, scopeDepth: usize, flags: u32): isize {
+    return nqSymbolsDefineTyped(source, symbols, count, start, end, typeCode, 0 as u64, 0, 0 as u64, 0 as usize, scopeDepth, flags)
 }
 
 export function nqSymbolsPopScope(symbols: []NqSymbol, count: *usize, scopeDepth: usize): usize {

@@ -7,5 +7,6 @@ if [ ! -x "$NQ" ] && [ -x ./build/Release/noqeri ]; then NQ=./build/Release/noqe
 "$NQ" check examples/hello.nqr
 "$NQ" run examples/hello.nqr
 "$NQ" test tests
+NQ="$NQ" sh ./scripts/test_safety.sh
 NQ="$NQ" sh ./scripts/test_maturity.sh
 "$NQ" doctor .

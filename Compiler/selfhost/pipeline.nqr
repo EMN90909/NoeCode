@@ -1,7 +1,11 @@
 module noqeri.compiler.selfhost.pipeline
 import "parser.nqr"
+import "parser_stmt.nqr"
+import "ast.nqr"
 import "semantics.nqr"
+import "semantic_program.nqr"
 import "nir.nqr"
+import "lower.nqr"
 import "optimizer.nqr"
 import "targets.nqr"
 import "backend.nqr"
@@ -16,7 +20,40 @@ record NqCompilePlan {
     sourceBytes: usize
 }
 
-export function nqPipelineCheck(source: []u8): isize { return nqParserCheck(source) }
+record NqCompileResult {
+    status: isize
+    firstAst: isize
+    astCount: usize
+    instructionCount: usize
+    functionCount: usize
+    optimizerChanges: usize
+}
+
+export function nqPipelineWorkspaceAstMinimum(): usize { return 4096 as usize }
+export function nqPipelineWorkspaceNirMinimum(): usize { return 8192 as usize }
+export function nqPipelineWorkspaceFunctionMinimum(): usize { return 512 as usize }
+
+export function nqPipelineSyntaxCheck(source: []u8): isize {
+    let nodes: [NqAstNode; 4096]
+    let count: usize = 0 as usize
+    let first: isize = nqAstNoNode()
+    return nqParserParseProgram(source, slice(nodes), &count, &first)
+}
+
+// Full check owns language semantics in Noqeri. It is intentionally stronger
+// than the historical delimiter/token sanity check.
+export function nqPipelineCheck(source: []u8): isize {
+    let policy: NqSecurityPolicy
+    nqSecurityProductionPolicy(&policy)
+    if !nqSecuritySourceAllowed(&policy, len(source)) { return nqSecurityLimitExceeded() }
+    let nodes: [NqAstNode; 4096]
+    let count: usize = 0 as usize
+    let first: isize = nqAstNoNode()
+    let parseStatus: isize = nqParserParseProgram(source, slice(nodes), &count, &first)
+    if parseStatus < 0 as isize { return parseStatus }
+    return nqSemanticAnalyzeProgram(source, slice(nodes), &count, first, false)
+}
+
 export function nqPipelineTargetCheck(target: int): isize { if !nqBackendTargetReady(target) { return nqBackendUnsupportedTarget() } return 0 }
 export function nqPipelineCompileReady(source: []u8, target: int): bool { return nqPipelineCheck(source) == 0 && nqPipelineTargetCheck(target) == 0 }
 export function nqPipelineDefaultOptimization(debug: bool): int { if debug { return nqOptLevelNone() } return nqOptLevelSpeed() }
@@ -24,8 +61,6 @@ export function nqPipelineDefaultLinkKind(): int { return nqLinkExecutable() }
 
 export function nqPipelinePlan(source: []u8, target: int, debug: bool, unsafeAllowed: bool, out: *NqCompilePlan): isize {
     if out == null { return -500 }
-    let parseStatus: isize = nqPipelineCheck(source)
-    if parseStatus < 0 { return parseStatus }
     let targetStatus: isize = nqPipelineTargetCheck(target)
     if targetStatus < 0 { return targetStatus }
     let policy: NqSecurityPolicy
@@ -51,4 +86,57 @@ export function nqPipelineOptimizeAndValidate(instructions: []NqNirInstruction, 
     if securityStatus < 0 { return securityStatus }
     nqOptimizerRun(instructions, plan.optimization)
     return nqBackendProgramValid(plan.target, instructions, plan.unsafeAllowed)
+}
+
+export function nqPipelineCompileToNir(source: []u8, target: int, debug: bool, unsafeAllowed: bool, nodes: []NqAstNode, instructions: []NqNirInstruction, functions: []NqNirFunction, out: *NqCompileResult): isize {
+    if out == null || len(nodes) < nqPipelineWorkspaceAstMinimum() || len(instructions) < nqPipelineWorkspaceNirMinimum() || len(functions) < nqPipelineWorkspaceFunctionMinimum() { return nqLowerCapacity() }
+    out.status = 0 as isize
+    out.firstAst = nqAstNoNode()
+    out.astCount = 0 as usize
+    out.instructionCount = 0 as usize
+    out.functionCount = 0 as usize
+    out.optimizerChanges = 0 as usize
+    let plan: NqCompilePlan
+    let planStatus: isize = nqPipelinePlan(source, target, debug, unsafeAllowed, &plan)
+    if planStatus < 0 as isize { out.status = planStatus return planStatus }
+    let first: isize = nqAstNoNode()
+    let astCount: usize = 0 as usize
+    let parseStatus: isize = nqParserParseProgram(source, nodes, &astCount, &first)
+    if parseStatus < 0 as isize { out.status = parseStatus return parseStatus }
+    let semanticStatus: isize = nqSemanticAnalyzeProgram(source, nodes, &astCount, first, unsafeAllowed)
+    if semanticStatus < 0 as isize { out.status = semanticStatus return semanticStatus }
+    let instructionCount: usize = 0 as usize
+    let functionCount: usize = 0 as usize
+    let lowerStatus: isize = nqLowerProgram(source, nodes, first, instructions, functions, &instructionCount, &functionCount)
+    if lowerStatus < 0 as isize { out.status = lowerStatus return lowerStatus }
+    let policy: NqSecurityPolicy
+    nqSecurityProductionPolicy(&policy)
+    policy.allowUnsafe = unsafeAllowed
+    policy.allowInlineAsm = unsafeAllowed
+    if !nqSecurityInstructionCountAllowed(&policy, instructionCount) { out.status = nqSecurityLimitExceeded() return out.status }
+    let active: []NqNirInstruction = slice(instructions, instructionCount)
+    let securityStatus: isize = nqSecurityProgramCheck(&policy, target, active)
+    if securityStatus < 0 as isize { out.status = securityStatus return securityStatus }
+    out.optimizerChanges = nqOptimizerRun(active, plan.optimization)
+    let backendStatus: isize = nqBackendProgramValid(target, active, unsafeAllowed)
+    if backendStatus < 0 as isize { out.status = backendStatus return backendStatus }
+    let fi: usize = 0 as usize
+    while fi < functionCount {
+        if !nqNirFunctionValid(&functions[fi], instructionCount) { out.status = nqBackendInvalidNir() return out.status }
+        fi = fi + 1 as usize
+    }
+    out.firstAst = first
+    out.astCount = astCount
+    out.instructionCount = instructionCount
+    out.functionCount = functionCount
+    out.status = 0 as isize
+    return 0 as isize
+}
+
+export function nqPipelineCompileCheck(source: []u8, target: int, unsafeAllowed: bool): isize {
+    let nodes: [NqAstNode; 4096]
+    let instructions: [NqNirInstruction; 8192]
+    let functions: [NqNirFunction; 512]
+    let result: NqCompileResult
+    return nqPipelineCompileToNir(source, target, true, unsafeAllowed, slice(nodes), slice(instructions), slice(functions), &result)
 }

@@ -1,0 +1,79 @@
+module noqeri.std.math.checked
+
+export function checked_i64_max(): i64 { return 9223372036854775807 as i64 }
+export function checked_i64_min(): i64 { return (-9223372036854775807 as i64) - 1 as i64 }
+
+export function checked_add_i64(left: i64, right: i64, out: *i64): bool {
+    let maximum: i64 = checked_i64_max()
+    let minimum: i64 = checked_i64_min()
+    if right > 0 as i64 && left > maximum - right { return false }
+    if right < 0 as i64 && left < minimum - right { return false }
+    out[0 as usize] = left + right
+    return true
+}
+
+export function checked_sub_i64(left: i64, right: i64, out: *i64): bool {
+    let maximum: i64 = checked_i64_max()
+    let minimum: i64 = checked_i64_min()
+    if right > 0 as i64 && left < minimum + right { return false }
+    if right < 0 as i64 && left > maximum + right { return false }
+    out[0 as usize] = left - right
+    return true
+}
+
+export function checked_mul_i64(left: i64, right: i64, out: *i64): bool {
+    let maximum: i64 = checked_i64_max()
+    let minimum: i64 = checked_i64_min()
+    if left == 0 as i64 || right == 0 as i64 { out[0 as usize] = 0 as i64 return true }
+    if left == -1 as i64 && right == minimum { return false }
+    if right == -1 as i64 && left == minimum { return false }
+    if left > 0 as i64 {
+        if right > 0 as i64 && left > maximum / right { return false }
+        if right < 0 as i64 && right < minimum / left { return false }
+    } else {
+        if right > 0 as i64 && left < minimum / right { return false }
+        if right < 0 as i64 && right < maximum / left { return false }
+    }
+    out[0 as usize] = left * right
+    return true
+}
+
+export function checked_div_i64(left: i64, right: i64, out: *i64): bool {
+    if right == 0 as i64 { return false }
+    if left == checked_i64_min() && right == -1 as i64 { return false }
+    out[0 as usize] = left / right
+    return true
+}
+
+export function checked_mod_i64(left: i64, right: i64, out: *i64): bool {
+    if right == 0 as i64 { return false }
+    if left == checked_i64_min() && right == -1 as i64 { out[0 as usize] = 0 as i64 return true }
+    out[0 as usize] = left % right
+    return true
+}
+
+export function checked_neg_i64(value: i64, out: *i64): bool {
+    if value == checked_i64_min() { return false }
+    out[0 as usize] = -value
+    return true
+}
+
+export function checked_abs_i64(value: i64, out: *i64): bool {
+    if value == checked_i64_min() { return false }
+    if value < 0 as i64 { out[0 as usize] = -value } else { out[0 as usize] = value }
+    return true
+}
+
+export function saturating_add_i64(left: i64, right: i64): i64 {
+    let result: i64 = 0 as i64
+    if checked_add_i64(left, right, &result) { return result }
+    if right > 0 as i64 { return checked_i64_max() }
+    return checked_i64_min()
+}
+
+export function saturating_sub_i64(left: i64, right: i64): i64 {
+    let result: i64 = 0 as i64
+    if checked_sub_i64(left, right, &result) { return result }
+    if right > 0 as i64 { return checked_i64_min() }
+    return checked_i64_max()
+}

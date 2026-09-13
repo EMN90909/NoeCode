@@ -2,14 +2,80 @@ module noqeri.std.io
 
 extern function abiRead(handle: usize, data: *u8, count: usize): isize
 extern function abiWrite(handle: usize, data: *u8, count: usize): isize
+extern function abiFlush(handle: usize): isize
+
+record Reader {
+    handle: usize
+}
+
+record Writer {
+    handle: usize
+}
 
 export function io_ok(status: isize): bool { return status >= 0 as isize }
 export function io_error(status: isize): bool { return status < 0 as isize }
-export function io_read(handle: usize, buffer: []u8): isize { if len(buffer) == 0 as usize { return 0 as isize } return abiRead(handle, &buffer[0], len(buffer)) }
-export function io_write(handle: usize, buffer: []u8): isize { if len(buffer) == 0 as usize { return 0 as isize } return abiWrite(handle, &buffer[0], len(buffer)) }
-export function io_write_all(handle: usize, buffer: []u8): isize {
+export function io_eof(status: isize): bool { return status == 0 as isize }
+
+export function reader_init(reader: *Reader, handle: usize): void { reader.handle = handle }
+export function writer_init(writer: *Writer, handle: usize): void { writer.handle = handle }
+
+export function io_read(handle: usize, buffer: []u8): isize {
+    if len(buffer) == 0 as usize { return 0 as isize }
+    return abiRead(handle, &buffer[0 as usize], len(buffer))
+}
+
+export function io_write(handle: usize, buffer: []u8): isize {
+    if len(buffer) == 0 as usize { return 0 as isize }
+    return abiWrite(handle, &buffer[0 as usize], len(buffer))
+}
+
+export function io_read_exact(handle: usize, buffer: []u8): isize {
     let offset: usize = 0 as usize
-    while offset < len(buffer) { let wrote: isize = abiWrite(handle, &buffer[offset], len(buffer)-offset) if wrote < 0 as isize { return wrote } if wrote == 0 as isize { throw 5 } offset = offset + (wrote as usize) }
+    while offset < len(buffer) {
+        let read: isize = abiRead(handle, &buffer[offset], len(buffer) - offset)
+        if read < 0 as isize { return read }
+        if read == 0 as isize { return -2 as isize }
+        offset = offset + read as usize
+    }
     return offset as isize
 }
-export function io_checked_range(offset: usize, length: usize, capacity: usize): bool { if offset > capacity { return false } return length <= capacity-offset }
+
+export function io_write_all(handle: usize, buffer: []u8): isize {
+    let offset: usize = 0 as usize
+    while offset < len(buffer) {
+        let wrote: isize = abiWrite(handle, &buffer[offset], len(buffer) - offset)
+        if wrote < 0 as isize { return wrote }
+        if wrote == 0 as isize { return -3 as isize }
+        offset = offset + wrote as usize
+    }
+    return offset as isize
+}
+
+export function reader_read(reader: *Reader, buffer: []u8): isize { return io_read(reader.handle, buffer) }
+export function reader_read_exact(reader: *Reader, buffer: []u8): isize { return io_read_exact(reader.handle, buffer) }
+export function writer_write(writer: *Writer, buffer: []u8): isize { return io_write(writer.handle, buffer) }
+export function writer_write_all(writer: *Writer, buffer: []u8): isize { return io_write_all(writer.handle, buffer) }
+export function writer_flush(writer: *Writer): isize { return abiFlush(writer.handle) }
+
+export function io_copy_count(source: usize, destination: usize, scratch: []u8, limit: usize): isize {
+    if len(scratch) == 0 as usize { return -4 as isize }
+    let copied: usize = 0 as usize
+    while copied < limit {
+        let remaining: usize = limit - copied
+        let request: usize = len(scratch)
+        if request > remaining { request = remaining }
+        let read: isize = abiRead(source, &scratch[0 as usize], request)
+        if read < 0 as isize { return read }
+        if read == 0 as isize { return copied as isize }
+        let chunk: []u8 = slice(&scratch[0 as usize], read as usize)
+        let wrote: isize = io_write_all(destination, chunk)
+        if wrote < 0 as isize { return wrote }
+        copied = copied + read as usize
+    }
+    return copied as isize
+}
+
+export function io_checked_range(offset: usize, length: usize, capacity: usize): bool {
+    if offset > capacity { return false }
+    return length <= capacity - offset
+}

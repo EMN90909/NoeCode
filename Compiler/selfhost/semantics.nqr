@@ -9,7 +9,86 @@ export function nqSemanticInvalidReturn(): isize { return -202 }
 export function nqSemanticConstWrite(): isize { return -203 }
 export function nqSemanticInvalidPointer(): isize { return -204 }
 export function nqSemanticInvalidCast(): isize { return -205 }
+export function nqSemanticInvalidIndex(): isize { return -206 }
+export function nqSemanticInvalidBinary(): isize { return -207 }
+export function nqSemanticInvalidUnary(): isize { return -208 }
+export function nqSemanticUnsafeRequired(): isize { return -209 }
+export function nqSemanticInvalidArrayElement(): isize { return -210 }
+
+export function nqSemanticOpAdd(): int { return 1 }
+export function nqSemanticOpSub(): int { return 2 }
+export function nqSemanticOpMul(): int { return 3 }
+export function nqSemanticOpDiv(): int { return 4 }
+export function nqSemanticOpMod(): int { return 5 }
+export function nqSemanticOpEq(): int { return 6 }
+export function nqSemanticOpNe(): int { return 7 }
+export function nqSemanticOpLt(): int { return 8 }
+export function nqSemanticOpLe(): int { return 9 }
+export function nqSemanticOpGt(): int { return 10 }
+export function nqSemanticOpGe(): int { return 11 }
+export function nqSemanticOpAnd(): int { return 12 }
+export function nqSemanticOpOr(): int { return 13 }
+
 export function nqSemanticConditionTypeValid(typeCode: int): bool { return typeCode == nqAstTypeBool() }
-export function nqSemanticAssignable(fromCode: int, toCode: int): bool { if fromCode == toCode { return true } if nqAstTypeInteger(fromCode) && nqAstTypeInteger(toCode) { return nqCompilerCanImplicitWiden(fromCode, toCode) } return false }
-export function nqSemanticExplicitCastValid(fromCode: int, toCode: int): bool { if fromCode == toCode { return true } if nqAstTypeInteger(fromCode) && nqAstTypeInteger(toCode) { return true } if fromCode == nqAstTypePointer() && toCode == nqAstTypeUsize() { return true } if fromCode == nqAstTypeUsize() && toCode == nqAstTypePointer() { return true } return false }
-export function nqSemanticReturnValid(actual: int, expected: int): bool { return expected == nqAstTypeVoid() || nqSemanticAssignable(actual, expected) }
+
+export function nqSemanticAssignable(fromCode: int, toCode: int): bool {
+    if fromCode == toCode { return true }
+    if nqCompilerTypeIsInteger(fromCode) && nqCompilerTypeIsInteger(toCode) { return nqCompilerCanImplicitWiden(fromCode, toCode) }
+    return false
+}
+
+export function nqSemanticExplicitCastValid(fromCode: int, toCode: int): bool {
+    if fromCode == toCode { return true }
+    if nqCompilerTypeIsNumeric(fromCode) && nqCompilerTypeIsNumeric(toCode) { return true }
+    if fromCode == nqAstTypePointer() && toCode == nqAstTypePointer() { return true }
+    if fromCode == nqAstTypePointer() && toCode == nqAstTypeUsize() { return true }
+    if fromCode == nqAstTypeUsize() && toCode == nqAstTypePointer() { return true }
+    return false
+}
+
+// Pointer/integer reinterpretation remains visually unsafe even though the cast
+// is representable. Normal pointer-to-pointer casts do not require this gate.
+export function nqSemanticCastRequiresUnsafe(fromCode: int, toCode: int): bool {
+    return (fromCode == nqAstTypePointer() && toCode == nqAstTypeUsize()) || (fromCode == nqAstTypeUsize() && toCode == nqAstTypePointer())
+}
+
+export function nqSemanticReturnValid(actual: int, expected: int): bool {
+    if expected == nqAstTypeVoid() { return actual == nqAstTypeVoid() }
+    return nqSemanticAssignable(actual, expected)
+}
+
+export function nqSemanticIndexValid(containerType: int, indexType: int): bool {
+    return nqCompilerTypeIsIndexable(containerType) && nqCompilerTypeIsInteger(indexType)
+}
+
+export function nqSemanticArrayElementValid(elementType: int, valueType: int): bool { return nqSemanticAssignable(valueType, elementType) }
+
+export function nqSemanticBinaryResult(op: int, left: int, right: int): int {
+    if op == nqSemanticOpAnd() || op == nqSemanticOpOr() {
+        if left == nqAstTypeBool() && right == nqAstTypeBool() { return nqAstTypeBool() }
+        return nqAstTypeUnknown()
+    }
+    if op >= nqSemanticOpEq() && op <= nqSemanticOpGe() {
+        if left == right { return nqAstTypeBool() }
+        if nqCompilerTypeIsInteger(left) && nqCompilerTypeIsInteger(right) {
+            if nqSemanticAssignable(left, right) || nqSemanticAssignable(right, left) { return nqAstTypeBool() }
+        }
+        return nqAstTypeUnknown()
+    }
+    if op >= nqSemanticOpAdd() && op <= nqSemanticOpMod() {
+        if left == right && nqCompilerTypeIsNumeric(left) { return left }
+        if nqCompilerTypeIsInteger(left) && nqCompilerTypeIsInteger(right) {
+            if nqSemanticAssignable(left, right) { return right }
+            if nqSemanticAssignable(right, left) { return left }
+        }
+    }
+    return nqAstTypeUnknown()
+}
+
+export function nqSemanticUnaryResult(operatorCode: int, operand: int): int {
+    if operatorCode == 33 { if operand == nqAstTypeBool() { return nqAstTypeBool() } return nqAstTypeUnknown() }
+    if operatorCode == 45 || operatorCode == 43 { if nqCompilerTypeIsNumeric(operand) { return operand } return nqAstTypeUnknown() }
+    if operatorCode == 38 { if operand != nqAstTypeVoid() && operand != nqAstTypeUnknown() { return nqAstTypePointer() } return nqAstTypeUnknown() }
+    if operatorCode == 42 { if operand == nqAstTypePointer() { return nqAstTypeUnknown() } }
+    return nqAstTypeUnknown()
+}

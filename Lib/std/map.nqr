@@ -1,16 +1,67 @@
 module noqeri.std.map
 
-export function map_find<K: Eq>(keys: []K, key: K): isize {
-    let i: usize = 0 as usize
-    while i < len(keys) { if keys[i] == key { return i as isize } i = i + 1 }
-    return -1
+// Map<K,V> uses caller-owned parallel key/value storage. It is deterministic,
+// allocation-free and preserves insertion order. Hash-backed maps can layer on
+// this API later without changing the generic surface.
+record Map<K, V> {
+    keys: *K
+    values: *V
+    length: usize
+    capacity: usize
 }
-export function map_contains_key<K: Eq>(keys: []K, key: K): bool { return map_find(keys, key) >= 0 }
+
+export function map_length<K,V>(map: *Map<K,V>): usize { return map.length }
+export function map_capacity<K,V>(map: *Map<K,V>): usize { return map.capacity }
+export function map_empty<K,V>(map: *Map<K,V>): bool { return map.length == 0 as usize }
+export function map_full<K,V>(map: *Map<K,V>): bool { return map.length >= map.capacity }
+export function map_invariant<K,V>(map: *Map<K,V>): bool { if map.length > map.capacity { return false } if map.capacity > 0 as usize && (map.keys == null || map.values == null) { return false } return true }
+
+export function map_find_index<K: Eq,V>(map: *Map<K,V>, key: K): isize {
+    if map.keys == null { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < map.length { if map.keys[i] == key { return i as isize } i = i + 1 as usize }
+    return -1 as isize
+}
+
+export function map_contains<K: Eq,V>(map: *Map<K,V>, key: K): bool { return map_find_index(map, key) >= 0 as isize }
+
+export function map_get_or<K: Eq,V>(map: *Map<K,V>, key: K, fallback: V): V {
+    let index: isize = map_find_index(map, key)
+    if index < 0 as isize || map.values == null { return fallback }
+    return map.values[index as usize]
+}
+
+export function map_put<K: Eq,V>(map: *Map<K,V>, key: K, value: V): bool {
+    if map.keys == null || map.values == null { return false }
+    let found: isize = map_find_index(map, key)
+    if found >= 0 as isize { map.values[found as usize] = value return true }
+    if map.length >= map.capacity { return false }
+    map.keys[map.length] = key
+    map.values[map.length] = value
+    map.length = map.length + 1 as usize
+    return true
+}
+
+export function map_remove<K: Eq,V>(map: *Map<K,V>, key: K): bool {
+    let found: isize = map_find_index(map, key)
+    if found < 0 as isize || map.keys == null || map.values == null { return false }
+    let index: usize = found as usize
+    let i: usize = index
+    while i + 1 as usize < map.length {
+        map.keys[i] = map.keys[i + 1 as usize]
+        map.values[i] = map.values[i + 1 as usize]
+        i = i + 1 as usize
+    }
+    map.length = map.length - 1 as usize
+    return true
+}
+
+export function map_clear<K,V>(map: *Map<K,V>): void { map.length = 0 as usize }
+
+// Parallel-slice compatibility helpers.
+export function map_find<K: Eq>(keys: []K, key: K): isize { let i: usize = 0 as usize while i < len(keys) { if keys[i] == key { return i as isize } i = i + 1 as usize } return -1 as isize }
+export function map_contains_key<K: Eq>(keys: []K, key: K): bool { return map_find(keys, key) >= 0 as isize }
 export function map_lengths_valid<K,V>(keys: []K, values: []V): bool { return len(keys) == len(values) }
 export function map_is_empty<K,V>(keys: []K, values: []V): bool { return len(keys) == 0 as usize && len(values) == 0 as usize }
 export function map_count<K,V>(keys: []K, values: []V): usize { if len(keys) < len(values) { return len(keys) } return len(values) }
-export function map_has_duplicate_keys<K: Eq>(keys: []K): bool {
-    let i: usize = 0 as usize
-    while i < len(keys) { let j: usize = i + 1 while j < len(keys) { if keys[i] == keys[j] { return true } j = j + 1 } i = i + 1 }
-    return false
-}
+export function map_has_duplicate_keys<K: Eq>(keys: []K): bool { let i: usize = 0 as usize while i < len(keys) { let j: usize = i + 1 as usize while j < len(keys) { if keys[i] == keys[j] { return true } j = j + 1 as usize } i = i + 1 as usize } return false }

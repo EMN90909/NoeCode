@@ -2,13 +2,58 @@ module noqeri.std.fs
 
 extern function fsExists(path: string): bool
 extern function fsIsDirectory(path: string): bool
+extern function fsIsFile(path: string): bool
 extern function fsCreateDirectory(path: string): isize
+extern function fsCreateDirectories(path: string): isize
 extern function fsRemove(path: string): isize
+extern function fsRemoveTree(path: string): isize
 extern function fsRename(from: string, to: string): isize
+extern function fsCopyFile(from: string, to: string, overwrite: bool): isize
+extern function fsFileSize(path: string): isize
+extern function fsModifiedMillis(path: string): i64
+extern function fsCanonical(path: string): string
+extern function fsCurrentDirectory(): string
+extern function fsSetCurrentDirectory(path: string): isize
 
 export function fs_exists(path: string): bool { return fsExists(path) }
 export function fs_is_directory(path: string): bool { return fsIsDirectory(path) }
+export function fs_is_file(path: string): bool { return fsIsFile(path) }
 export function fs_create_directory(path: string): isize { return fsCreateDirectory(path) }
+export function fs_create_directories(path: string): isize { return fsCreateDirectories(path) }
 export function fs_remove(path: string): isize { return fsRemove(path) }
-export function fs_rename(from: string, to: string): isize { return fsRename(from,to) }
+export function fs_remove_tree(path: string): isize { return fsRemoveTree(path) }
+export function fs_rename(from: string, to: string): isize { return fsRename(from, to) }
+export function fs_copy_file(from: string, to: string): isize { return fsCopyFile(from, to, false) }
+export function fs_copy_file_replace(from: string, to: string): isize { return fsCopyFile(from, to, true) }
+export function fs_file_size(path: string): isize { return fsFileSize(path) }
+export function fs_modified_millis(path: string): i64 { return fsModifiedMillis(path) }
+export function fs_canonical(path: string): string { return fsCanonical(path) }
+export function fs_current_directory(): string { return fsCurrentDirectory() }
+export function fs_set_current_directory(path: string): isize { return fsSetCurrentDirectory(path) }
+
 export function fs_status_ok(status: isize): bool { return status >= 0 as isize }
+export function fs_status_error(status: isize): bool { return status < 0 as isize }
+export function fs_size_known(size: isize): bool { return size >= 0 as isize }
+
+export function fs_ensure_directory(path: string): isize {
+    if fsExists(path) {
+        if fsIsDirectory(path) { return 0 as isize }
+        return -2 as isize
+    }
+    return fsCreateDirectories(path)
+}
+
+export function fs_move_replace(from: string, to: string): isize {
+    if !fsExists(from) { return -3 as isize }
+    if fsExists(to) {
+        let removed: isize = fsRemove(to)
+        if removed < 0 as isize { return removed }
+    }
+    return fsRename(from, to)
+}
+
+export function fs_copy_if_missing(from: string, to: string): isize {
+    if !fsExists(from) { return -3 as isize }
+    if fsExists(to) { return -4 as isize }
+    return fsCopyFile(from, to, false)
+}

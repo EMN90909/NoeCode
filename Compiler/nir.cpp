@@ -44,8 +44,8 @@ Reg Lowerer::lowerAddress(NirFunction&fn,const ExprPtr&expr){
             NirInstruction data;data.op=NirOp::SliceData;data.dest=fn.nextReg++;data.args={base};emit(fn,data);base=*data.dest;
             NirInstruction dataNonNull;dataNonNull.op=NirOp::CheckNonNull;dataNonNull.args={base};emit(fn,dataNonNull);
         }else{
-            if(x->fixedBound>0){NirInstruction length;length.op=NirOp::Const;length.dest=fn.nextReg++;length.literal=static_cast<std::int64_t>(x->fixedBound);emit(fn,length);NirInstruction bounds;bounds.op=NirOp::CheckBounds;bounds.args={idx,*length.dest};emit(fn,bounds);}
-            if(x->fixedBound==0){NirInstruction nonnull;nonnull.op=NirOp::CheckNonNull;nonnull.args={base};emit(fn,nonnull);}
+            if(x->hasFixedBound){NirInstruction length;length.op=NirOp::Const;length.dest=fn.nextReg++;length.literal=static_cast<std::int64_t>(x->fixedBound);emit(fn,length);NirInstruction bounds;bounds.op=NirOp::CheckBounds;bounds.args={idx,*length.dest};emit(fn,bounds);}
+            else{NirInstruction nonnull;nonnull.op=NirOp::CheckNonNull;nonnull.args={base};emit(fn,nonnull);}
         }
         NirInstruction i;i.op=NirOp::PtrOffset;i.dest=fn.nextReg++;i.args={base,idx};i.width=x->elementSize;emit(fn,i);return*i.dest;
     }

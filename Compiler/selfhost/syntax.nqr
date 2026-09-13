@@ -78,12 +78,16 @@ export function nqCompilerUnsafeCheck(source: []u8): isize {
         } else {
             let inUnsafe: bool = unsafeBraceDepth > 0
             if nqSyntaxUnsafeAt(source, index) {
-                let after: usize = nqCompilerSkipTrivia(source, index + 6 as usize)
-                if after >= len(source) { return nqSyntaxUnsafeMalformed() }
-                if source[after] == 123 as u8 { pendingUnsafeBlock = true }
-                else if nqSyntaxExternAt(source, after) { pendingUnsafeDeclaration = true }
-                else { return nqSyntaxUnsafeMalformed() }
-                index = index + 6 as usize
+                if inUnsafe {
+                    index = index + 6 as usize
+                } else {
+                    let after: usize = nqCompilerSkipTrivia(source, index + 6 as usize)
+                    if after >= len(source) { return nqSyntaxUnsafeMalformed() }
+                    if source[after] == 123 as u8 { pendingUnsafeBlock = true }
+                    else if nqSyntaxExternAt(source, after) { pendingUnsafeDeclaration = true }
+                    else { return nqSyntaxUnsafeMalformed() }
+                    index = index + 6 as usize
+                }
             } else if nqSyntaxExternAt(source, index) {
                 if !inUnsafe && !pendingUnsafeDeclaration { return nqSyntaxUnsafeRequired() }
                 pendingUnsafeDeclaration = false

@@ -14,7 +14,6 @@ std::optional<std::size_t> fixedArrayCount(const std::string&type){
     try{return static_cast<std::size_t>(std::stoull(type.substr(semi+1,close-semi-1),nullptr,0));}catch(...){return std::nullopt;}
 }
 bool pointerType(const std::string&type){return !type.empty()&&type.front()=='*';}
-std::string calleeName(const ExprPtr&e){if(auto n=std::dynamic_pointer_cast<NameExpr>(e))return n->name;if(auto m=std::dynamic_pointer_cast<MemberExpr>(e))if(auto n=std::dynamic_pointer_cast<NameExpr>(m->object))return n->name+"."+m->member;return{};}
 
 class Annotator {
 public:
@@ -54,12 +53,7 @@ private:
             return;
         }
         if(auto binary=std::dynamic_pointer_cast<BinaryExpr>(e)){expression(binary->left);expression(binary->right);return;}
-        if(auto call=std::dynamic_pointer_cast<CallExpr>(e)){
-            expression(call->callee);for(const auto&a:call->args)expression(a);
-            const auto name=calleeName(call->callee);
-            if(name=="asm"||name=="intrinsic")requireUnsafe(call->span,name+" operation");
-            return;
-        }
+        if(auto call=std::dynamic_pointer_cast<CallExpr>(e)){expression(call->callee);for(const auto&a:call->args)expression(a);return;}
         if(auto cast=std::dynamic_pointer_cast<CastExpr>(e)){
             expression(cast->value);
             if(pointerType(cast->typeName))requireUnsafe(cast->span,"cast to raw pointer");

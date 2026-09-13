@@ -1,0 +1,23 @@
+module noqeri.compiler.selfhost.driver
+import "lexer.nqr"
+import "syntax.nqr"
+import "../../Lib/std/checksum.nqr"
+
+export function nqCompilerVersionMajor(): int { return 1 }
+export function nqCompilerVersionMinor(): int { return 0 }
+export function nqCompilerVersionPatch(): int { return 0 }
+
+export function nqCompilerCheckSource(source: []u8): isize {
+    let syntaxStatus: isize = nqCompilerSyntaxCheck(source)
+    if syntaxStatus < 0 { return syntaxStatus }
+    if nqCompilerTokenCount(source) == 0 as usize { return -30 }
+    return 0
+}
+
+export function nqCompilerSourceTokenCount(source: []u8): usize {
+    return nqCompilerTokenCount(source)
+}
+
+export function nqCompilerSourceFingerprint(source: []u8): u32 {
+    return nqAdler32(source)
+}

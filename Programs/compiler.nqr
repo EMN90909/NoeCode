@@ -1,0 +1,6 @@
+import "../Compiler/selfhost/main.nqr"
+
+function main(): int {
+    print("Noqeri stage-1 compiler kernel 1.0.0")
+    return 0
+}

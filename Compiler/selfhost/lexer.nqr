@@ -1,0 +1,106 @@
+module noqeri.compiler.selfhost.lexer
+
+export function nqCompilerIsSpace(value: u8): bool {
+    return value == 32 as u8 || value == 9 as u8 || value == 10 as u8 || value == 13 as u8
+}
+
+export function nqCompilerIsDigit(value: u8): bool {
+    return value >= 48 as u8 && value <= 57 as u8
+}
+
+export function nqCompilerIsAlpha(value: u8): bool {
+    return (value >= 65 as u8 && value <= 90 as u8) || (value >= 97 as u8 && value <= 122 as u8)
+}
+
+export function nqCompilerIsIdentifierStart(value: u8): bool {
+    return nqCompilerIsAlpha(value) || value == 95 as u8
+}
+
+export function nqCompilerIsIdentifierContinue(value: u8): bool {
+    return nqCompilerIsIdentifierStart(value) || nqCompilerIsDigit(value)
+}
+
+export function nqCompilerSkipTrivia(source: []u8, start: usize): usize {
+    let index: usize = start
+    let moving: bool = true
+    while moving {
+        moving = false
+        while index < len(source) && nqCompilerIsSpace(source[index]) {
+            index = index + 1
+            moving = true
+        }
+        if index + 1 < len(source) && source[index] == 47 as u8 && source[index + 1] == 47 as u8 {
+            index = index + 2
+            while index < len(source) && source[index] != 10 as u8 { index = index + 1 }
+            moving = true
+        }
+        if index + 1 < len(source) && source[index] == 47 as u8 && source[index + 1] == 42 as u8 {
+            index = index + 2
+            while index + 1 < len(source) && !(source[index] == 42 as u8 && source[index + 1] == 47 as u8) {
+                index = index + 1
+            }
+            if index + 1 < len(source) { index = index + 2 }
+            moving = true
+        }
+    }
+    return index
+}
+
+export function nqCompilerScanIdentifier(source: []u8, start: usize): usize {
+    if start >= len(source) || !nqCompilerIsIdentifierStart(source[start]) { return start }
+    let index: usize = start + 1
+    while index < len(source) && nqCompilerIsIdentifierContinue(source[index]) { index = index + 1 }
+    return index
+}
+
+export function nqCompilerScanNumber(source: []u8, start: usize): usize {
+    let index: usize = start
+    while index < len(source) && nqCompilerIsDigit(source[index]) { index = index + 1 }
+    if index < len(source) && source[index] == 46 as u8 {
+        index = index + 1
+        while index < len(source) && nqCompilerIsDigit(source[index]) { index = index + 1 }
+    }
+    return index
+}
+
+export function nqCompilerScanString(source: []u8, start: usize): usize {
+    if start >= len(source) || source[start] != 34 as u8 { return start }
+    let index: usize = start + 1
+    while index < len(source) {
+        if source[index] == 92 as u8 {
+            index = index + 2
+        } else {
+            if source[index] == 34 as u8 { return index + 1 }
+            index = index + 1
+        }
+    }
+    return len(source)
+}
+
+export function nqCompilerTokenEnd(source: []u8, start: usize): usize {
+    let index: usize = nqCompilerSkipTrivia(source, start)
+    if index >= len(source) { return index }
+    if nqCompilerIsIdentifierStart(source[index]) { return nqCompilerScanIdentifier(source, index) }
+    if nqCompilerIsDigit(source[index]) { return nqCompilerScanNumber(source, index) }
+    if source[index] == 34 as u8 { return nqCompilerScanString(source, index) }
+    if index + 1 < len(source) {
+        let a: u8 = source[index]
+        let b: u8 = source[index + 1]
+        if (a == 61 as u8 && b == 61 as u8) || (a == 33 as u8 && b == 61 as u8) || (a == 60 as u8 && b == 61 as u8) || (a == 62 as u8 && b == 61 as u8) || (a == 38 as u8 && b == 38 as u8) || (a == 124 as u8 && b == 124 as u8) || (a == 45 as u8 && b == 62 as u8) {
+            return index + 2
+        }
+    }
+    return index + 1
+}
+
+export function nqCompilerTokenCount(source: []u8): usize {
+    let count: usize = 0 as usize
+    let index: usize = nqCompilerSkipTrivia(source, 0 as usize)
+    while index < len(source) {
+        let next: usize = nqCompilerTokenEnd(source, index)
+        if next <= index { return count }
+        count = count + 1
+        index = nqCompilerSkipTrivia(source, next)
+    }
+    return count
+}

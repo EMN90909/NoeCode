@@ -1,8 +1,4 @@
-param(
-    [switch]$Yes,
-    [switch]$SkipInstall
-)
-
+$ErrorActionPreference = 'Stop'
 $script = Join-Path $PSScriptRoot 'scripts\build.ps1'
-& $script -Yes:$Yes -SkipInstall:$SkipInstall
+& $script
 exit $LASTEXITCODE

@@ -1,0 +1,27 @@
+module noqeri.database.page
+
+export function dbPageMagic(): u32 { return 1312900162 as u32 }
+export function dbPageFormatVersion(): u32 { return 1 as u32 }
+export function dbPageHeaderBytes(): usize { return 32 as usize }
+
+export function dbPageChecksum(bytes: []u8): u32 {
+    let hash: u32 = 2166136261 as u32
+    let index: usize = 0 as usize
+    while index < len(bytes) {
+        hash = hash ^ bytes[index] as u32
+        hash = hash * 16777619 as u32
+        index = index + 1 as usize
+    }
+    return hash
+}
+
+export function dbPageHeaderValid(magic: u32, version: u32, pageId: u64, payloadBytes: usize, pageSize: usize): bool {
+    if magic != dbPageMagic() || version != dbPageFormatVersion() { return false }
+    if pageId == 0 as u64 || pageSize < dbPageHeaderBytes() { return false }
+    return payloadBytes <= pageSize - dbPageHeaderBytes()
+}
+
+export function dbPageSlotFits(offset: usize, length: usize, pageSize: usize): bool {
+    if offset < dbPageHeaderBytes() || offset > pageSize { return false }
+    return length <= pageSize - offset
+}

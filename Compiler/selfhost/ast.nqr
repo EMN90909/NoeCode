@@ -1,7 +1,5 @@
 module noqeri.compiler.selfhost.ast
 
-// Compact stable node/type tags. The self-hosted frontend uses index-based
-// arenas so the compiler never depends on host object layout.
 record NqAstNode {
     tag: int
     typeCode: int
@@ -69,6 +67,8 @@ export function nqAstTypePointer(): int { return 16 }
 export function nqAstTypeSlice(): int { return 17 }
 export function nqAstTypeArray(): int { return 18 }
 export function nqAstTypeRecord(): int { return 19 }
+export function nqAstTypeNull(): int { return 20 }
+export function nqAstTypeGeneric(): int { return 21 }
 
 export function nqAstTypeScalar(code: int): bool { return code >= nqAstTypeBool() && code <= nqAstTypeUsize() }
 export function nqAstTypeInteger(code: int): bool { return code == nqAstTypeInt() || (code >= nqAstTypeI8() && code <= nqAstTypeUsize()) }

@@ -8,6 +8,7 @@ record NqAstNode {
     left: isize
     right: isize
     extra: isize
+    next: isize
     flags: u32
 }
 
@@ -41,11 +42,15 @@ export function nqAstFloat(): int { return 20 }
 export function nqAstString(): int { return 21 }
 export function nqAstBool(): int { return 22 }
 export function nqAstArray(): int { return 23 }
+export function nqAstParameter(): int { return 24 }
+export function nqAstField(): int { return 25 }
+export function nqAstExpressionStatement(): int { return 26 }
 
-export function nqAstNodeTagValid(tag: int): bool { return tag >= nqAstModule() && tag <= nqAstArray() }
-export function nqAstIsStatement(tag: int): bool { return tag == nqAstBinding() || tag == nqAstBlock() || tag == nqAstIf() || tag == nqAstWhile() || tag == nqAstReturn() || tag == nqAstThrow() || tag == nqAstAssign() || tag == nqAstCall() }
+export function nqAstNodeTagValid(tag: int): bool { return tag >= nqAstModule() && tag <= nqAstExpressionStatement() }
+export function nqAstIsStatement(tag: int): bool { return tag == nqAstBinding() || tag == nqAstBlock() || tag == nqAstIf() || tag == nqAstWhile() || tag == nqAstReturn() || tag == nqAstThrow() || tag == nqAstExpressionStatement() }
 export function nqAstIsExpression(tag: int): bool { return tag >= nqAstAssign() && tag <= nqAstArray() }
 export function nqAstIsLiteral(tag: int): bool { return tag >= nqAstInteger() && tag <= nqAstArray() }
+export function nqAstIsDeclaration(tag: int): bool { return tag == nqAstModule() || tag == nqAstImport() || tag == nqAstFunction() || tag == nqAstRecord() || tag == nqAstBinding() }
 
 export function nqAstTypeUnknown(): int { return 0 }
 export function nqAstTypeVoid(): int { return 1 }
@@ -82,6 +87,7 @@ export function nqAstNodeInit(out: *NqAstNode, tag: int, start: usize, end: usiz
     out.left = nqAstNoNode()
     out.right = nqAstNoNode()
     out.extra = nqAstNoNode()
+    out.next = nqAstNoNode()
     out.flags = 0 as u32
 }
 
@@ -97,4 +103,26 @@ export function nqAstArenaPush(nodes: []NqAstNode, count: *usize, tag: int, star
     nqAstNodeInit(&nodes[index], tag, start, end)
     count[0] = index + 1 as usize
     return index as isize
+}
+
+export function nqAstAppend(nodes: []NqAstNode, first: *isize, last: *isize, node: isize): bool {
+    if first == null || last == null || node < 0 as isize || node as usize >= len(nodes) { return false }
+    if first[0] < 0 as isize { first[0] = node }
+    else {
+        if last[0] < 0 as isize || last[0] as usize >= len(nodes) { return false }
+        nodes[last[0] as usize].next = node
+    }
+    last[0] = node
+    return true
+}
+
+export function nqAstChainCount(nodes: []NqAstNode, first: isize): usize {
+    let count: usize = 0 as usize
+    let cursor: isize = first
+    while cursor >= 0 as isize {
+        if cursor as usize >= len(nodes) { return count }
+        count = count + 1 as usize
+        cursor = nodes[cursor as usize].next
+    }
+    return count
 }

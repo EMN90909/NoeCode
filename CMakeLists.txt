@@ -16,7 +16,7 @@ set(NOQERI_FRONTEND_SOURCES
  Compiler/lifetime.cpp Compiler/safety.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp Compiler/register_alloc.cpp Compiler/optimizer.cpp
  Compiler/bootstrap/lexer_host.cpp Compiler/bootstrap/parser_host.cpp Compiler/bootstrap/abi_runtime_host.cpp Compiler/bootstrap/interpreter_host.cpp
  Compiler/bootstrap/runtime_checks_host.cpp Compiler/bootstrap/task_scheduler_host.cpp Compiler/bootstrap/sync_runtime_host.cpp
- Compiler/bootstrap/profile_host.cpp Compiler/bootstrap/profile_runner_host.cpp Compiler/bootstrap/noqeridb_host.cpp)
+ Compiler/bootstrap/profile_host.cpp Compiler/bootstrap/profile_runner_host.cpp Compiler/bootstrap/noqeridb_host.cpp Compiler/bootstrap/sql_database_host.cpp)
 set(NOQERI_SOURCES ${NOQERI_FRONTEND_SOURCES}
  Compiler/native_backend.cpp Compiler/web_backend.cpp Compiler/linker.cpp Compiler/object_loader.cpp
  Compiler/bootstrap/cli_host.cpp Compiler/bootstrap/formatter_host.cpp Compiler/bootstrap/package_host.cpp Compiler/bootstrap/lsp_host.cpp
@@ -87,6 +87,13 @@ if(BUILD_TESTING)
  target_link_libraries(noqeri-build-tags-test PRIVATE noqeri_abi Threads::Threads)
  noqeri_apply_warnings(noqeri-build-tags-test)
  add_test(NAME noqeri-build-tags COMMAND noqeri-build-tags-test)
+
+ add_executable(noqeri-sql-adapter-test tests/noqeridb_sql_host_test.cpp)
+ target_include_directories(noqeri-sql-adapter-test PRIVATE Include/noqeri Compiler/bootstrap)
+ target_compile_features(noqeri-sql-adapter-test PRIVATE cxx_std_17)
+ target_link_libraries(noqeri-sql-adapter-test PRIVATE noqeri_abi Threads::Threads)
+ noqeri_apply_warnings(noqeri-sql-adapter-test)
+ add_test(NAME noqeri-sql-adapter COMMAND noqeri-sql-adapter-test)
 
  add_test(NAME noqeri-version COMMAND noqeri --version)
  add_test(NAME noqeri-check-hello COMMAND noqeri check ${CMAKE_SOURCE_DIR}/examples/hello.nqr)

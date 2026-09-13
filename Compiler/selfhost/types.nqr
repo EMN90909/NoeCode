@@ -16,7 +16,6 @@ export function nqCompilerTypeIsNumeric(code: int): bool { return nqCompilerType
 export function nqCompilerTypeIsPointerLike(code: int): bool { return code == nqAstTypePointer() || code == nqAstTypeSlice() || code == nqAstTypeString() }
 export function nqCompilerTypeIsIndexable(code: int): bool { return code == nqAstTypeArray() || code == nqAstTypeSlice() || code == nqAstTypeString() }
 export function nqCompilerTypeIsAggregate(code: int): bool { return nqAstTypeAggregate(code) }
-
 export function nqCompilerTypeIsSigned(code: int): bool { return code == nqAstTypeInt() || code == nqAstTypeI8() || code == nqAstTypeI16() || code == nqAstTypeI32() || code == nqAstTypeI64() || code == nqAstTypeIsize() }
 export function nqCompilerTypeIsUnsigned(code: int): bool { return code == nqAstTypeU8() || code == nqAstTypeU16() || code == nqAstTypeU32() || code == nqAstTypeU64() || code == nqAstTypeUsize() }
 
@@ -48,3 +47,47 @@ export function nqCompilerIntegerBits(code: int): usize { return nqCompilerPrimi
 export function nqCompilerTypeValid(code: int): bool { return code >= nqAstTypeVoid() && code <= nqAstTypeGeneric() }
 export function nqCompilerTypeCanBeNull(code: int): bool { return code == nqAstTypePointer() || code == nqAstTypeNull() }
 export function nqCompilerTypeSafeByValue(code: int): bool { return nqAstTypeScalar(code) || code == nqAstTypeString() || code == nqAstTypeSlice() || code == nqAstTypeNull() }
+
+function nqCompilerTypeTextEqual(source: []u8, start: usize, text: []u8): bool {
+    if start + len(text) > len(source) { return false }
+    let index: usize = 0 as usize
+    while index < len(text) {
+        if source[start + index] != text[index] { return false }
+        index = index + 1 as usize
+    }
+    let end: usize = start + len(text)
+    if end < len(source) {
+        let c: u8 = source[end]
+        if (c >= 48 as u8 && c <= 57 as u8) || (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) || c == 95 as u8 { return false }
+    }
+    return true
+}
+
+// Returns the storage category needed by semantic analysis. Named/generic
+// aggregate identities remain record/generic metadata instead of host strings.
+export function nqCompilerTypeCodeFromSource(source: []u8, start: usize): int {
+    while start < len(source) && (source[start] == 32 as u8 || source[start] == 9 as u8 || source[start] == 10 as u8 || source[start] == 13 as u8) { start = start + 1 as usize }
+    if start >= len(source) { return nqAstTypeUnknown() }
+    if source[start] == 42 as u8 { return nqAstTypePointer() }
+    if source[start] == 91 as u8 {
+        if start + 1 as usize < len(source) && source[start + 1 as usize] == 93 as u8 { return nqAstTypeSlice() }
+        return nqAstTypeArray()
+    }
+    if nqCompilerTypeTextEqual(source, start, slice([118 as u8,111 as u8,105 as u8,100 as u8])) { return nqAstTypeVoid() }
+    if nqCompilerTypeTextEqual(source, start, slice([98 as u8,111 as u8,111 as u8,108 as u8])) { return nqAstTypeBool() }
+    if nqCompilerTypeTextEqual(source, start, slice([105 as u8,110 as u8,116 as u8])) { return nqAstTypeInt() }
+    if nqCompilerTypeTextEqual(source, start, slice([102 as u8,108 as u8,111 as u8,97 as u8,116 as u8])) { return nqAstTypeFloat() }
+    if nqCompilerTypeTextEqual(source, start, slice([115 as u8,116 as u8,114 as u8,105 as u8,110 as u8,103 as u8])) { return nqAstTypeString() }
+    if nqCompilerTypeTextEqual(source, start, slice([105 as u8,56 as u8])) { return nqAstTypeI8() }
+    if nqCompilerTypeTextEqual(source, start, slice([117 as u8,56 as u8])) { return nqAstTypeU8() }
+    if nqCompilerTypeTextEqual(source, start, slice([105 as u8,49 as u8,54 as u8])) { return nqAstTypeI16() }
+    if nqCompilerTypeTextEqual(source, start, slice([117 as u8,49 as u8,54 as u8])) { return nqAstTypeU16() }
+    if nqCompilerTypeTextEqual(source, start, slice([105 as u8,51 as u8,50 as u8])) { return nqAstTypeI32() }
+    if nqCompilerTypeTextEqual(source, start, slice([117 as u8,51 as u8,50 as u8])) { return nqAstTypeU32() }
+    if nqCompilerTypeTextEqual(source, start, slice([105 as u8,54 as u8,52 as u8])) { return nqAstTypeI64() }
+    if nqCompilerTypeTextEqual(source, start, slice([117 as u8,54 as u8,52 as u8])) { return nqAstTypeU64() }
+    if nqCompilerTypeTextEqual(source, start, slice([105 as u8,115 as u8,105 as u8,122 as u8,101 as u8])) { return nqAstTypeIsize() }
+    if nqCompilerTypeTextEqual(source, start, slice([117 as u8,115 as u8,105 as u8,122 as u8,101 as u8])) { return nqAstTypeUsize() }
+    if nqCompilerTypeTextEqual(source, start, slice([110 as u8,117 as u8,108 as u8,108 as u8])) { return nqAstTypeNull() }
+    return nqAstTypeRecord()
+}

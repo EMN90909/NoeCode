@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 const args=process.argv.slice(2)
-const currentPath=resolve(args[0]||'benchmarks/results/latest.json')
-const baselinePath=resolve(args[1]||'benchmarks/results/baseline.json')
+const currentPath=resolve(args[0]||'Benchmarks/results/latest.json')
+const baselinePath=resolve(args[1]||'Benchmarks/results/baseline.json')
 const thresholdArg=args.find(x=>x.startsWith('--threshold='))
 const defaultThreshold=Number(thresholdArg?.split('=')[1]||8)
 const current=JSON.parse(await readFile(currentPath,'utf8'))

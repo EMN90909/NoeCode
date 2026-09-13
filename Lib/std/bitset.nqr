@@ -1,6 +1,503 @@
 module noqeri.std.bitset
 
+// BitSet is a caller-owned view over bytes. The module never allocates.
+// A bit index maps to byte = index / 8 and mask = 2^(index % 8).
+record BitSet {
+    data: *u8
+    bit_length: usize
+    byte_capacity: usize
+}
+
+export function bitset_required_bytes(bits: usize): usize {
+    if bits == 0 as usize { return 0 as usize }
+    return (bits + 7 as usize) / 8 as usize
+}
+
+export function bitset_init(set: *BitSet, data: *u8, bits: usize, byte_capacity: usize): bool {
+    if set == null { return false }
+    let needed: usize = bitset_required_bytes(bits)
+    if needed > byte_capacity { return false }
+    if needed > 0 as usize && data == null { return false }
+    set.data = data
+    set.bit_length = bits
+    set.byte_capacity = byte_capacity
+    return true
+}
+
+export function bitset_invariant(set: *BitSet): bool {
+    if set == null { return false }
+    let needed: usize = bitset_required_bytes(set.bit_length)
+    if needed > set.byte_capacity { return false }
+    if needed > 0 as usize && set.data == null { return false }
+    return true
+}
+
+export function bitset_len_bits(set: *BitSet): usize {
+    if set == null { return 0 as usize }
+    return set.bit_length
+}
+
+export function bitset_len_bytes(set: *BitSet): usize {
+    if set == null { return 0 as usize }
+    return bitset_required_bytes(set.bit_length)
+}
+
+export function bitset_capacity_bytes(set: *BitSet): usize {
+    if set == null { return 0 as usize }
+    return set.byte_capacity
+}
+
+export function bitset_is_empty_set(set: *BitSet): bool {
+    return set == null || set.bit_length == 0 as usize
+}
+
+export function bitset_index_valid(set: *BitSet, bit: usize): bool {
+    return set != null && bit < set.bit_length
+}
+
+function bitset_mask(offset: usize): u8 {
+    let mask: u8 = 1 as u8
+    let i: usize = 0 as usize
+    while i < offset {
+        mask = mask * 2 as u8
+        i = i + 1 as usize
+    }
+    return mask
+}
+
+function bitset_byte_index(bit: usize): usize {
+    return bit / 8 as usize
+}
+
+function bitset_offset(bit: usize): usize {
+    return bit % 8 as usize
+}
+
+export function bitset_test(set: *BitSet, bit: usize): bool {
+    if !bitset_index_valid(set, bit) || set.data == null { return false }
+    let byte_index: usize = bitset_byte_index(bit)
+    let mask: u8 = bitset_mask(bitset_offset(bit))
+    return (set.data[byte_index] / mask) % 2 as u8 == 1 as u8
+}
+
+export function bitset_set(set: *BitSet, bit: usize): bool {
+    if !bitset_index_valid(set, bit) || set.data == null { return false }
+    if bitset_test(set, bit) { return true }
+    let byte_index: usize = bitset_byte_index(bit)
+    let mask: u8 = bitset_mask(bitset_offset(bit))
+    set.data[byte_index] = set.data[byte_index] + mask
+    return true
+}
+
+export function bitset_clear(set: *BitSet, bit: usize): bool {
+    if !bitset_index_valid(set, bit) || set.data == null { return false }
+    if !bitset_test(set, bit) { return true }
+    let byte_index: usize = bitset_byte_index(bit)
+    let mask: u8 = bitset_mask(bitset_offset(bit))
+    set.data[byte_index] = set.data[byte_index] - mask
+    return true
+}
+
+export function bitset_toggle(set: *BitSet, bit: usize): bool {
+    if !bitset_index_valid(set, bit) || set.data == null { return false }
+    if bitset_test(set, bit) { return bitset_clear(set, bit) }
+    return bitset_set(set, bit)
+}
+
+export function bitset_assign(set: *BitSet, bit: usize, value: bool): bool {
+    if value { return bitset_set(set, bit) }
+    return bitset_clear(set, bit)
+}
+
+export function bitset_clear_all(set: *BitSet): bool {
+    if !bitset_invariant(set) { return false }
+    let bytes: usize = bitset_len_bytes(set)
+    let i: usize = 0 as usize
+    while i < bytes {
+        set.data[i] = 0 as u8
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_fill_all(set: *BitSet): bool {
+    if !bitset_invariant(set) { return false }
+    let i: usize = 0 as usize
+    while i < set.bit_length {
+        if !bitset_set(set, i) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_count_ones(set: *BitSet): usize {
+    if !bitset_invariant(set) { return 0 as usize }
+    let count: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < set.bit_length {
+        if bitset_test(set, i) { count = count + 1 as usize }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function bitset_count_zeros(set: *BitSet): usize {
+    if set == null { return 0 as usize }
+    let ones: usize = bitset_count_ones(set)
+    if ones > set.bit_length { return 0 as usize }
+    return set.bit_length - ones
+}
+
+export function bitset_any(set: *BitSet): bool {
+    if !bitset_invariant(set) { return false }
+    let i: usize = 0 as usize
+    while i < set.bit_length {
+        if bitset_test(set, i) { return true }
+        i = i + 1 as usize
+    }
+    return false
+}
+
+export function bitset_none(set: *BitSet): bool {
+    return !bitset_any(set)
+}
+
+export function bitset_all(set: *BitSet): bool {
+    if !bitset_invariant(set) { return false }
+    let i: usize = 0 as usize
+    while i < set.bit_length {
+        if !bitset_test(set, i) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_set_range(set: *BitSet, start: usize, end_exclusive: usize): bool {
+    if set == null || start > end_exclusive || end_exclusive > set.bit_length { return false }
+    let i: usize = start
+    while i < end_exclusive {
+        if !bitset_set(set, i) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_clear_range(set: *BitSet, start: usize, end_exclusive: usize): bool {
+    if set == null || start > end_exclusive || end_exclusive > set.bit_length { return false }
+    let i: usize = start
+    while i < end_exclusive {
+        if !bitset_clear(set, i) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_toggle_range(set: *BitSet, start: usize, end_exclusive: usize): bool {
+    if set == null || start > end_exclusive || end_exclusive > set.bit_length { return false }
+    let i: usize = start
+    while i < end_exclusive {
+        if !bitset_toggle(set, i) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_count_range(set: *BitSet, start: usize, end_exclusive: usize): usize {
+    if set == null || start > end_exclusive || end_exclusive > set.bit_length { return 0 as usize }
+    let count: usize = 0 as usize
+    let i: usize = start
+    while i < end_exclusive {
+        if bitset_test(set, i) { count = count + 1 as usize }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function bitset_first_set(set: *BitSet): isize {
+    if !bitset_invariant(set) { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < set.bit_length {
+        if bitset_test(set, i) { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function bitset_last_set(set: *BitSet): isize {
+    if !bitset_invariant(set) || set.bit_length == 0 as usize { return -1 as isize }
+    let i: usize = set.bit_length
+    while i > 0 as usize {
+        i = i - 1 as usize
+        if bitset_test(set, i) { return i as isize }
+    }
+    return -1 as isize
+}
+
+export function bitset_first_clear(set: *BitSet): isize {
+    if !bitset_invariant(set) { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < set.bit_length {
+        if !bitset_test(set, i) { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function bitset_last_clear(set: *BitSet): isize {
+    if !bitset_invariant(set) || set.bit_length == 0 as usize { return -1 as isize }
+    let i: usize = set.bit_length
+    while i > 0 as usize {
+        i = i - 1 as usize
+        if !bitset_test(set, i) { return i as isize }
+    }
+    return -1 as isize
+}
+
+export function bitset_next_set(set: *BitSet, after: usize): isize {
+    if set == null || after >= set.bit_length { return -1 as isize }
+    let i: usize = after + 1 as usize
+    while i < set.bit_length {
+        if bitset_test(set, i) { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function bitset_next_clear(set: *BitSet, after: usize): isize {
+    if set == null || after >= set.bit_length { return -1 as isize }
+    let i: usize = after + 1 as usize
+    while i < set.bit_length {
+        if !bitset_test(set, i) { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function bitset_previous_set(set: *BitSet, before: usize): isize {
+    if set == null || before == 0 as usize || before > set.bit_length { return -1 as isize }
+    let i: usize = before
+    while i > 0 as usize {
+        i = i - 1 as usize
+        if bitset_test(set, i) { return i as isize }
+    }
+    return -1 as isize
+}
+
+export function bitset_previous_clear(set: *BitSet, before: usize): isize {
+    if set == null || before == 0 as usize || before > set.bit_length { return -1 as isize }
+    let i: usize = before
+    while i > 0 as usize {
+        i = i - 1 as usize
+        if !bitset_test(set, i) { return i as isize }
+    }
+    return -1 as isize
+}
+
+export function bitset_rank(set: *BitSet, end_exclusive: usize): usize {
+    if set == null { return 0 as usize }
+    let end: usize = end_exclusive
+    if end > set.bit_length { end = set.bit_length }
+    return bitset_count_range(set, 0 as usize, end)
+}
+
+export function bitset_select(set: *BitSet, ordinal: usize): isize {
+    if !bitset_invariant(set) { return -1 as isize }
+    let seen: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < set.bit_length {
+        if bitset_test(set, i) {
+            if seen == ordinal { return i as isize }
+            seen = seen + 1 as usize
+        }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function bitset_equal(left: *BitSet, right: *BitSet): bool {
+    if !bitset_invariant(left) || !bitset_invariant(right) { return false }
+    if left.bit_length != right.bit_length { return false }
+    let i: usize = 0 as usize
+    while i < left.bit_length {
+        if bitset_test(left, i) != bitset_test(right, i) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_is_subset(subset: *BitSet, superset: *BitSet): bool {
+    if !bitset_invariant(subset) || !bitset_invariant(superset) { return false }
+    if subset.bit_length > superset.bit_length { return false }
+    let i: usize = 0 as usize
+    while i < subset.bit_length {
+        if bitset_test(subset, i) && !bitset_test(superset, i) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_intersects(left: *BitSet, right: *BitSet): bool {
+    if !bitset_invariant(left) || !bitset_invariant(right) { return false }
+    let limit: usize = left.bit_length
+    if right.bit_length < limit { limit = right.bit_length }
+    let i: usize = 0 as usize
+    while i < limit {
+        if bitset_test(left, i) && bitset_test(right, i) { return true }
+        i = i + 1 as usize
+    }
+    return false
+}
+
+function bitset_compatible_output(out: *BitSet, left: *BitSet, right: *BitSet): bool {
+    if !bitset_invariant(out) || !bitset_invariant(left) || !bitset_invariant(right) { return false }
+    return out.bit_length == left.bit_length && left.bit_length == right.bit_length
+}
+
+export function bitset_union_into(out: *BitSet, left: *BitSet, right: *BitSet): bool {
+    if !bitset_compatible_output(out, left, right) { return false }
+    let i: usize = 0 as usize
+    while i < out.bit_length {
+        if !bitset_assign(out, i, bitset_test(left, i) || bitset_test(right, i)) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_intersection_into(out: *BitSet, left: *BitSet, right: *BitSet): bool {
+    if !bitset_compatible_output(out, left, right) { return false }
+    let i: usize = 0 as usize
+    while i < out.bit_length {
+        if !bitset_assign(out, i, bitset_test(left, i) && bitset_test(right, i)) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_difference_into(out: *BitSet, left: *BitSet, right: *BitSet): bool {
+    if !bitset_compatible_output(out, left, right) { return false }
+    let i: usize = 0 as usize
+    while i < out.bit_length {
+        if !bitset_assign(out, i, bitset_test(left, i) && !bitset_test(right, i)) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_xor_into(out: *BitSet, left: *BitSet, right: *BitSet): bool {
+    if !bitset_compatible_output(out, left, right) { return false }
+    let i: usize = 0 as usize
+    while i < out.bit_length {
+        let a: bool = bitset_test(left, i)
+        let b: bool = bitset_test(right, i)
+        if !bitset_assign(out, i, (a && !b) || (!a && b)) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_not_into(out: *BitSet, input: *BitSet): bool {
+    if !bitset_invariant(out) || !bitset_invariant(input) || out.bit_length != input.bit_length { return false }
+    let i: usize = 0 as usize
+    while i < out.bit_length {
+        if !bitset_assign(out, i, !bitset_test(input, i)) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_copy(out: *BitSet, input: *BitSet): bool {
+    if !bitset_invariant(out) || !bitset_invariant(input) || out.bit_length != input.bit_length { return false }
+    let i: usize = 0 as usize
+    while i < out.bit_length {
+        if !bitset_assign(out, i, bitset_test(input, i)) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_shift_left_into(out: *BitSet, input: *BitSet, shift: usize): bool {
+    if !bitset_invariant(out) || !bitset_invariant(input) || out.bit_length != input.bit_length { return false }
+    if !bitset_clear_all(out) { return false }
+    if shift >= input.bit_length { return true }
+    let i: usize = 0 as usize
+    while i + shift < input.bit_length {
+        if bitset_test(input, i) {
+            if !bitset_set(out, i + shift) { return false }
+        }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_shift_right_into(out: *BitSet, input: *BitSet, shift: usize): bool {
+    if !bitset_invariant(out) || !bitset_invariant(input) || out.bit_length != input.bit_length { return false }
+    if !bitset_clear_all(out) { return false }
+    if shift >= input.bit_length { return true }
+    let i: usize = shift
+    while i < input.bit_length {
+        if bitset_test(input, i) {
+            if !bitset_set(out, i - shift) { return false }
+        }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function bitset_copy_bytes(set: *BitSet, out: []u8): usize {
+    if !bitset_invariant(set) { return 0 as usize }
+    let count: usize = bitset_len_bytes(set)
+    if len(out) < count { return 0 as usize }
+    let i: usize = 0 as usize
+    while i < count {
+        out[i] = set.data[i]
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function bitset_load_bytes(set: *BitSet, input: []u8): bool {
+    if !bitset_invariant(set) { return false }
+    let count: usize = bitset_len_bytes(set)
+    if len(input) < count { return false }
+    let i: usize = 0 as usize
+    while i < count {
+        set.data[i] = input[i]
+        i = i + 1 as usize
+    }
+    // Clear any bits in the final byte that are outside the logical length.
+    let logical: usize = set.bit_length
+    let bit: usize = logical
+    let physical_bits: usize = count * 8 as usize
+    while bit < physical_bits {
+        let byte_index: usize = bitset_byte_index(bit)
+        let mask: u8 = bitset_mask(bitset_offset(bit))
+        if ((set.data[byte_index] / mask) % 2 as u8) == 1 as u8 {
+            set.data[byte_index] = set.data[byte_index] - mask
+        }
+        bit = bit + 1 as usize
+    }
+    return true
+}
+
+export function bitset_density_per_mille(set: *BitSet): usize {
+    if set == null || set.bit_length == 0 as usize { return 0 as usize }
+    return (bitset_count_ones(set) * 1000 as usize) / set.bit_length
+}
+
+export function bitset_hamming_distance(left: *BitSet, right: *BitSet): usize {
+    if !bitset_invariant(left) || !bitset_invariant(right) || left.bit_length != right.bit_length { return 0 as usize }
+    let distance: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < left.bit_length {
+        if bitset_test(left, i) != bitset_test(right, i) { distance = distance + 1 as usize }
+        i = i + 1 as usize
+    }
+    return distance
+}
+
+// Compatibility helpers for old slice-shaped code. They intentionally do not
+// pretend a generic slice is a bitset; they preserve the original catalog API.
 export function bitset_len<T>(items: []T): usize { return len(items) }
 export function bitset_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
-export function bitset_first<T>(items: []T): T { return items[0] }
-export function bitset_last<T>(items: []T): T { return items[len(items)-1] }
+export function bitset_first<T: Copy>(items: []T): T { return items[0 as usize] }
+export function bitset_last<T: Copy>(items: []T): T { return items[len(items)-1 as usize] }

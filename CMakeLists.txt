@@ -16,7 +16,7 @@ set(NOQERI_FRONTEND_SOURCES
  Compiler/bootstrap/lexer_host.cpp Compiler/bootstrap/parser_host.cpp Compiler/bootstrap/abi_runtime_host.cpp Compiler/bootstrap/interpreter_host.cpp
  Compiler/bootstrap/runtime_checks_host.cpp Compiler/bootstrap/profile_host.cpp Compiler/bootstrap/noqeridb_host.cpp)
 set(NOQERI_SOURCES ${NOQERI_FRONTEND_SOURCES}
- Compiler/native_backend.cpp Compiler/web_backend.cpp Compiler/linker.cpp
+ Compiler/native_backend.cpp Compiler/web_backend.cpp Compiler/linker.cpp Compiler/object_loader.cpp
  Compiler/bootstrap/cli_host.cpp Compiler/bootstrap/formatter_host.cpp Compiler/bootstrap/package_host.cpp Compiler/bootstrap/lsp_host.cpp
  Compiler/bootstrap/test_runner_host.cpp Compiler/bootstrap/production_doctor_host.cpp
  Compiler/bootstrap/security_audit_host.cpp)
@@ -56,6 +56,13 @@ noqeri_apply_warnings(noqeri)
 noqeri_apply_warnings(noqeri_abi)
 include(CTest)
 if(BUILD_TESTING)
+ find_package(Threads REQUIRED)
+ add_executable(noqeri-runtime-checks-test tests/runtime_checks_host_test.cpp Compiler/bootstrap/runtime_checks_host.cpp)
+ target_include_directories(noqeri-runtime-checks-test PRIVATE Include/noqeri Compiler/bootstrap)
+ target_compile_features(noqeri-runtime-checks-test PRIVATE cxx_std_17)
+ target_link_libraries(noqeri-runtime-checks-test PRIVATE Threads::Threads)
+ noqeri_apply_warnings(noqeri-runtime-checks-test)
+ add_test(NAME noqeri-runtime-checks COMMAND noqeri-runtime-checks-test)
  add_test(NAME noqeri-version COMMAND noqeri --version)
  add_test(NAME noqeri-check-hello COMMAND noqeri check ${CMAKE_SOURCE_DIR}/examples/hello.nqr)
  add_test(NAME noqeri-tests COMMAND noqeri test ${CMAKE_SOURCE_DIR}/tests)

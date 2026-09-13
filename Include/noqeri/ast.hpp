@@ -14,7 +14,7 @@ enum class TokenKind {
     Eof, Identifier, Integer, Float, String,
     LineComment, BlockComment,
     Let, Const, Function, If, Else, While, Return, True, False, Null,
-    Import, Module, Record, Class, Extern, Export, Volatile, As, Throw, Try,
+    Import, Module, Record, Class, Extern, Export, Volatile, As, Throw, Try, Unsafe,
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
     Comma, Colon, Semicolon, Dot,
     Plus, Minus, Star, Slash, Percent, Ampersand,
@@ -44,7 +44,7 @@ struct Stmt { virtual ~Stmt()=default; Span span; };
 using StmtPtr = std::shared_ptr<Stmt>;
 struct ExprStmt final : Stmt { ExprPtr expr; };
 struct LetStmt final : Stmt { bool isConst=false; std::string name; std::optional<std::string> annotation; ExprPtr initializer; };
-struct BlockStmt final : Stmt { std::vector<StmtPtr> statements; };
+struct BlockStmt final : Stmt { std::vector<StmtPtr> statements; bool isUnsafe=false; };
 struct IfStmt final : Stmt { ExprPtr condition; StmtPtr thenBranch; StmtPtr elseBranch; };
 struct WhileStmt final : Stmt { ExprPtr condition; StmtPtr body; };
 struct ReturnStmt final : Stmt { ExprPtr value; };

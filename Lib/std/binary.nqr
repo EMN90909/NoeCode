@@ -1,6 +1,358 @@
 module noqeri.std.binary
 
-export function binary_byte_sum(data: []u8): u64 { let sum: u64 = 0 as u64 let i: usize = 0 as usize while i < len(data) { sum = sum + data[i] as u64 i = i + 1 } return sum }
-export function binary_all_zero(data: []u8): bool { let i: usize = 0 as usize while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 } return true }
-export function binary_bounded_length(data: []u8, max: usize): bool { return len(data) <= max }
-export function binary_nonempty(data: []u8): bool { return len(data) > 0 as usize }
+// Binary byte-order, range and primitive codec helpers.
+// Functions validate ranges before indexing so callers can use them on
+// untrusted packets/files without duplicating offset arithmetic.
+
+record BinaryRange {
+    offset: usize
+    length: usize
+}
+
+export function binary_range(offset: usize, length: usize): BinaryRange {
+    let range: BinaryRange
+    range.offset = offset
+    range.length = length
+    return range
+}
+
+export function binary_range_valid(data: []u8, offset: usize, width: usize): bool {
+    if offset > len(data) { return false }
+    return width <= len(data) - offset
+}
+
+export function binary_range_end(range: BinaryRange): usize {
+    return range.offset + range.length
+}
+
+export function binary_range_contains(range: BinaryRange, offset: usize): bool {
+    if offset < range.offset { return false }
+    return offset - range.offset < range.length
+}
+
+export function binary_byte_sum(data: []u8): u64 {
+    let sum: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < len(data) {
+        sum = sum + data[i] as u64
+        i = i + 1 as usize
+    }
+    return sum
+}
+
+export function binary_all_zero(data: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(data) {
+        if data[i] != 0 as u8 { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function binary_bounded_length(data: []u8, max: usize): bool {
+    return len(data) <= max
+}
+
+export function binary_nonempty(data: []u8): bool {
+    return len(data) > 0 as usize
+}
+
+export function binary_equal(a: []u8, b: []u8): bool {
+    if len(a) != len(b) { return false }
+    let i: usize = 0 as usize
+    while i < len(a) {
+        if a[i] != b[i] { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function binary_compare(a: []u8, b: []u8): int {
+    let limit: usize = len(a)
+    if len(b) < limit { limit = len(b) }
+    let i: usize = 0 as usize
+    while i < limit {
+        if a[i] < b[i] { return -1 }
+        if a[i] > b[i] { return 1 }
+        i = i + 1 as usize
+    }
+    if len(a) < len(b) { return -1 }
+    if len(a) > len(b) { return 1 }
+    return 0
+}
+
+export function binary_copy(out: []u8, out_offset: usize, data: []u8): bool {
+    if !binary_range_valid(out, out_offset, len(data)) { return false }
+    let i: usize = 0 as usize
+    while i < len(data) {
+        out[out_offset + i] = data[i]
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function binary_fill(out: []u8, offset: usize, count: usize, value: u8): bool {
+    if !binary_range_valid(out, offset, count) { return false }
+    let i: usize = 0 as usize
+    while i < count {
+        out[offset + i] = value
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function binary_read_u8(data: []u8, offset: usize): u8 {
+    if !binary_range_valid(data, offset, 1 as usize) { return 0 as u8 }
+    return data[offset]
+}
+
+export function binary_write_u8(out: []u8, offset: usize, value: u8): bool {
+    if !binary_range_valid(out, offset, 1 as usize) { return false }
+    out[offset] = value
+    return true
+}
+
+export function binary_read_u16_le(data: []u8, offset: usize): u16 {
+    if !binary_range_valid(data, offset, 2 as usize) { return 0 as u16 }
+    return data[offset] as u16 + data[offset + 1 as usize] as u16 * 256 as u16
+}
+
+export function binary_read_u16_be(data: []u8, offset: usize): u16 {
+    if !binary_range_valid(data, offset, 2 as usize) { return 0 as u16 }
+    return data[offset] as u16 * 256 as u16 + data[offset + 1 as usize] as u16
+}
+
+export function binary_write_u16_le(out: []u8, offset: usize, value: u16): bool {
+    if !binary_range_valid(out, offset, 2 as usize) { return false }
+    out[offset] = (value % 256 as u16) as u8
+    out[offset + 1 as usize] = (value / 256 as u16) as u8
+    return true
+}
+
+export function binary_write_u16_be(out: []u8, offset: usize, value: u16): bool {
+    if !binary_range_valid(out, offset, 2 as usize) { return false }
+    out[offset] = (value / 256 as u16) as u8
+    out[offset + 1 as usize] = (value % 256 as u16) as u8
+    return true
+}
+
+export function binary_read_u24_le(data: []u8, offset: usize): u32 {
+    if !binary_range_valid(data, offset, 3 as usize) { return 0 as u32 }
+    return data[offset] as u32 + data[offset + 1 as usize] as u32 * 256 as u32 + data[offset + 2 as usize] as u32 * 65536 as u32
+}
+
+export function binary_read_u24_be(data: []u8, offset: usize): u32 {
+    if !binary_range_valid(data, offset, 3 as usize) { return 0 as u32 }
+    return data[offset] as u32 * 65536 as u32 + data[offset + 1 as usize] as u32 * 256 as u32 + data[offset + 2 as usize] as u32
+}
+
+export function binary_write_u24_le(out: []u8, offset: usize, value: u32): bool {
+    if !binary_range_valid(out, offset, 3 as usize) { return false }
+    out[offset] = (value % 256 as u32) as u8
+    out[offset + 1 as usize] = ((value / 256 as u32) % 256 as u32) as u8
+    out[offset + 2 as usize] = ((value / 65536 as u32) % 256 as u32) as u8
+    return true
+}
+
+export function binary_write_u24_be(out: []u8, offset: usize, value: u32): bool {
+    if !binary_range_valid(out, offset, 3 as usize) { return false }
+    out[offset] = ((value / 65536 as u32) % 256 as u32) as u8
+    out[offset + 1 as usize] = ((value / 256 as u32) % 256 as u32) as u8
+    out[offset + 2 as usize] = (value % 256 as u32) as u8
+    return true
+}
+
+export function binary_read_u32_le(data: []u8, offset: usize): u32 {
+    if !binary_range_valid(data, offset, 4 as usize) { return 0 as u32 }
+    return data[offset] as u32 + data[offset + 1 as usize] as u32 * 256 as u32 + data[offset + 2 as usize] as u32 * 65536 as u32 + data[offset + 3 as usize] as u32 * 16777216 as u32
+}
+
+export function binary_read_u32_be(data: []u8, offset: usize): u32 {
+    if !binary_range_valid(data, offset, 4 as usize) { return 0 as u32 }
+    return data[offset] as u32 * 16777216 as u32 + data[offset + 1 as usize] as u32 * 65536 as u32 + data[offset + 2 as usize] as u32 * 256 as u32 + data[offset + 3 as usize] as u32
+}
+
+export function binary_write_u32_le(out: []u8, offset: usize, value: u32): bool {
+    if !binary_range_valid(out, offset, 4 as usize) { return false }
+    let current: u32 = value
+    let i: usize = 0 as usize
+    while i < 4 as usize {
+        out[offset + i] = (current % 256 as u32) as u8
+        current = current / 256 as u32
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function binary_write_u32_be(out: []u8, offset: usize, value: u32): bool {
+    if !binary_range_valid(out, offset, 4 as usize) { return false }
+    let current: u32 = value
+    let i: usize = 0 as usize
+    while i < 4 as usize {
+        out[offset + 3 as usize - i] = (current % 256 as u32) as u8
+        current = current / 256 as u32
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function binary_read_u64_le(data: []u8, offset: usize): u64 {
+    if !binary_range_valid(data, offset, 8 as usize) { return 0 as u64 }
+    let value: u64 = 0 as u64
+    let multiplier: u64 = 1 as u64
+    let i: usize = 0 as usize
+    while i < 8 as usize {
+        value = value + data[offset + i] as u64 * multiplier
+        multiplier = multiplier * 256 as u64
+        i = i + 1 as usize
+    }
+    return value
+}
+
+export function binary_read_u64_be(data: []u8, offset: usize): u64 {
+    if !binary_range_valid(data, offset, 8 as usize) { return 0 as u64 }
+    let value: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < 8 as usize {
+        value = value * 256 as u64 + data[offset + i] as u64
+        i = i + 1 as usize
+    }
+    return value
+}
+
+export function binary_write_u64_le(out: []u8, offset: usize, value: u64): bool {
+    if !binary_range_valid(out, offset, 8 as usize) { return false }
+    let current: u64 = value
+    let i: usize = 0 as usize
+    while i < 8 as usize {
+        out[offset + i] = (current % 256 as u64) as u8
+        current = current / 256 as u64
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function binary_write_u64_be(out: []u8, offset: usize, value: u64): bool {
+    if !binary_range_valid(out, offset, 8 as usize) { return false }
+    let current: u64 = value
+    let i: usize = 0 as usize
+    while i < 8 as usize {
+        out[offset + 7 as usize - i] = (current % 256 as u64) as u8
+        current = current / 256 as u64
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function binary_read_i16_le(data: []u8, offset: usize): i16 {
+    return binary_read_u16_le(data, offset) as i16
+}
+
+export function binary_read_i16_be(data: []u8, offset: usize): i16 {
+    return binary_read_u16_be(data, offset) as i16
+}
+
+export function binary_read_i32_le(data: []u8, offset: usize): i32 {
+    return binary_read_u32_le(data, offset) as i32
+}
+
+export function binary_read_i32_be(data: []u8, offset: usize): i32 {
+    return binary_read_u32_be(data, offset) as i32
+}
+
+export function binary_read_i64_le(data: []u8, offset: usize): i64 {
+    return binary_read_u64_le(data, offset) as i64
+}
+
+export function binary_read_i64_be(data: []u8, offset: usize): i64 {
+    return binary_read_u64_be(data, offset) as i64
+}
+
+export function binary_write_i16_le(out: []u8, offset: usize, value: i16): bool {
+    return binary_write_u16_le(out, offset, value as u16)
+}
+
+export function binary_write_i16_be(out: []u8, offset: usize, value: i16): bool {
+    return binary_write_u16_be(out, offset, value as u16)
+}
+
+export function binary_write_i32_le(out: []u8, offset: usize, value: i32): bool {
+    return binary_write_u32_le(out, offset, value as u32)
+}
+
+export function binary_write_i32_be(out: []u8, offset: usize, value: i32): bool {
+    return binary_write_u32_be(out, offset, value as u32)
+}
+
+export function binary_write_i64_le(out: []u8, offset: usize, value: i64): bool {
+    return binary_write_u64_le(out, offset, value as u64)
+}
+
+export function binary_write_i64_be(out: []u8, offset: usize, value: i64): bool {
+    return binary_write_u64_be(out, offset, value as u64)
+}
+
+export function binary_reverse(out: []u8): void {
+    if len(out) <= 1 as usize { return }
+    let left: usize = 0 as usize
+    let right: usize = len(out) - 1 as usize
+    while left < right {
+        let temp: u8 = out[left]
+        out[left] = out[right]
+        out[right] = temp
+        left = left + 1 as usize
+        right = right - 1 as usize
+    }
+}
+
+export function binary_find(data: []u8, value: u8): usize {
+    let i: usize = 0 as usize
+    while i < len(data) {
+        if data[i] == value { return i }
+        i = i + 1 as usize
+    }
+    return len(data)
+}
+
+export function binary_count(data: []u8, value: u8): usize {
+    let count: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(data) {
+        if data[i] == value { count = count + 1 as usize }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function binary_prefix_equal(data: []u8, prefix: []u8): bool {
+    if len(prefix) > len(data) { return false }
+    let i: usize = 0 as usize
+    while i < len(prefix) {
+        if data[i] != prefix[i] { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function binary_suffix_equal(data: []u8, suffix: []u8): bool {
+    if len(suffix) > len(data) { return false }
+    let start: usize = len(data) - len(suffix)
+    let i: usize = 0 as usize
+    while i < len(suffix) {
+        if data[start + i] != suffix[i] { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function binary_xor_checksum_compat(data: []u8): u8 {
+    // Arithmetic fallback for targets before stable bitwise operators: this is
+    // a rolling parity checksum, not a cryptographic digest.
+    let parity: u8 = 0 as u8
+    let i: usize = 0 as usize
+    while i < len(data) {
+        parity = ((parity as u16 + data[i] as u16) % 256 as u16) as u8
+        i = i + 1 as usize
+    }
+    return parity
+}

@@ -1,0 +1,12 @@
+import "../../../Lib/std/http.nqr"
+import "../../../Lib/std/json.nqr"
+
+function api_health(): int { return 200 }
+
+function main(): int {
+    let sample = "{\"status\":\"ok\"}"
+    if !json_validate(sample) { return 1 }
+    let server: isize = serve("127.0.0.1:8081", "api_health")
+    if server < 0 as isize { return 1 }
+    return 0
+}

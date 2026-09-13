@@ -24,6 +24,7 @@ function nqTypeAlpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (
 function nqTypeDigit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
 function nqTypeIdent(c: u8): bool { return nqTypeAlpha(c) || nqTypeDigit(c) }
 function nqTypeSkip(source: []u8, start: usize): usize { let i: usize = start while i < len(source) && nqTypeSpace(source[i]) { i = i + 1 as usize } return i }
+function nqTypeSafeUsizeMax(): usize { return 9223372036854775807 as usize }
 
 export function nqTypeNameSymbol(source: []u8, start: usize, end: usize): u64 {
     if start >= end || end > len(source) { return 0 as u64 }
@@ -56,7 +57,7 @@ function nqTypeParseLength(source: []u8, start: usize, out: *usize): usize {
     let value: usize = 0 as usize
     while index < len(source) && nqTypeDigit(source[index]) {
         let digit: usize = (source[index] - 48 as u8) as usize
-        if value > (18446744073709551615 as usize - digit) / 10 as usize { return start }
+        if value > (nqTypeSafeUsizeMax() - digit) / 10 as usize { return start }
         value = value * 10 as usize + digit
         index = index + 1 as usize
     }
@@ -73,7 +74,6 @@ export function nqTypeRefParse(source: []u8, start: usize, out: *NqTypeRef): usi
     let cursor: usize = begin
     if source[cursor] == 42 as u8 {
         cursor = nqTypeSkip(source, cursor + 1 as usize)
-        let volatileStart: usize = cursor
         if cursor + 8 as usize <= len(source) && source[cursor] == 118 as u8 && source[cursor + 1 as usize] == 111 as u8 && source[cursor + 2 as usize] == 108 as u8 && source[cursor + 3 as usize] == 97 as u8 && source[cursor + 4 as usize] == 116 as u8 && source[cursor + 5 as usize] == 105 as u8 && source[cursor + 6 as usize] == 108 as u8 && source[cursor + 7 as usize] == 101 as u8 {
             if cursor + 8 as usize == len(source) || !nqTypeIdent(source[cursor + 8 as usize]) { out.flags = nqTypeFlagVolatile() cursor = nqTypeSkip(source, cursor + 8 as usize) }
         }
@@ -166,7 +166,7 @@ export function nqTypeRefStorageBytes(value: *NqTypeRef, pointerBytes: usize): u
         element.code = value.elementCode
         element.nameSymbol = value.elementSymbol
         let width: usize = nqTypeRefStorageBytes(&element, pointerBytes)
-        if width == 0 as usize || value.arrayLength > 18446744073709551615 as usize / width { return 0 as usize }
+        if width == 0 as usize || value.arrayLength > nqTypeSafeUsizeMax() / width { return 0 as usize }
         return value.arrayLength * width
     }
     return nqCompilerTypeStorageBytes(value.code, pointerBytes)

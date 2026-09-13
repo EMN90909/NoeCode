@@ -1,5 +1,6 @@
 module noqeri.compiler.selfhost.object_formats
 import "targets.nqr"
+
 export function nqElfMagic32(): u32 { return 0x464c457f as u32 }
 export function nqMachOMagic64(): u32 { return 0xfeedfacf as u32 }
 export function nqCoffMachineX64(): u16 { return 0x8664 as u16 }
@@ -11,3 +12,50 @@ export function nqMachCpuArm64(): u32 { return 0x0100000c as u32 }
 export function nqObjectMachine(target: int): u32 { let format: int = nqTargetObjectFormat(target) let arch: int = nqTargetArchitecture(target) if format == nqObjectCoff() { if arch == nqArchArm64() { return nqCoffMachineArm64() as u32 } return nqCoffMachineX64() as u32 } if format == nqObjectElf() { if arch == nqArchArm64() { return nqElfMachineArm64() as u32 } return nqElfMachineX64() as u32 } if arch == nqArchArm64() { return nqMachCpuArm64() } return nqMachCpuX64() }
 export function nqObjectSectionAlignment(target: int, executable: bool): usize { if !nqTargetValid(target) { return 0 as usize } if executable { return 16 as usize } return 8 as usize }
 export function nqObjectSymbolAlignment(target: int): usize { if nqTargetArchitecture(target) == nqArchArm64() { return 4 as usize } return 1 as usize }
+
+export function nqObjectAlignUp(value: usize, alignment: usize): usize {
+    if alignment == 0 as usize { return value }
+    let remainder: usize = value % alignment
+    if remainder == 0 as usize { return value }
+    return value + (alignment - remainder)
+}
+
+export function nqObjectRangeValid(buffer: []u8, offset: usize, count: usize): bool {
+    if offset > len(buffer) { return false }
+    return count <= len(buffer) - offset
+}
+
+export function nqObjectWriteU16LE(buffer: []u8, offset: usize, value: u16): bool {
+    if !nqObjectRangeValid(buffer, offset, 2 as usize) { return false }
+    buffer[offset] = value as u8
+    buffer[offset + 1 as usize] = (value / 256 as u16) as u8
+    return true
+}
+
+export function nqObjectWriteU32LE(buffer: []u8, offset: usize, value: u32): bool {
+    if !nqObjectRangeValid(buffer, offset, 4 as usize) { return false }
+    buffer[offset] = value as u8
+    buffer[offset + 1 as usize] = (value / 256 as u32) as u8
+    buffer[offset + 2 as usize] = (value / 65536 as u32) as u8
+    buffer[offset + 3 as usize] = (value / 16777216 as u32) as u8
+    return true
+}
+
+export function nqObjectWriteU64LE(buffer: []u8, offset: usize, value: u64): bool {
+    if !nqObjectRangeValid(buffer, offset, 8 as usize) { return false }
+    let cursor: usize = 0 as usize
+    let remaining: u64 = value
+    while cursor < 8 as usize {
+        buffer[offset + cursor] = (remaining % 256 as u64) as u8
+        remaining = remaining / 256 as u64
+        cursor = cursor + 1 as usize
+    }
+    return true
+}
+
+export function nqObjectZero(buffer: []u8, offset: usize, count: usize): bool {
+    if !nqObjectRangeValid(buffer, offset, count) { return false }
+    let index: usize = 0 as usize
+    while index < count { buffer[offset + index] = 0 as u8 index = index + 1 as usize }
+    return true
+}

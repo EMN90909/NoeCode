@@ -1,13 +1,72 @@
 module noqeri.std.process
 
 extern function processId(): u64
+extern function processParentId(): u64
 extern function processExit(code: int): void
 extern function processSpawn(command: string): isize
+extern function processSpawnIn(command: string, directory: string): isize
 extern function processWait(pid: usize): isize
+extern function processTryWait(pid: usize): isize
+extern function processTerminate(pid: usize, code: int): isize
+extern function processCurrentDirectory(): string
+
+record Process {
+    handle: usize
+    running: bool
+    exitCode: int
+}
 
 export function process_id(): u64 { return processId() }
-export function process_spawn(command: string): isize { return processSpawn(command) }
-export function process_wait(pid: usize): isize { return processWait(pid) }
-export function process_exit(code: int): void { processExit(code) }
+export function process_parent_id(): u64 { return processParentId() }
+export function process_current_directory(): string { return processCurrentDirectory() }
 export function process_success(code: int): bool { return code == 0 }
 export function process_exit_code_valid(code: int): bool { return code >= 0 && code <= 255 }
+export function process_handle_valid(handle: isize): bool { return handle >= 0 as isize }
+
+export function process_init(process: *Process): void { process.handle = 0 as usize process.running = false process.exitCode = 0 }
+
+export function process_spawn(command: string): isize {
+    if textLength(command) == 0 as usize { return -2 as isize }
+    return processSpawn(command)
+}
+
+export function process_spawn_in(command: string, directory: string): isize {
+    if textLength(command) == 0 as usize || textLength(directory) == 0 as usize { return -2 as isize }
+    return processSpawnIn(command, directory)
+}
+
+export function process_start(process: *Process, command: string): isize {
+    if process == null || process.running { return -2 as isize }
+    let handle: isize = process_spawn(command)
+    if handle < 0 as isize { return handle }
+    process.handle = handle as usize
+    process.running = true
+    process.exitCode = 0
+    return handle
+}
+
+export function process_wait(pid: usize): isize { return processWait(pid) }
+export function process_try_wait(pid: usize): isize { return processTryWait(pid) }
+
+export function process_join(process: *Process): isize {
+    if process == null || !process.running { return -2 as isize }
+    let status: isize = processWait(process.handle)
+    if status < 0 as isize { return status }
+    process.exitCode = status as int
+    process.running = false
+    return status
+}
+
+export function process_poll(process: *Process): isize {
+    if process == null || !process.running { return -2 as isize }
+    let status: isize = processTryWait(process.handle)
+    if status >= 0 as isize { process.exitCode = status as int process.running = false }
+    return status
+}
+
+export function process_terminate(process: *Process, code: int): isize {
+    if process == null || !process.running || !process_exit_code_valid(code) { return -2 as isize }
+    return processTerminate(process.handle, code)
+}
+
+export function process_exit(code: int): void { processExit(code) }

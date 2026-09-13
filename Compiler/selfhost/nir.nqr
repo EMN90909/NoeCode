@@ -1,0 +1,40 @@
+module noqeri.compiler.selfhost.nir
+
+// Small SSA-friendly NIR opcode model. Values are arena indexes rather than host pointers.
+export function nqNirNop(): int { return 0 }
+export function nqNirConstI64(): int { return 1 }
+export function nqNirConstF64(): int { return 2 }
+export function nqNirMove(): int { return 3 }
+export function nqNirLoad(): int { return 4 }
+export function nqNirStore(): int { return 5 }
+export function nqNirAdd(): int { return 6 }
+export function nqNirSub(): int { return 7 }
+export function nqNirMul(): int { return 8 }
+export function nqNirDiv(): int { return 9 }
+export function nqNirMod(): int { return 10 }
+export function nqNirNeg(): int { return 11 }
+export function nqNirNot(): int { return 12 }
+export function nqNirEq(): int { return 13 }
+export function nqNirNe(): int { return 14 }
+export function nqNirLt(): int { return 15 }
+export function nqNirLe(): int { return 16 }
+export function nqNirGt(): int { return 17 }
+export function nqNirGe(): int { return 18 }
+export function nqNirJump(): int { return 19 }
+export function nqNirBranch(): int { return 20 }
+export function nqNirCall(): int { return 21 }
+export function nqNirReturn(): int { return 22 }
+export function nqNirPhi(): int { return 23 }
+export function nqNirAddr(): int { return 24 }
+export function nqNirPtrAdd(): int { return 25 }
+export function nqNirAtomicLoad(): int { return 26 }
+export function nqNirAtomicStore(): int { return 27 }
+export function nqNirAtomicExchange(): int { return 28 }
+export function nqNirCmpXchg(): int { return 29 }
+export function nqNirFence(): int { return 30 }
+export function nqNirIntrinsic(): int { return 31 }
+export function nqNirAsm(): int { return 32 }
+export function nqNirOpcodeValid(opcode: int): bool { return opcode >= nqNirNop() && opcode <= nqNirAsm() }
+export function nqNirHasSideEffect(opcode: int): bool { return opcode == nqNirStore() || opcode == nqNirCall() || opcode == nqNirReturn() || opcode == nqNirJump() || opcode == nqNirBranch() || opcode >= nqNirAtomicStore() }
+export function nqNirIsTerminator(opcode: int): bool { return opcode == nqNirJump() || opcode == nqNirBranch() || opcode == nqNirReturn() }
+export function nqNirIsPureArithmetic(opcode: int): bool { return opcode >= nqNirAdd() && opcode <= nqNirGe() }

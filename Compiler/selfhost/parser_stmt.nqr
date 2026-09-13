@@ -1,0 +1,375 @@
+module noqeri.compiler.selfhost.parser_stmt
+import "lexer.nqr"
+import "ast.nqr"
+import "parser.nqr"
+import "parser_expr.nqr"
+
+export function nqParseProgramCapacity(): isize { return -120 }
+export function nqParseBadStatement(): isize { return -121 }
+export function nqParseBadBlock(): isize { return -122 }
+export function nqParseBadBinding(): isize { return -123 }
+
+function nqStmtTokenIs(source: []u8, start: usize, text: []u8, out: *NqToken): bool {
+    if out == null { return false }
+    nqCompilerNextToken(source, start, out)
+    return nqTokenTextEqual(source, out, text)
+}
+
+function nqStmtOptionalSemicolon(source: []u8, start: usize): usize {
+    let token: NqToken
+    nqCompilerNextToken(source, start, &token)
+    if token.kind == nqTokenPunctuation() && token.first == 59 as u8 { return token.end }
+    return start
+}
+
+function nqStmtNameNode(source: []u8, start: usize, nodes: []NqAstNode, count: *usize, outEnd: *usize): isize {
+    let token: NqToken
+    nqCompilerNextToken(source, start, &token)
+    if token.kind != nqTokenIdentifier() { return nqAstNoNode() }
+    let node: isize = nqAstArenaPush(nodes, count, nqAstName(), token.start, token.end)
+    if node >= 0 as isize { outEnd[0] = token.end }
+    return node
+}
+
+function nqStmtParseBlock(source: []u8, start: usize, nodes: []NqAstNode, count: *usize, outEnd: *usize): isize
+function nqStmtParseDeclaration(source: []u8, start: usize, nodes: []NqAstNode, count: *usize, outEnd: *usize, topLevel: bool): isize
+
+function nqStmtParseBinding(source: []u8, start: usize, nodes: []NqAstNode, count: *usize, outEnd: *usize): isize {
+    let keyword: NqToken
+    nqCompilerNextToken(source, start, &keyword)
+    let isConst: bool = nqTokenTextEqual(source, &keyword, slice([99 as u8,111 as u8,110 as u8,115 as u8,116 as u8]))
+    if !isConst && !nqTokenTextEqual(source, &keyword, slice([108 as u8,101 as u8,116 as u8])) { return nqAstNoNode() }
+    let cursor: usize = keyword.end
+    let nameEnd: usize = cursor
+    let name: isize = nqStmtNameNode(source, cursor, nodes, count, &nameEnd)
+    if name < 0 as isize { return nqAstNoNode() }
+    cursor = nameEnd
+    let typeStart: usize = 0 as usize
+    let token: NqToken
+    nqCompilerNextToken(source, cursor, &token)
+    if token.kind == nqTokenPunctuation() && token.first == 58 as u8 {
+        typeStart = nqCompilerSkipTrivia(source, token.end)
+        let typeEnd: usize = nqParserScanType(source, typeStart)
+        if typeEnd <= typeStart { return nqAstNoNode() }
+        cursor = typeEnd
+        nqCompilerNextToken(source, cursor, &token)
+    }
+    if token.kind != nqTokenOperator() || token.first != 61 as u8 || token.end - token.start != 1 as usize { return nqAstNoNode() }
+    let expressionEnd: usize = token.end
+    let value: isize = nqParserParseExpression(source, token.end, nodes, count, &expressionEnd)
+    if value < 0 as isize { return nqAstNoNode() }
+    let end: usize = nqStmtOptionalSemicolon(source, expressionEnd)
+    let binding: isize = nqAstArenaPush(nodes, count, nqAstBinding(), keyword.start, end)
+    if binding < 0 as isize { return binding }
+    nodes[binding as usize].left = name
+    nodes[binding as usize].right = value
+    if typeStart > 0 as usize { nodes[binding as usize].extra = typeStart as isize }
+    if isConst { nodes[binding as usize].flags = nodes[binding as usize].flags + nqAstFlagConst() }
+    outEnd[0] = end
+    return binding
+}
+
+function nqStmtParseReturnThrow(source: []u8, start: usize, nodes: []NqAstNode, count: *usize, outEnd: *usize, throwing: bool): isize {
+    let keyword: NqToken
+    nqCompilerNextToken(source, start, &keyword)
+    let cursor: usize = keyword.end
+    let look: NqToken
+    nqCompilerNextToken(source, cursor, &look)
+    let value: isize = nqAstNoNode()
+    let end: usize = cursor
+    let emptyReturn: bool = !throwing && ((look.kind == nqTokenPunctuation() && (look.first == 59 as u8 || look.first == 125 as u8)) || look.kind == nqTokenEof())
+    if !emptyReturn {
+        value = nqParserParseExpression(source, cursor, nodes, count, &end)
+        if value < 0 as isize { return nqAstNoNode() }
+    }
+    end = nqStmtOptionalSemicolon(source, end)
+    let node: isize = nqAstArenaPush(nodes, count, if throwing { nqAstThrow() } else { nqAstReturn() }, keyword.start, end)
+    if node < 0 as isize { return node }
+    nodes[node as usize].left = value
+    outEnd[0] = end
+    return node
+}
+
+function nqStmtParseIf(source: []u8, start: usize, nodes: []NqAstNode, count: *usize, outEnd: *usize): isize {
+    let keyword: NqToken
+    nqCompilerNextToken(source, start, &keyword)
+    let conditionEnd: usize = keyword.end
+    let condition: isize = nqParserParseExpression(source, keyword.end, nodes, count, &conditionEnd)
+    if condition < 0 as isize { return nqAstNoNode() }
+    let thenEnd: usize = conditionEnd
+    let thenBlock: isize = nqStmtParseBlock(source, conditionEnd, nodes, count, &thenEnd)
+    if thenBlock < 0 as isize { return nqAstNoNode() }
+    let elseNode: isize = nqAstNoNode()
+    let end: usize = thenEnd
+    let token: NqToken
+    nqCompilerNextToken(source, end, &token)
+    if token.kind == nqTokenIdentifier() && nqTokenTextEqual(source, &token, slice([101 as u8,108 as u8,115 as u8,101 as u8])) {
+        let afterElse: NqToken
+        nqCompilerNextToken(source, token.end, &afterElse)
+        if afterElse.kind == nqTokenIdentifier() && nqTokenTextEqual(source, &afterElse, slice([105 as u8,102 as u8])) { elseNode = nqStmtParseIf(source, afterElse.start, nodes, count, &end) }
+        else { elseNode = nqStmtParseBlock(source, token.end, nodes, count, &end) }
+        if elseNode < 0 as isize { return nqAstNoNode() }
+    }
+    let node: isize = nqAstArenaPush(nodes, count, nqAstIf(), keyword.start, end)
+    if node < 0 as isize { return node }
+    nodes[node as usize].left = condition
+    nodes[node as usize].right = thenBlock
+    nodes[node as usize].extra = elseNode
+    outEnd[0] = end
+    return node
+}
+
+function nqStmtParseWhile(source: []u8, start: usize, nodes: []NqAstNode, count: *usize, outEnd: *usize): isize {
+    let keyword: NqToken
+    nqCompilerNextToken(source, start, &keyword)
+    let conditionEnd: usize = keyword.end
+    let condition: isize = nqParserParseExpression(source, keyword.end, nodes, count, &conditionEnd)
+    if condition < 0 as isize { return nqAstNoNode() }
+    let bodyEnd: usize = conditionEnd
+    let body: isize = nqStmtParseBlock(source, conditionEnd, nodes, count, &bodyEnd)
+    if body < 0 as isize { return nqAstNoNode() }
+    let node: isize = nqAstArenaPush(nodes, count, nqAstWhile(), keyword.start, bodyEnd)
+    if node < 0 as isize { return node }
+    nodes[node as usize].left = condition
+    nodes[node as usize].right = body
+    outEnd[0] = bodyEnd
+    return node
+}
+
+function nqStmtParseBlock(source: []u8, start: usize, nodes: []NqAstNode, count: *usize, outEnd: *usize): isize {
+    let open: NqToken
+    nqCompilerNextToken(source, start, &open)
+    if open.kind != nqTokenPunctuation() || open.first != 123 as u8 { return nqAstNoNode() }
+    let first: isize = nqAstNoNode()
+    let last: isize = nqAstNoNode()
+    let cursor: usize = open.end
+    while true {
+        let look: NqToken
+        nqCompilerNextToken(source, cursor, &look)
+        if look.kind == nqTokenEof() { return nqAstNoNode() }
+        if look.kind == nqTokenPunctuation() && look.first == 125 as u8 {
+            let block: isize = nqAstArenaPush(nodes, count, nqAstBlock(), open.start, look.end)
+            if block < 0 as isize { return block }
+            nodes[block as usize].left = first
+            nodes[block as usize].extra = nqAstChainCount(nodes, first) as isize
+            outEnd[0] = look.end
+            return block
+        }
+        let itemEnd: usize = cursor
+        let item: isize = nqStmtParseDeclaration(source, cursor, nodes, count, &itemEnd, false)
+        if item < 0 as isize || itemEnd <= cursor { return nqAstNoNode() }
+        if !nqAstAppend(nodes, &first, &last, item) { return nqAstNoNode() }
+        cursor = itemEnd
+    }
+    return nqAstNoNode()
+}
+
+function nqStmtParseRecord(source: []u8, start: usize, nodes: []NqAstNode, count: *usize, outEnd: *usize): isize {
+    let keyword: NqToken
+    nqCompilerNextToken(source, start, &keyword)
+    let cursor: usize = keyword.end
+    let nameEnd: usize = cursor
+    let name: isize = nqStmtNameNode(source, cursor, nodes, count, &nameEnd)
+    if name < 0 as isize { return nqAstNoNode() }
+    cursor = nameEnd
+    let open: NqToken
+    nqCompilerNextToken(source, cursor, &open)
+    if open.kind != nqTokenPunctuation() || open.first != 123 as u8 { return nqAstNoNode() }
+    cursor = open.end
+    let first: isize = nqAstNoNode()
+    let last: isize = nqAstNoNode()
+    while true {
+        let look: NqToken
+        nqCompilerNextToken(source, cursor, &look)
+        if look.kind == nqTokenPunctuation() && look.first == 125 as u8 {
+            let end: usize = nqStmtOptionalSemicolon(source, look.end)
+            let record: isize = nqAstArenaPush(nodes, count, nqAstRecord(), keyword.start, end)
+            if record < 0 as isize { return record }
+            nodes[record as usize].left = name
+            nodes[record as usize].right = first
+            nodes[record as usize].extra = nqAstChainCount(nodes, first) as isize
+            outEnd[0] = end
+            return record
+        }
+        if look.kind != nqTokenIdentifier() { return nqAstNoNode() }
+        let fieldName: isize = nqAstArenaPush(nodes, count, nqAstName(), look.start, look.end)
+        if fieldName < 0 as isize { return fieldName }
+        let colon: NqToken
+        nqCompilerNextToken(source, look.end, &colon)
+        if colon.kind != nqTokenPunctuation() || colon.first != 58 as u8 { return nqAstNoNode() }
+        let typeStart: usize = nqCompilerSkipTrivia(source, colon.end)
+        let typeEnd: usize = nqParserScanType(source, typeStart)
+        if typeEnd <= typeStart { return nqAstNoNode() }
+        let field: isize = nqAstArenaPush(nodes, count, nqAstField(), look.start, typeEnd)
+        if field < 0 as isize { return field }
+        nodes[field as usize].left = fieldName
+        nodes[field as usize].extra = typeStart as isize
+        if !nqAstAppend(nodes, &first, &last, field) { return nqAstNoNode() }
+        cursor = typeEnd
+        let separator: NqToken
+        nqCompilerNextToken(source, cursor, &separator)
+        if separator.kind == nqTokenPunctuation() && (separator.first == 44 as u8 || separator.first == 59 as u8) { cursor = separator.end }
+    }
+    return nqAstNoNode()
+}
+
+function nqStmtParseFunction(source: []u8, start: usize, nodes: []NqAstNode, count: *usize, outEnd: *usize, modifiers: u32): isize {
+    let keyword: NqToken
+    nqCompilerNextToken(source, start, &keyword)
+    let cursor: usize = keyword.end
+    let nameEnd: usize = cursor
+    let name: isize = nqStmtNameNode(source, cursor, nodes, count, &nameEnd)
+    if name < 0 as isize { return nqAstNoNode() }
+    cursor = nameEnd
+    let maybeGeneric: NqToken
+    nqCompilerNextToken(source, cursor, &maybeGeneric)
+    if maybeGeneric.kind == nqTokenOperator() && maybeGeneric.first == 60 as u8 {
+        cursor = maybeGeneric.end
+        while true {
+            let parameter: NqToken
+            nqCompilerNextToken(source, cursor, &parameter)
+            if parameter.kind != nqTokenIdentifier() { return nqAstNoNode() }
+            cursor = parameter.end
+            let separator: NqToken
+            nqCompilerNextToken(source, cursor, &separator)
+            if separator.kind == nqTokenOperator() && separator.first == 62 as u8 { cursor = separator.end break }
+            if separator.kind != nqTokenPunctuation() || separator.first != 44 as u8 { return nqAstNoNode() }
+            cursor = separator.end
+        }
+    }
+    let open: NqToken
+    nqCompilerNextToken(source, cursor, &open)
+    if open.kind != nqTokenPunctuation() || open.first != 40 as u8 { return nqAstNoNode() }
+    cursor = open.end
+    let firstParam: isize = nqAstNoNode()
+    let lastParam: isize = nqAstNoNode()
+    let look: NqToken
+    nqCompilerNextToken(source, cursor, &look)
+    if !(look.kind == nqTokenPunctuation() && look.first == 41 as u8) {
+        while true {
+            let parameterName: isize = nqAstArenaPush(nodes, count, nqAstName(), look.start, look.end)
+            if look.kind != nqTokenIdentifier() || parameterName < 0 as isize { return nqAstNoNode() }
+            cursor = look.end
+            let typeStart: usize = 0 as usize
+            let colon: NqToken
+            nqCompilerNextToken(source, cursor, &colon)
+            if colon.kind == nqTokenPunctuation() && colon.first == 58 as u8 {
+                typeStart = nqCompilerSkipTrivia(source, colon.end)
+                let typeEnd: usize = nqParserScanType(source, typeStart)
+                if typeEnd <= typeStart { return nqAstNoNode() }
+                cursor = typeEnd
+            }
+            let param: isize = nqAstArenaPush(nodes, count, nqAstParameter(), look.start, cursor)
+            if param < 0 as isize { return param }
+            nodes[param as usize].left = parameterName
+            if typeStart > 0 as usize { nodes[param as usize].extra = typeStart as isize }
+            if !nqAstAppend(nodes, &firstParam, &lastParam, param) { return nqAstNoNode() }
+            let separator: NqToken
+            nqCompilerNextToken(source, cursor, &separator)
+            if separator.kind == nqTokenPunctuation() && separator.first == 41 as u8 { cursor = separator.end break }
+            if separator.kind != nqTokenPunctuation() || separator.first != 44 as u8 { return nqAstNoNode() }
+            cursor = separator.end
+            nqCompilerNextToken(source, cursor, &look)
+        }
+    } else { cursor = look.end }
+    let returnTypeStart: usize = 0 as usize
+    let afterParams: NqToken
+    nqCompilerNextToken(source, cursor, &afterParams)
+    if afterParams.kind == nqTokenPunctuation() && afterParams.first == 58 as u8 {
+        returnTypeStart = nqCompilerSkipTrivia(source, afterParams.end)
+        let returnTypeEnd: usize = nqParserScanType(source, returnTypeStart)
+        if returnTypeEnd <= returnTypeStart { return nqAstNoNode() }
+        cursor = returnTypeEnd
+    }
+    let body: isize = nqAstNoNode()
+    let end: usize = cursor
+    let bodyToken: NqToken
+    nqCompilerNextToken(source, cursor, &bodyToken)
+    if bodyToken.kind == nqTokenPunctuation() && bodyToken.first == 123 as u8 { body = nqStmtParseBlock(source, cursor, nodes, count, &end) if body < 0 as isize { return nqAstNoNode() } }
+    else { end = nqStmtOptionalSemicolon(source, cursor) }
+    let function: isize = nqAstArenaPush(nodes, count, nqAstFunction(), keyword.start, end)
+    if function < 0 as isize { return function }
+    nodes[function as usize].left = name
+    nodes[function as usize].right = firstParam
+    nodes[function as usize].extra = body
+    nodes[function as usize].flags = modifiers
+    if returnTypeStart > 0 as usize { nodes[function as usize].typeCode = nqAstTypeUnknown() }
+    outEnd[0] = end
+    return function
+}
+
+function nqStmtParseDeclaration(source: []u8, start: usize, nodes: []NqAstNode, count: *usize, outEnd: *usize, topLevel: bool): isize {
+    let cursor: usize = nqCompilerSkipTrivia(source, start)
+    let token: NqToken
+    nqCompilerNextToken(source, cursor, &token)
+    if token.kind == nqTokenEof() { return nqAstNoNode() }
+    let modifiers: u32 = 0 as u32
+    while token.kind == nqTokenIdentifier() && (nqTokenTextEqual(source, &token, slice([101 as u8,120 as u8,112 as u8,111 as u8,114 as u8,116 as u8])) || nqTokenTextEqual(source, &token, slice([101 as u8,120 as u8,116 as u8,101 as u8,114 as u8,110 as u8]))) {
+        if nqTokenTextEqual(source, &token, slice([101 as u8,120 as u8,112 as u8,111 as u8,114 as u8,116 as u8])) { modifiers = modifiers + nqAstFlagExport() }
+        else { modifiers = modifiers + nqAstFlagExtern() }
+        cursor = token.end
+        nqCompilerNextToken(source, cursor, &token)
+    }
+    if nqTokenTextEqual(source, &token, slice([108 as u8,101 as u8,116 as u8])) || nqTokenTextEqual(source, &token, slice([99 as u8,111 as u8,110 as u8,115 as u8,116 as u8])) { return nqStmtParseBinding(source, token.start, nodes, count, outEnd) }
+    if nqTokenTextEqual(source, &token, slice([102 as u8,117 as u8,110 as u8,99 as u8,116 as u8,105 as u8,111 as u8,110 as u8])) { return nqStmtParseFunction(source, token.start, nodes, count, outEnd, modifiers) }
+    if nqTokenTextEqual(source, &token, slice([114 as u8,101 as u8,99 as u8,111 as u8,114 as u8,100 as u8])) { return nqStmtParseRecord(source, token.start, nodes, count, outEnd) }
+    if nqTokenTextEqual(source, &token, slice([105 as u8,102 as u8])) { return nqStmtParseIf(source, token.start, nodes, count, outEnd) }
+    if nqTokenTextEqual(source, &token, slice([119 as u8,104 as u8,105 as u8,108 as u8,101 as u8])) { return nqStmtParseWhile(source, token.start, nodes, count, outEnd) }
+    if nqTokenTextEqual(source, &token, slice([114 as u8,101 as u8,116 as u8,117 as u8,114 as u8,110 as u8])) { return nqStmtParseReturnThrow(source, token.start, nodes, count, outEnd, false) }
+    if nqTokenTextEqual(source, &token, slice([116 as u8,104 as u8,114 as u8,111 as u8,119 as u8])) { return nqStmtParseReturnThrow(source, token.start, nodes, count, outEnd, true) }
+    if token.kind == nqTokenPunctuation() && token.first == 123 as u8 { return nqStmtParseBlock(source, token.start, nodes, count, outEnd) }
+    if topLevel && nqTokenTextEqual(source, &token, slice([109 as u8,111 as u8,100 as u8,117 as u8,108 as u8,101 as u8])) {
+        let endName: usize = nqParserScanQualifiedName(source, token.end)
+        if endName <= token.end { return nqAstNoNode() }
+        let end: usize = nqStmtOptionalSemicolon(source, endName)
+        let node: isize = nqAstArenaPush(nodes, count, nqAstModule(), token.start, end)
+        if node >= 0 as isize { nodes[node as usize].left = token.end as isize outEnd[0] = end }
+        return node
+    }
+    if topLevel && nqTokenTextEqual(source, &token, slice([105 as u8,109 as u8,112 as u8,111 as u8,114 as u8,116 as u8])) {
+        let target: NqToken
+        nqCompilerNextToken(source, token.end, &target)
+        let packageImport: bool = target.kind == nqTokenIdentifier() && nqTokenTextEqual(source, &target, slice([112 as u8,97 as u8,99 as u8,107 as u8,97 as u8,103 as u8,101 as u8]))
+        if packageImport { nqCompilerNextToken(source, target.end, &target) }
+        if target.kind != nqTokenString() { return nqAstNoNode() }
+        let end: usize = nqStmtOptionalSemicolon(source, target.end)
+        let node: isize = nqAstArenaPush(nodes, count, nqAstImport(), token.start, end)
+        if node >= 0 as isize { nodes[node as usize].left = target.start as isize nodes[node as usize].right = target.end as isize if packageImport { nodes[node as usize].flags = 1 as u32 } outEnd[0] = end }
+        return node
+    }
+    if modifiers != 0 as u32 { return nqAstNoNode() }
+    let expressionEnd: usize = cursor
+    let expression: isize = nqParserParseExpression(source, cursor, nodes, count, &expressionEnd)
+    if expression < 0 as isize { return nqAstNoNode() }
+    let end: usize = nqStmtOptionalSemicolon(source, expressionEnd)
+    let statement: isize = nqAstArenaPush(nodes, count, nqAstExpressionStatement(), cursor, end)
+    if statement < 0 as isize { return statement }
+    nodes[statement as usize].left = expression
+    outEnd[0] = end
+    return statement
+}
+
+export function nqParserParseProgram(source: []u8, nodes: []NqAstNode, count: *usize, outFirst: *isize): isize {
+    if count == null || outFirst == null { return nqParseProgramCapacity() }
+    count[0] = 0 as usize
+    outFirst[0] = nqAstNoNode()
+    let first: isize = nqAstNoNode()
+    let last: isize = nqAstNoNode()
+    let cursor: usize = nqCompilerSkipTrivia(source, 0 as usize)
+    while cursor < len(source) {
+        let end: usize = cursor
+        let declaration: isize = nqStmtParseDeclaration(source, cursor, nodes, count, &end, true)
+        if declaration < 0 as isize || end <= cursor { return nqParseBadDeclaration() }
+        if !nqAstAppend(nodes, &first, &last, declaration) { return nqParseProgramCapacity() }
+        cursor = nqCompilerSkipTrivia(source, end)
+    }
+    outFirst[0] = first
+    return nqParseOk()
+}
+
+export function nqParserProgramValid(source: []u8): bool {
+    let nodes: [NqAstNode; 2048]
+    let count: usize = 0 as usize
+    let first: isize = nqAstNoNode()
+    return nqParserParseProgram(source, slice(nodes), &count, &first) == nqParseOk()
+}

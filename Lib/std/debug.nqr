@@ -1,5 +1,10 @@
 module noqeri.std.debug
 
+export function debug_is_printable_ascii(c: u8): bool { return c >= 32 as u8 && c <= 126 as u8 }
+export function debug_hex_digit(value: u8): u8 { let v: u8 = value % 16 as u8 if v < 10 as u8 { return 48 as u8 + v } return 65 as u8 + (v - 10 as u8) }
+function debug_pow16(exponent: usize): u64 { let value: u64 = 1 as u64 let i: usize = 0 as usize while i < exponent { value = value * 16 as u64 i = i + 1 as usize } return value }
+export function debug_write_hex_u64(value: u64, out: []u8): usize { if len(out) < 16 as usize { return 0 as usize } let i: usize = 0 as usize while i < 16 as usize { let divisor: u64 = debug_pow16(15 as usize - i) let nibble: u8 = ((value / divisor) % 16 as u64) as u8 out[i] = debug_hex_digit(nibble) i = i + 1 as usize } return 16 as usize }
+export function debug_count_printable(data: []u8): usize { let count: usize = 0 as usize let i: usize = 0 as usize while i < len(data) { if debug_is_printable_ascii(data[i]) { count = count + 1 as usize } i = i + 1 as usize } return count }
 export function debug_ratio_per_mille(part: usize, total: usize): usize { if total == 0 as usize { return 0 as usize } return (part * 1000 as usize) / total }
 export function debug_passed(passed: usize, failed: usize): bool { return failed == 0 as usize && passed > 0 as usize }
 export function debug_delta(start: i64, end: i64): i64 { return end - start }

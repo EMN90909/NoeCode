@@ -1,0 +1,88 @@
+import "../Compiler/selfhost/ast.nqr"
+import "../Compiler/selfhost/types.nqr"
+import "../Compiler/selfhost/semantics.nqr"
+import "../Compiler/selfhost/parser.nqr"
+import "../Compiler/selfhost/nir.nqr"
+import "../Compiler/selfhost/optimizer.nqr"
+import "../Compiler/selfhost/targets.nqr"
+import "../Compiler/selfhost/abi.nqr"
+import "../Compiler/selfhost/backend.nqr"
+import "../Compiler/selfhost/object_formats.nqr"
+import "../Compiler/selfhost/coff_writer.nqr"
+import "../Compiler/selfhost/elf_writer.nqr"
+import "../Compiler/selfhost/macho_writer.nqr"
+import "../Compiler/selfhost/security.nqr"
+import "../Compiler/selfhost/stage2.nqr"
+import "../Lib/std/array.nqr"
+import "../Lib/std/slice.nqr"
+
+function main(): int {
+    // Type-system and semantic conversion rules.
+    if nqCompilerPrimitiveTypeWidth(nqAstTypeU8()) != 1 as usize { return 1 }
+    if nqCompilerPrimitiveTypeWidth(nqAstTypeU32()) != 4 as usize { return 2 }
+    if nqCompilerPrimitiveTypeWidth(nqAstTypeI64()) != 8 as usize { return 3 }
+    if !nqCompilerCanImplicitWiden(nqAstTypeU32(), nqAstTypeI64()) { return 4 }
+    if nqCompilerCanImplicitWiden(nqAstTypeU64(), nqAstTypeI64()) { return 5 }
+    if nqCompilerCanImplicitWiden(nqAstTypeI32(), nqAstTypeU64()) { return 6 }
+    if nqSemanticBinaryResult(nqSemanticOpAdd(), nqAstTypeU8(), nqAstTypeU32()) != nqAstTypeU32() { return 7 }
+    if !nqSemanticIndexValid(nqAstTypeSlice(), nqAstTypeUsize()) { return 8 }
+    if !nqSemanticCastRequiresUnsafe(nqAstTypePointer(), nqAstTypeUsize()) { return 9 }
+
+    // Parser type grammar including nested generic aggregates.
+    let genericType: [u8; 26] = [77 as u8,97 as u8,112 as u8,60 as u8,115 as u8,116 as u8,114 as u8,105 as u8,110 as u8,103 as u8,44 as u8,32 as u8,76 as u8,105 as u8,115 as u8,116 as u8,60 as u8,117 as u8,51 as u8,50 as u8,62 as u8,62 as u8,32 as u8,32 as u8,32 as u8,32 as u8]
+    let genericView: []u8 = slice(genericType)
+    if nqParserScanType(genericView, 0 as usize) != 22 as usize { return 10 }
+    let sliceType: [u8; 5] = [91 as u8,93 as u8,117 as u8,56 as u8,32 as u8]
+    if nqParserScanType(slice(sliceType), 0 as usize) != 4 as usize { return 11 }
+
+    // Executable NIR optimizer: 2 + 3 must become constant 5 and stay live.
+    let code: [NqNirInstruction; 4]
+    nqNirMakeConst(&code[0], 0 as isize, 2 as i64, nqAstTypeI64())
+    nqNirMakeConst(&code[1], 1 as isize, 3 as i64, nqAstTypeI64())
+    nqNirMakeBinary(&code[2], nqNirAdd(), 2 as isize, 0 as isize, 1 as isize, nqAstTypeI64())
+    nqNirInstructionInit(&code[3], nqNirReturn(), nqNirNoValue())
+    code[3].left = 2 as isize
+    if !nqNirProgramValid(slice(code)) { return 12 }
+    if nqOptimizerRun(slice(code), nqOptLevelSpeed()) == 0 as usize { return 13 }
+    if code[2].opcode != nqNirConstI64() || code[2].immediate != 5 as i64 { return 14 }
+
+    // Target and ABI descriptors remove platform-condition boilerplate.
+    let target: NqTargetInfo
+    if !nqTargetDescribe(nqTargetLinuxX64(), &target) { return 15 }
+    if !nqTargetInfoValid(&target) || target.objectFormat != nqObjectElf() { return 16 }
+    let abi: NqAbiInfo
+    if !nqAbiDescribe(nqTargetWindowsX64(), &abi) { return 17 }
+    if abi.integerArgRegisters != 4 || abi.shadowSpaceBytes != 32 as usize { return 18 }
+    let backend: NqBackendPlan
+    if nqBackendPlanInit(nqTargetMacArm64(), &backend) != 0 { return 19 }
+
+    // Real object-header generation.
+    let coff: [u8; 20]
+    if nqCoffWriteFileHeader(slice(coff), 0 as usize, nqTargetWindowsX64(), 1 as usize, 0 as usize, 0 as u32, 0 as u32) != 20 as isize { return 20 }
+    if coff[0] != 0x64 as u8 || coff[1] != 0x86 as u8 { return 21 }
+    let elf: [u8; 64]
+    if nqElfWriteHeader64(slice(elf), 0 as usize, nqTargetLinuxX64(), 64 as u64, 2 as usize, 1 as usize) != 64 as isize { return 22 }
+    if elf[0] != 0x7f as u8 || elf[1] != 69 as u8 || elf[2] != 76 as u8 || elf[3] != 70 as u8 { return 23 }
+    let mach: [u8; 32]
+    if nqMachWriteHeader64(slice(mach), 0 as usize, nqTargetMacArm64(), 0 as usize, 0 as usize, 0 as u32) != 32 as isize { return 24 }
+    if mach[0] != 0xcf as u8 || mach[1] != 0xfa as u8 || mach[2] != 0xed as u8 || mach[3] != 0xfe as u8 { return 25 }
+
+    // Production security defaults deny inline asm unless explicitly enabled.
+    let policy: NqSecurityPolicy
+    nqSecurityProductionPolicy(&policy)
+    let unsafeCode: [NqNirInstruction; 1]
+    nqNirInstructionInit(&unsafeCode[0], nqNirAsm(), nqNirNoValue())
+    if nqSecurityProgramCheck(&policy, nqTargetLinuxX64(), slice(unsafeCode)) != nqSecurityUnsafeDenied() { return 26 }
+
+    // Stage 2 cannot be declared complete by an empty proof.
+    let proof: NqStage2Proof
+    nqStage2ProofInit(&proof)
+    if nqStage2ProofValid(&proof) || nqStage2GateStatus(&proof) == 0 { return 27 }
+
+    // Safe generic array/slice APIs.
+    let values: [i64; 3] = [4 as i64, 5 as i64, 6 as i64]
+    if array_get_or(slice(values), 4 as usize, 99 as i64) != 99 as i64 { return 28 }
+    if slice_first_or(slice(values), 99 as i64) != 4 as i64 { return 29 }
+    if !array_contains(slice(values), 5 as i64) { return 30 }
+    return 0
+}

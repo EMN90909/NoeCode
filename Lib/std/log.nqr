@@ -1,5 +1,13 @@
 module noqeri.std.log
 
+extern function logWrite(level: int, target: string, message: string): isize
+extern function logWriteFields(level: int, target: string, message: string, fields: string): isize
+
+record Logger {
+    minimum: int
+    target: string
+}
+
 export function log_level_trace(): int { return 0 }
 export function log_level_debug(): int { return 1 }
 export function log_level_info(): int { return 2 }
@@ -8,3 +16,28 @@ export function log_level_error(): int { return 4 }
 export function log_level_valid(level: int): bool { return level >= 0 && level <= 4 }
 export function log_should_emit(level: int, minimum: int): bool { return log_level_valid(level) && log_level_valid(minimum) && level >= minimum }
 export function log_is_failure(level: int): bool { return level >= log_level_error() }
+
+export function log_level_name(level: int): string {
+    if level == log_level_trace() { return "TRACE" }
+    if level == log_level_debug() { return "DEBUG" }
+    if level == log_level_info() { return "INFO" }
+    if level == log_level_warn() { return "WARN" }
+    if level == log_level_error() { return "ERROR" }
+    return "UNKNOWN"
+}
+
+export function logger_init(logger: *Logger, minimum: int, target: string): bool {
+    if logger == null || !log_level_valid(minimum) { return false }
+    logger.minimum = minimum
+    logger.target = target
+    return true
+}
+
+export function logger_enabled(logger: *Logger, level: int): bool { return logger != null && log_should_emit(level, logger.minimum) }
+export function logger_write(logger: *Logger, level: int, message: string): isize { if !logger_enabled(logger, level) { return 0 as isize } return logWrite(level, logger.target, message) }
+export function logger_write_fields(logger: *Logger, level: int, message: string, fields: string): isize { if !logger_enabled(logger, level) { return 0 as isize } return logWriteFields(level, logger.target, message, fields) }
+export function logger_trace(logger: *Logger, message: string): isize { return logger_write(logger, log_level_trace(), message) }
+export function logger_debug(logger: *Logger, message: string): isize { return logger_write(logger, log_level_debug(), message) }
+export function logger_info(logger: *Logger, message: string): isize { return logger_write(logger, log_level_info(), message) }
+export function logger_warn(logger: *Logger, message: string): isize { return logger_write(logger, log_level_warn(), message) }
+export function logger_error(logger: *Logger, message: string): isize { return logger_write(logger, log_level_error(), message) }

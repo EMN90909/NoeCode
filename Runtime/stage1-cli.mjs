@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 import { createPackageManager } from './package-manager.mjs'
 import { auditProject } from './package-security.mjs'
+import { formatNoqeri, isFormattedNoqeri } from './formatter.mjs'
+import { extractNoqeriApi, renderNoqeriMarkdown } from './docgen.mjs'
 
 function usage() {
-  console.log(`Noqeri stage-1 portable compiler kernel\n\nUsage:\n  noqeri --version\n  noqeri check <file.nqr>\n  noqeri lex-count <file.nqr>\n  noqeri fingerprint <file.nqr>\n  noqeri add <namespace/name>[@version]\n  noqeri install\n  noqeri resolve <file.nqr>\n  noqeri audit\n  noqeri selftest\n\nRegistry source uses import package "namespace/name". Packages are cached immutably, re-hashed before use, and noqeri audit validates the deterministic lockfile.`)
+  console.log(`Noqeri stage-1 portable compiler kernel\n\nUsage:\n  noqeri --version\n  noqeri check <file.nqr>\n  noqeri fmt <file.nqr> [--check]\n  noqeri doc <file.nqr> [output.md]\n  noqeri lex-count <file.nqr>\n  noqeri fingerprint <file.nqr>\n  noqeri add <namespace/name>[@version]\n  noqeri install\n  noqeri resolve <file.nqr>\n  noqeri audit\n  noqeri selftest\n\nRegistry source uses import package "namespace/name". Packages are cached immutably, re-hashed before use, and noqeri audit validates the deterministic lockfile.`)
 }
 
 const modulePath = process.env.NOQERI_STAGE1_MODULE || resolve(process.cwd(), 'build/noqeri-stage1.nqo')
@@ -27,6 +29,23 @@ try {
     const pkg = new TextEncoder().encode('noqeri/supabase')
     if (status !== 0 || tokens < 6 || safeStatus !== 0 || unsafeStatus !== -140 || compiler.stage1PackageCoordinateValid?.(pkg) !== true) throw new Error(`stage-1 selftest failed: status=${status} tokens=${tokens} safe=${safeStatus} unsafe=${unsafeStatus}`)
     console.log(`stage-1 selftest passed (${tokens} tokens; unsafe boundary + package policy OK)`); process.exit(0)
+  }
+  if (command === 'fmt' || command === 'format') {
+    if (!args[1]) throw new Error('noqeri fmt needs a source file')
+    const file = resolve(args[1]), source = await readFile(file, 'utf8')
+    if (args.includes('--check')) {
+      if (!isFormattedNoqeri(source)) { console.error(`${args[1]}: not formatted`); process.exit(1) }
+      console.log(`${args[1]}: formatted`); process.exit(0)
+    }
+    const formatted = formatNoqeri(source)
+    if (formatted !== source.replace(/\r\n?/g, '\n')) await writeFile(file, formatted)
+    console.log(`${args[1]}: formatted`); process.exit(0)
+  }
+  if (command === 'doc') {
+    if (!args[1]) throw new Error('noqeri doc needs a source file')
+    const file = resolve(args[1]), source = await readFile(file, 'utf8'), markdown = renderNoqeriMarkdown(extractNoqeriApi(source), { sourcePath: args[1] })
+    if (args[2]) { await writeFile(resolve(args[2]), markdown); console.log(args[2]) } else process.stdout.write(markdown)
+    process.exit(0)
   }
   if (command === 'add') { if (!args[1]) throw new Error('noqeri add needs namespace/name[@version]'); await packages.addPackage(args[1]); process.exit(0) }
   if (command === 'install') { await packages.installProject(); process.exit(0) }

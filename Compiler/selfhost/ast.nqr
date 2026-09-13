@@ -13,6 +13,8 @@ record NqAstNode {
     right: isize
     extra: isize
     next: isize
+    genericFirst: isize
+    genericCount: usize
     flags: u32
 }
 
@@ -21,6 +23,7 @@ export function nqAstFlagExport(): u32 { return 1 as u32 }
 export function nqAstFlagExtern(): u32 { return 2 as u32 }
 export function nqAstFlagConst(): u32 { return 4 as u32 }
 export function nqAstFlagUnsafe(): u32 { return 8 as u32 }
+export function nqAstFlagGeneric(): u32 { return 16 as u32 }
 
 export function nqAstInvalid(): int { return 0 }
 export function nqAstModule(): int { return 1 }
@@ -97,6 +100,8 @@ export function nqAstNodeInit(out: *NqAstNode, tag: int, start: usize, end: usiz
     out.right = nqAstNoNode()
     out.extra = nqAstNoNode()
     out.next = nqAstNoNode()
+    out.genericFirst = nqAstNoNode()
+    out.genericCount = 0 as usize
     out.flags = 0 as u32
 }
 

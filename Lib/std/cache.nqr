@@ -1,5 +1,415 @@
 module noqeri.std.cache
 
+// Cache<K,V> is a deterministic fixed-capacity LRU cache backed entirely by
+// caller-owned parallel arrays. It performs no hidden allocation. Each live
+// slot has an age token; reads and updates touch the slot, while insertion into
+// a full cache evicts the least-recently-used slot.
+record Cache<K, V> {
+    keys: *K
+    values: *V
+    ages: *u64
+    occupied: *bool
+    capacity: usize
+    length: usize
+    clock: u64
+    hits: u64
+    misses: u64
+    evictions: u64
+}
+
+export function cache_clock_limit(): u64 { return 9223372036854775806 as u64 }
+
+export function cache_init<K,V>(cache: *Cache<K,V>, keys: *K, values: *V, ages: *u64, occupied: *bool, capacity: usize): bool {
+    if cache == null { return false }
+    if capacity > 0 as usize && (keys == null || values == null || ages == null || occupied == null) { return false }
+    cache.keys = keys
+    cache.values = values
+    cache.ages = ages
+    cache.occupied = occupied
+    cache.capacity = capacity
+    cache.length = 0 as usize
+    cache.clock = 1 as u64
+    cache.hits = 0 as u64
+    cache.misses = 0 as u64
+    cache.evictions = 0 as u64
+    let i: usize = 0 as usize
+    while i < capacity {
+        cache.occupied[i] = false
+        cache.ages[i] = 0 as u64
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function cache_invariant<K,V>(cache: *Cache<K,V>): bool {
+    if cache == null { return false }
+    if cache.length > cache.capacity { return false }
+    if cache.capacity > 0 as usize && (cache.keys == null || cache.values == null || cache.ages == null || cache.occupied == null) { return false }
+    let counted: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < cache.capacity {
+        if cache.occupied[i] {
+            counted = counted + 1 as usize
+            if cache.ages[i] == 0 as u64 { return false }
+        } else if cache.ages[i] != 0 as u64 { return false }
+        i = i + 1 as usize
+    }
+    return counted == cache.length
+}
+
+export function cache_length<K,V>(cache: *Cache<K,V>): usize {
+    if cache == null { return 0 as usize }
+    return cache.length
+}
+
+export function cache_capacity<K,V>(cache: *Cache<K,V>): usize {
+    if cache == null { return 0 as usize }
+    return cache.capacity
+}
+
+export function cache_empty<K,V>(cache: *Cache<K,V>): bool { return cache == null || cache.length == 0 as usize }
+export function cache_full<K,V>(cache: *Cache<K,V>): bool { return cache != null && cache.capacity > 0 as usize && cache.length >= cache.capacity }
+
+export function cache_free_slots<K,V>(cache: *Cache<K,V>): usize {
+    if cache == null || cache.length >= cache.capacity { return 0 as usize }
+    return cache.capacity - cache.length
+}
+
+export function cache_hit_count<K,V>(cache: *Cache<K,V>): u64 {
+    if cache == null { return 0 as u64 }
+    return cache.hits
+}
+
+export function cache_miss_count<K,V>(cache: *Cache<K,V>): u64 {
+    if cache == null { return 0 as u64 }
+    return cache.misses
+}
+
+export function cache_eviction_count<K,V>(cache: *Cache<K,V>): u64 {
+    if cache == null { return 0 as u64 }
+    return cache.evictions
+}
+
+export function cache_lookup_count<K,V>(cache: *Cache<K,V>): u64 {
+    if cache == null { return 0 as u64 }
+    return cache.hits + cache.misses
+}
+
+export function cache_hit_rate_per_mille<K,V>(cache: *Cache<K,V>): usize {
+    let total: u64 = cache_lookup_count(cache)
+    if total == 0 as u64 { return 0 as usize }
+    return (cache.hits * 1000 as u64 / total) as usize
+}
+
+export function cache_utilization_per_mille<K,V>(cache: *Cache<K,V>): usize {
+    if cache == null || cache.capacity == 0 as usize { return 0 as usize }
+    return cache.length * 1000 as usize / cache.capacity
+}
+
+export function cache_slot_live<K,V>(cache: *Cache<K,V>, index: usize): bool {
+    if cache == null || index >= cache.capacity || cache.occupied == null { return false }
+    return cache.occupied[index]
+}
+
+export function cache_find_index<K: Eq + Copy,V>(cache: *Cache<K,V>, key: K): isize {
+    if cache == null || cache.keys == null || cache.occupied == null { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < cache.capacity {
+        if cache.occupied[i] && cache.keys[i] == key { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function cache_contains<K: Eq + Copy,V>(cache: *Cache<K,V>, key: K): bool {
+    return cache_find_index(cache, key) >= 0 as isize
+}
+
+export function cache_first_free_index<K,V>(cache: *Cache<K,V>): isize {
+    if cache == null || cache.occupied == null { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < cache.capacity {
+        if !cache.occupied[i] { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function cache_oldest_index<K,V>(cache: *Cache<K,V>): isize {
+    if cache == null || cache.length == 0 as usize || cache.occupied == null || cache.ages == null { return -1 as isize }
+    let found: isize = -1 as isize
+    let oldest: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < cache.capacity {
+        if cache.occupied[i] {
+            if found < 0 as isize || cache.ages[i] < oldest {
+                found = i as isize
+                oldest = cache.ages[i]
+            }
+        }
+        i = i + 1 as usize
+    }
+    return found
+}
+
+export function cache_newest_index<K,V>(cache: *Cache<K,V>): isize {
+    if cache == null || cache.length == 0 as usize || cache.occupied == null || cache.ages == null { return -1 as isize }
+    let found: isize = -1 as isize
+    let newest: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < cache.capacity {
+        if cache.occupied[i] {
+            if found < 0 as isize || cache.ages[i] > newest {
+                found = i as isize
+                newest = cache.ages[i]
+            }
+        }
+        i = i + 1 as usize
+    }
+    return found
+}
+
+export function cache_rebase_ages<K,V>(cache: *Cache<K,V>): bool {
+    if cache == null || cache.occupied == null || cache.ages == null { return false }
+    if cache.length == 0 as usize {
+        cache.clock = 1 as u64
+        return true
+    }
+    let oldestIndex: isize = cache_oldest_index(cache)
+    if oldestIndex < 0 as isize { return false }
+    let base: u64 = cache.ages[oldestIndex as usize]
+    let maximum: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < cache.capacity {
+        if cache.occupied[i] {
+            cache.ages[i] = cache.ages[i] - base + 1 as u64
+            if cache.ages[i] > maximum { maximum = cache.ages[i] }
+        }
+        i = i + 1 as usize
+    }
+    cache.clock = maximum + 1 as u64
+    return true
+}
+
+function cache_next_age<K,V>(cache: *Cache<K,V>): u64 {
+    if cache.clock >= cache_clock_limit() { cache_rebase_ages(cache) }
+    let age: u64 = cache.clock
+    cache.clock = cache.clock + 1 as u64
+    return age
+}
+
+export function cache_touch_index<K,V>(cache: *Cache<K,V>, index: usize): bool {
+    if !cache_slot_live(cache, index) || cache.ages == null { return false }
+    cache.ages[index] = cache_next_age(cache)
+    return true
+}
+
+export function cache_peek_ref<K: Eq + Copy,V>(cache: *Cache<K,V>, key: K): *V {
+    let index: isize = cache_find_index(cache, key)
+    if index < 0 as isize || cache.values == null { return null as *V }
+    return &cache.values[index as usize]
+}
+
+export function cache_get_ref<K: Eq + Copy,V>(cache: *Cache<K,V>, key: K): *V {
+    let index: isize = cache_find_index(cache, key)
+    if index < 0 as isize || cache.values == null {
+        if cache != null { cache.misses = cache.misses + 1 as u64 }
+        return null as *V
+    }
+    cache.hits = cache.hits + 1 as u64
+    cache_touch_index(cache, index as usize)
+    return &cache.values[index as usize]
+}
+
+export function cache_peek_or<K: Eq + Copy,V: Copy>(cache: *Cache<K,V>, key: K, fallback: V): V {
+    let value: *V = cache_peek_ref(cache, key)
+    if value == null { return fallback }
+    return *value
+}
+
+export function cache_get_or<K: Eq + Copy,V: Copy>(cache: *Cache<K,V>, key: K, fallback: V): V {
+    let value: *V = cache_get_ref(cache, key)
+    if value == null { return fallback }
+    return *value
+}
+
+export function cache_put<K: Eq + Copy,V: Copy>(cache: *Cache<K,V>, key: K, value: V): bool {
+    if cache == null || cache.capacity == 0 as usize || cache.keys == null || cache.values == null || cache.occupied == null || cache.ages == null { return false }
+    let existing: isize = cache_find_index(cache, key)
+    if existing >= 0 as isize {
+        let index: usize = existing as usize
+        cache.values[index] = value
+        cache_touch_index(cache, index)
+        return true
+    }
+
+    let target: isize = cache_first_free_index(cache)
+    if target < 0 as isize {
+        target = cache_oldest_index(cache)
+        if target < 0 as isize { return false }
+        cache.evictions = cache.evictions + 1 as u64
+    } else {
+        cache.length = cache.length + 1 as usize
+    }
+
+    let index: usize = target as usize
+    cache.keys[index] = key
+    cache.values[index] = value
+    cache.occupied[index] = true
+    cache.ages[index] = cache_next_age(cache)
+    return true
+}
+
+export function cache_put_with_evicted<K: Eq + Copy,V: Copy>(cache: *Cache<K,V>, key: K, value: V, evictedKey: *K, evictedValue: *V, didEvict: *bool): bool {
+    if didEvict != null { *didEvict = false }
+    if cache == null || cache.capacity == 0 as usize { return false }
+    let existing: isize = cache_find_index(cache, key)
+    if existing >= 0 as isize { return cache_put(cache, key, value) }
+    if cache_full(cache) {
+        let oldest: isize = cache_oldest_index(cache)
+        if oldest < 0 as isize { return false }
+        let index: usize = oldest as usize
+        if evictedKey != null { *evictedKey = cache.keys[index] }
+        if evictedValue != null { *evictedValue = cache.values[index] }
+        if didEvict != null { *didEvict = true }
+    }
+    return cache_put(cache, key, value)
+}
+
+export function cache_remove<K: Eq + Copy,V>(cache: *Cache<K,V>, key: K): bool {
+    let found: isize = cache_find_index(cache, key)
+    if found < 0 as isize || cache.occupied == null || cache.ages == null { return false }
+    let index: usize = found as usize
+    cache.occupied[index] = false
+    cache.ages[index] = 0 as u64
+    if cache.length > 0 as usize { cache.length = cache.length - 1 as usize }
+    return true
+}
+
+export function cache_remove_oldest<K,V>(cache: *Cache<K,V>): bool {
+    let found: isize = cache_oldest_index(cache)
+    if found < 0 as isize { return false }
+    let index: usize = found as usize
+    cache.occupied[index] = false
+    cache.ages[index] = 0 as u64
+    if cache.length > 0 as usize { cache.length = cache.length - 1 as usize }
+    return true
+}
+
+export function cache_clear<K,V>(cache: *Cache<K,V>): bool {
+    if cache == null || cache.occupied == null || cache.ages == null { return false }
+    let i: usize = 0 as usize
+    while i < cache.capacity {
+        cache.occupied[i] = false
+        cache.ages[i] = 0 as u64
+        i = i + 1 as usize
+    }
+    cache.length = 0 as usize
+    cache.clock = 1 as u64
+    return true
+}
+
+export function cache_reset_statistics<K,V>(cache: *Cache<K,V>): bool {
+    if cache == null { return false }
+    cache.hits = 0 as u64
+    cache.misses = 0 as u64
+    cache.evictions = 0 as u64
+    return true
+}
+
+export function cache_copy_keys<K: Copy,V>(cache: *Cache<K,V>, output: []K): usize {
+    if cache == null || cache.keys == null || cache.occupied == null { return 0 as usize }
+    let written: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < cache.capacity && written < len(output) {
+        if cache.occupied[i] { output[written] = cache.keys[i] written = written + 1 as usize }
+        i = i + 1 as usize
+    }
+    return written
+}
+
+export function cache_copy_values<K,V: Copy>(cache: *Cache<K,V>, output: []V): usize {
+    if cache == null || cache.values == null || cache.occupied == null { return 0 as usize }
+    let written: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < cache.capacity && written < len(output) {
+        if cache.occupied[i] { output[written] = cache.values[i] written = written + 1 as usize }
+        i = i + 1 as usize
+    }
+    return written
+}
+
+export function cache_copy_lru_keys<K: Copy,V>(cache: *Cache<K,V>, output: []K): usize {
+    if cache == null || cache.length == 0 as usize { return 0 as usize }
+    let written: usize = 0 as usize
+    let lastAge: u64 = 0 as u64
+    while written < cache.length && written < len(output) {
+        let found: isize = -1 as isize
+        let candidateAge: u64 = 0 as u64
+        let i: usize = 0 as usize
+        while i < cache.capacity {
+            if cache.occupied[i] && cache.ages[i] > lastAge {
+                if found < 0 as isize || cache.ages[i] < candidateAge {
+                    found = i as isize
+                    candidateAge = cache.ages[i]
+                }
+            }
+            i = i + 1 as usize
+        }
+        if found < 0 as isize { return written }
+        output[written] = cache.keys[found as usize]
+        lastAge = candidateAge
+        written = written + 1 as usize
+    }
+    return written
+}
+
+export function cache_oldest_key_or<K: Copy,V>(cache: *Cache<K,V>, fallback: K): K {
+    let index: isize = cache_oldest_index(cache)
+    if index < 0 as isize || cache.keys == null { return fallback }
+    return cache.keys[index as usize]
+}
+
+export function cache_newest_key_or<K: Copy,V>(cache: *Cache<K,V>, fallback: K): K {
+    let index: isize = cache_newest_index(cache)
+    if index < 0 as isize || cache.keys == null { return fallback }
+    return cache.keys[index as usize]
+}
+
+export function cache_age_of<K: Eq + Copy,V>(cache: *Cache<K,V>, key: K): u64 {
+    let index: isize = cache_find_index(cache, key)
+    if index < 0 as isize || cache.ages == null { return 0 as u64 }
+    return cache.ages[index as usize]
+}
+
+export function cache_touch<K: Eq + Copy,V>(cache: *Cache<K,V>, key: K): bool {
+    let index: isize = cache_find_index(cache, key)
+    if index < 0 as isize { return false }
+    return cache_touch_index(cache, index as usize)
+}
+
+export function cache_contains_value<K,V: Eq + Copy>(cache: *Cache<K,V>, value: V): bool {
+    if cache == null || cache.values == null || cache.occupied == null { return false }
+    let i: usize = 0 as usize
+    while i < cache.capacity {
+        if cache.occupied[i] && cache.values[i] == value { return true }
+        i = i + 1 as usize
+    }
+    return false
+}
+
+export function cache_count_value<K,V: Eq + Copy>(cache: *Cache<K,V>, value: V): usize {
+    if cache == null || cache.values == null || cache.occupied == null { return 0 as usize }
+    let count: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < cache.capacity {
+        if cache.occupied[i] && cache.values[i] == value { count = count + 1 as usize }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+// Compatibility helpers retained from the former capacity-only placeholder.
 export function cache_capacity_valid(length: usize, capacity: usize): bool { return length <= capacity }
 export function cache_remaining(length: usize, capacity: usize): usize { if length >= capacity { return 0 as usize } return capacity - length }
 export function cache_nonempty(length: usize): bool { return length > 0 as usize }

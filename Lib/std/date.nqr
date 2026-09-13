@@ -1,5 +1,87 @@
 module noqeri.std.date
 
+record Date {
+    year: int
+    month: int
+    day: int
+}
+
 export function date_is_leap_year(year: int): bool { if year % 400 == 0 { return true } if year % 100 == 0 { return false } return year % 4 == 0 }
-export function date_days_in_month(year: int, month: int): int { if month==2 { if date_is_leap_year(year) { return 29 } return 28 } if month==4||month==6||month==9||month==11 { return 30 } if month>=1&&month<=12 { return 31 } return 0 }
-export function date_valid(year: int, month: int, day: int): bool { return year != 0 && month>=1&&month<=12&&day>=1&&day<=date_days_in_month(year,month) }
+export function date_days_in_month(year: int, month: int): int { if month == 2 { if date_is_leap_year(year) { return 29 } return 28 } if month == 4 || month == 6 || month == 9 || month == 11 { return 30 } if month >= 1 && month <= 12 { return 31 } return 0 }
+export function date_valid(year: int, month: int, day: int): bool { return year != 0 && month >= 1 && month <= 12 && day >= 1 && day <= date_days_in_month(year, month) }
+export function date_value_valid(value: *Date): bool { return value != null && date_valid(value.year, value.month, value.day) }
+
+export function date_day_of_year(year: int, month: int, day: int): int {
+    if !date_valid(year, month, day) { return 0 }
+    let total: int = day
+    let current: int = 1
+    while current < month { total = total + date_days_in_month(year, current) current = current + 1 }
+    return total
+}
+
+export function date_days_in_year(year: int): int { if date_is_leap_year(year) { return 366 } return 365 }
+export function date_quarter(month: int): int { if month < 1 || month > 12 { return 0 } return (month - 1) / 3 + 1 }
+export function date_is_weekend_iso(weekday: int): bool { return weekday == 6 || weekday == 7 }
+
+// Gregorian civil-date to days relative to 1970-01-01. Adapted as integer
+// arithmetic so it works in freestanding builds without libc/timezone state.
+export function date_days_from_civil(year: int, month: int, day: int): i64 {
+    if !date_valid(year, month, day) { return 0 as i64 }
+    let y: i64 = year as i64
+    let m: i64 = month as i64
+    let d: i64 = day as i64
+    if m <= 2 as i64 { y = y - 1 as i64 }
+    let era: i64 = y / 400 as i64
+    if y < 0 as i64 && y % 400 as i64 != 0 as i64 { era = era - 1 as i64 }
+    let yoe: i64 = y - era * 400 as i64
+    let mp: i64 = m
+    if m > 2 as i64 { mp = m - 3 as i64 } else { mp = m + 9 as i64 }
+    let doy: i64 = (153 as i64 * mp + 2 as i64) / 5 as i64 + d - 1 as i64
+    let doe: i64 = yoe * 365 as i64 + yoe / 4 as i64 - yoe / 100 as i64 + doy
+    return era * 146097 as i64 + doe - 719468 as i64
+}
+
+export function date_compare(left: *Date, right: *Date): int {
+    if left.year < right.year { return -1 } if left.year > right.year { return 1 }
+    if left.month < right.month { return -1 } if left.month > right.month { return 1 }
+    if left.day < right.day { return -1 } if left.day > right.day { return 1 }
+    return 0
+}
+
+export function date_days_between(left: *Date, right: *Date): i64 {
+    if !date_value_valid(left) || !date_value_valid(right) { return 0 as i64 }
+    return date_days_from_civil(right.year, right.month, right.day) - date_days_from_civil(left.year, left.month, left.day)
+}
+
+// ISO weekday: Monday=1 ... Sunday=7.
+export function date_iso_weekday(year: int, month: int, day: int): int {
+    if !date_valid(year, month, day) { return 0 }
+    let days: i64 = date_days_from_civil(year, month, day)
+    let weekday: i64 = (days + 3 as i64) % 7 as i64
+    if weekday < 0 as i64 { weekday = weekday + 7 as i64 }
+    return (weekday + 1 as i64) as int
+}
+
+export function date_add_days_in_place(value: *Date, delta: int): bool {
+    if !date_value_valid(value) { return false }
+    let remaining: int = delta
+    while remaining > 0 {
+        value.day = value.day + 1
+        if value.day > date_days_in_month(value.year, value.month) {
+            value.day = 1
+            value.month = value.month + 1
+            if value.month > 12 { value.month = 1 value.year = value.year + 1 if value.year == 0 { value.year = 1 } }
+        }
+        remaining = remaining - 1
+    }
+    while remaining < 0 {
+        value.day = value.day - 1
+        if value.day < 1 {
+            value.month = value.month - 1
+            if value.month < 1 { value.month = 12 value.year = value.year - 1 if value.year == 0 { value.year = -1 } }
+            value.day = date_days_in_month(value.year, value.month)
+        }
+        remaining = remaining + 1
+    }
+    return true
+}

@@ -1,6 +1,14 @@
 module noqeri.std.benchmark
 
+record BenchmarkStats { samples: usize min_ns: u64 max_ns: u64 total_ns: u64 }
+
+export function benchmark_stats_reset(stats: *BenchmarkStats): void { stats.samples = 0 as usize stats.min_ns = 0 as u64 stats.max_ns = 0 as u64 stats.total_ns = 0 as u64 }
+export function benchmark_stats_add(stats: *BenchmarkStats, elapsed_ns: u64): void { if stats.samples == 0 as usize || elapsed_ns < stats.min_ns { stats.min_ns = elapsed_ns } if stats.samples == 0 as usize || elapsed_ns > stats.max_ns { stats.max_ns = elapsed_ns } stats.samples = stats.samples + 1 as usize stats.total_ns = stats.total_ns + elapsed_ns }
+export function benchmark_mean_ns(stats: *BenchmarkStats): u64 { if stats.samples == 0 as usize { return 0 as u64 } return stats.total_ns / stats.samples as u64 }
+export function benchmark_range_ns(stats: *BenchmarkStats): u64 { if stats.samples == 0 as usize { return 0 as u64 } return stats.max_ns - stats.min_ns }
 export function benchmark_ratio_per_mille(part: usize, total: usize): usize { if total == 0 as usize { return 0 as usize } return (part * 1000 as usize) / total }
 export function benchmark_passed(passed: usize, failed: usize): bool { return failed == 0 as usize && passed > 0 as usize }
 export function benchmark_delta(start: i64, end: i64): i64 { return end - start }
 export function benchmark_clamp_sample(value: usize, max: usize): usize { if value > max { return max } return value }
+export function benchmark_percentile_index(count: usize, percentile: usize): usize { if count == 0 as usize { return 0 as usize } let p: usize = percentile if p > 100 as usize { p = 100 as usize } return ((count - 1 as usize) * p) / 100 as usize }
+export function benchmark_ops_per_second(operations: u64, elapsed_ns: u64): u64 { if elapsed_ns == 0 as u64 { return 0 as u64 } return (operations * 1000000000 as u64) / elapsed_ns }

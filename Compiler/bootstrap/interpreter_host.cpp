@@ -12,7 +12,8 @@
 
 namespace noe {
 namespace {
-std::vector<std::unique_ptr<std::uint8_t[]>> allocations;
+thread_local std::vector<std::unique_ptr<std::uint8_t[]>> allocations;
+thread_local const std::atomic_bool* currentTaskCancellation=nullptr;
 std::mutex atomicMutex;
 
 bool truthyValue(const NirValue&v){if(auto p=std::get_if<bool>(&v))return*p;if(auto p=std::get_if<std::int64_t>(&v))return*p!=0;if(auto p=std::get_if<double>(&v))return*p!=0.0;if(auto p=std::get_if<std::string>(&v))return!p->empty();return false;}
@@ -23,12 +24,14 @@ std::uint64_t rawLoad(std::uintptr_t address,std::size_t width,bool vol,bool ato
 void rawStore(std::uintptr_t address,std::size_t width,std::uint64_t value,bool vol,bool atomicAccess=false){if(address==0)throw std::runtime_error("null pointer store");runtimeCheckMemoryWrite(address,width,atomicAccess);switch(width){case 1:if(vol)*reinterpret_cast<volatile std::uint8_t*>(address)=static_cast<std::uint8_t>(value);else*reinterpret_cast<std::uint8_t*>(address)=static_cast<std::uint8_t>(value);break;case 2:if(vol)*reinterpret_cast<volatile std::uint16_t*>(address)=static_cast<std::uint16_t>(value);else*reinterpret_cast<std::uint16_t*>(address)=static_cast<std::uint16_t>(value);break;case 4:if(vol)*reinterpret_cast<volatile std::uint32_t*>(address)=static_cast<std::uint32_t>(value);else*reinterpret_cast<std::uint32_t*>(address)=static_cast<std::uint32_t>(value);break;case 8:if(vol)*reinterpret_cast<volatile std::uint64_t*>(address)=static_cast<std::uint64_t>(value);else*reinterpret_cast<std::uint64_t*>(address)=static_cast<std::uint64_t>(value);break;default:throw std::runtime_error("unsupported memory store width");}}
 std::uintptr_t allocateBytes(std::size_t bytes){const auto size=std::max<std::size_t>(bytes,1);auto p=std::make_unique<std::uint8_t[]>(size);std::memset(p.get(),0,size);auto address=reinterpret_cast<std::uintptr_t>(p.get());runtimeRegisterMemory(address,size,"runtime allocation");allocations.push_back(std::move(p));return address;}
 struct FrameMemory { std::vector<std::uintptr_t> addresses; ~FrameMemory(){for(auto address:addresses)runtimeUnregisterMemory(address);} void add(std::uintptr_t address){if(std::find(addresses.begin(),addresses.end(),address)==addresses.end()){addresses.push_back(address);runtimeRegisterMemory(address,sizeof(std::uint64_t),"interpreter local");}} };
+bool stringValue(const NirValue&value,std::string&out){if(auto p=std::get_if<std::string>(&value)){out=*p;return true;}return false;}
 }
 
 std::string Interpreter::valueToString(const NirValue&v)const{if(std::holds_alternative<std::monostate>(v))return"null";if(auto p=std::get_if<std::int64_t>(&v))return std::to_string(*p);if(auto p=std::get_if<double>(&v))return std::to_string(*p);if(auto p=std::get_if<bool>(&v))return*p?"true":"false";return std::get<std::string>(v);}
-int Interpreter::run(const NirProgram&p){try{allocations.clear();runtimeResetChecks();runFunction(p,p.entry,{});allocations.clear();runtimeResetChecks();return 0;}catch(const std::exception&e){allocations.clear();runtimeResetChecks();std::cerr<<"NQR-R4000: runtime error: "<<e.what()<<"\n";return 1;}}
+int Interpreter::run(const NirProgram&p){try{allocations.clear();runtimeTaskReset();runtimeResetChecks();runFunction(p,p.entry,{});runtimeTaskJoinAll();runtimeTaskReset();allocations.clear();runtimeResetChecks();return 0;}catch(const std::exception&e){runtimeTaskReset();allocations.clear();runtimeResetChecks();std::cerr<<"NQR-R4000: runtime error: "<<e.what()<<"\n";return 1;}}
 NirValue Interpreter::runFunction(const NirProgram&p,const NirFunction&fn,const std::vector<NirValue>&argv){
     if(fn.isExtern)throw std::runtime_error("cannot directly interpret extern function "+fn.name);
+    RuntimeProfileScope profileScope(fn.name);
     std::unordered_map<std::string,NirValue>vars;std::unordered_map<std::string,std::uint64_t>cells;std::unordered_set<std::string>addressTaken;std::vector<NirValue>regs(fn.nextReg);FrameMemory frameMemory;
     for(std::size_t i=0;i<fn.params.size()&&i<argv.size();++i){vars[fn.params[i]]=argv[i];if(std::holds_alternative<std::int64_t>(argv[i]))cells[fn.params[i]]=static_cast<std::uint64_t>(std::get<std::int64_t>(argv[i]));}
     std::size_t pc=0;
@@ -58,7 +61,33 @@ NirValue Interpreter::runFunction(const NirProgram&p,const NirFunction&fn,const 
             case NirOp::Cast:{auto v=get(i.args[0]);Type t=typeFromName(i.text);if(t.kind==TypeKind::Float)regs[*i.dest]=asDouble(v);else if(t.isInteger()||t.kind==TypeKind::Pointer)regs[*i.dest]=asInt(v);else regs[*i.dest]=v;break;}
             case NirOp::Unary:{auto v=get(i.args[0]);if(i.text=="!")regs[*i.dest]=!truthyValue(v);else if(i.text=="-"){if(auto n=std::get_if<std::int64_t>(&v))regs[*i.dest]=runtimeNegI64(*n);else regs[*i.dest]=-asDouble(v);}else regs[*i.dest]=v;break;}
             case NirOp::Binary:regs[*i.dest]=binary(i.text,get(i.args[0]),get(i.args[1]));break;
-            case NirOp::Call:{std::vector<NirValue>a;for(auto r:i.args)a.push_back(get(r));auto user=std::find_if(p.functions.begin(),p.functions.end(),[&](const auto&x){return x.name==i.text&&!x.isExtern;});if(user!=p.functions.end()){regs[*i.dest]=runFunction(p,*user,a);break;}std::string error;if(i.text=="host"||i.text=="abi"){if(a.empty()||!std::holds_alternative<std::string>(a[0]))throw std::runtime_error(i.text+" requires a string service name");std::string service=std::get<std::string>(a[0]);std::vector<NirValue>serviceArgs(a.begin()+1,a.end());std::optional<NirValue>result;if(host_)result=callNoqeriAbi(host_,service,serviceArgs,error);if(!result)result=callNoqeriAbi(defaultNoqeriAbi(),service,serviceArgs,error);if(!result)throw std::runtime_error(error.empty()?"unknown ABI service "+service:error);regs[*i.dest]=*result;break;}std::optional<NirValue>result;if(host_)result=callNoqeriAbi(host_,i.text,a,error);if(!result)result=callNoqeriAbi(defaultNoqeriAbi(),i.text,a,error);if(!result)throw std::runtime_error(error.empty()?"unknown function "+i.text:error);regs[*i.dest]=*result;break;}
+            case NirOp::Call:{
+                std::vector<NirValue>a;for(auto r:i.args)a.push_back(get(r));
+                if(i.text=="taskHostSpawn"){
+                    if(a.size()<2)throw std::runtime_error("taskHostSpawn expects entry and payload strings");
+                    std::string entry,payload;if(!stringValue(a[0],entry)||!stringValue(a[1],payload))throw std::runtime_error("taskHostSpawn expects entry and payload strings");
+                    auto taskFn=std::find_if(p.functions.begin(),p.functions.end(),[&](const auto&x){return x.name==entry&&!x.isExtern;});
+                    if(taskFn==p.functions.end())throw std::runtime_error("task entry not found: "+entry);
+                    const NirFunction* fnPtr=&*taskFn;
+                    const auto handle=runtimeTaskSpawn([this,&p,fnPtr,payload](const std::atomic_bool&cancelled)->std::int64_t{
+                        currentTaskCancellation=&cancelled;
+                        allocations.clear();
+                        try{
+                            if(cancelled.load(std::memory_order_acquire)){currentTaskCancellation=nullptr;return -3;}
+                            std::vector<NirValue> taskArgs;if(!fnPtr->params.empty())taskArgs.emplace_back(payload);
+                            auto value=runFunction(p,*fnPtr,taskArgs);
+                            allocations.clear();currentTaskCancellation=nullptr;return asInt(value);
+                        }catch(...){allocations.clear();currentTaskCancellation=nullptr;throw;}
+                    });
+                    regs[*i.dest]=static_cast<std::int64_t>(handle);break;
+                }
+                if(i.text=="taskHostState"){regs[*i.dest]=static_cast<std::int64_t>(runtimeTaskState(static_cast<std::size_t>(asInt(a.at(0)))));break;}
+                if(i.text=="taskHostJoin"){regs[*i.dest]=runtimeTaskJoin(static_cast<std::size_t>(asInt(a.at(0))),asInt(a.at(1)));break;}
+                if(i.text=="taskHostCancel"){regs[*i.dest]=runtimeTaskCancel(static_cast<std::size_t>(asInt(a.at(0))));break;}
+                if(i.text=="taskHostDestroy"){regs[*i.dest]=runtimeTaskDestroy(static_cast<std::size_t>(asInt(a.at(0))));break;}
+                if(i.text=="taskHostCancelled"){regs[*i.dest]=runtimeTaskCancelled(static_cast<std::size_t>(asInt(a.at(0))));break;}
+                if(i.text=="taskHostCurrentCancelled"){regs[*i.dest]=currentTaskCancellation&&currentTaskCancellation->load(std::memory_order_acquire);break;}
+                auto user=std::find_if(p.functions.begin(),p.functions.end(),[&](const auto&x){return x.name==i.text&&!x.isExtern;});if(user!=p.functions.end()){regs[*i.dest]=runFunction(p,*user,a);break;}std::string error;if(i.text=="host"||i.text=="abi"){if(a.empty()||!std::holds_alternative<std::string>(a[0]))throw std::runtime_error(i.text+" requires a string service name");std::string service=std::get<std::string>(a[0]);std::vector<NirValue>serviceArgs(a.begin()+1,a.end());std::optional<NirValue>result;if(host_)result=callNoqeriAbi(host_,service,serviceArgs,error);if(!result)result=callNoqeriAbi(defaultNoqeriAbi(),service,serviceArgs,error);if(!result)throw std::runtime_error(error.empty()?"unknown ABI service "+service:error);regs[*i.dest]=*result;break;}std::optional<NirValue>result;if(host_)result=callNoqeriAbi(host_,i.text,a,error);if(!result)result=callNoqeriAbi(defaultNoqeriAbi(),i.text,a,error);if(!result)throw std::runtime_error(error.empty()?"unknown function "+i.text:error);regs[*i.dest]=*result;break;}
             case NirOp::Jump:pc=i.target;continue;
             case NirOp::JumpIfFalse:if(!truthyValue(get(i.args[0]))){pc=i.target;continue;}break;
             case NirOp::Return:return i.args.empty()?NirValue(std::monostate{}):get(i.args[0]);

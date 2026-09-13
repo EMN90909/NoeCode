@@ -1,0 +1,91 @@
+#!/usr/bin/env sh
+set -eu
+
+NQ="${NQ:-./build/noqeri}"
+mkdir -p build
+
+reject_check() {
+  file="$1"
+  label="$2"
+  if "$NQ" check "$file" >/dev/null 2>&1; then
+    echo "safety checker accepted invalid program: $label" >&2
+    exit 1
+  fi
+}
+
+reject_run() {
+  file="$1"
+  label="$2"
+  if "$NQ" run "$file" >/dev/null 2>&1; then
+    echo "runtime accepted invalid program: $label" >&2
+    exit 1
+  fi
+}
+
+cat > build/unsafe_required.nqr <<'EOF'
+function write_raw(ptr: *u32): void {
+    ptr[0] = 7 as u32
+}
+EOF
+reject_check build/unsafe_required.nqr "raw pointer indexing outside unsafe block"
+
+cat > build/unsafe_allowed.nqr <<'EOF'
+function write_raw(ptr: *u32): void {
+    unsafe {
+        ptr[0] = 7 as u32
+    }
+}
+EOF
+"$NQ" check build/unsafe_allowed.nqr >/dev/null
+
+cat > build/dynamic_bounds_ok.nqr <<'EOF'
+let values: [int; 3] = [10, 20, 30]
+let index: usize = 1 as usize
+print(values[index])
+EOF
+bounds_output="$("$NQ" run build/dynamic_bounds_ok.nqr)"
+if [ "$bounds_output" != '20' ]; then
+  echo "checked dynamic index changed valid semantics" >&2
+  exit 1
+fi
+"$NQ" nir build/dynamic_bounds_ok.nqr > build/dynamic_bounds_ok.nir
+grep -q 'check_bounds' build/dynamic_bounds_ok.nir
+
+cat > build/dynamic_bounds_bad.nqr <<'EOF'
+let values: [int; 3] = [10, 20, 30]
+let index: usize = 9 as usize
+print(values[index])
+EOF
+reject_run build/dynamic_bounds_bad.nqr "dynamic fixed-array index beyond length"
+
+cat > build/null_runtime_bad.nqr <<'EOF'
+let ptr: *u32 = null
+unsafe {
+    print(ptr[0])
+}
+EOF
+reject_run build/null_runtime_bad.nqr "null raw-pointer index"
+
+cat > build/overflow_checked_bad.nqr <<'EOF'
+let max: i64 = 9223372036854775807
+let one: i64 = 1
+print(max + one)
+EOF
+if NOQERI_CHECKED_OVERFLOW=1 "$NQ" run build/overflow_checked_bad.nqr >/dev/null 2>&1; then
+  echo "checked-overflow mode accepted i64 overflow" >&2
+  exit 1
+fi
+
+cat > build/web_checked_index.nqr <<'EOF'
+export function pick(index: usize): int {
+    let values: [int; 3] = [4, 8, 12]
+    return values[index]
+}
+EOF
+"$NQ" web build/web_checked_index.nqr build/web_checked_index.mjs >/dev/null
+grep -q '__nqIndex' build/web_checked_index.mjs
+if command -v node >/dev/null 2>&1; then
+  node --input-type=module -e 'import("./build/web_checked_index.mjs").then(m => { if(m.pick(1)!==8) process.exit(1); let trapped=false; try { m.pick(9) } catch(e) { trapped=e instanceof RangeError } if(!trapped) process.exit(2) })'
+fi
+
+echo "unsafe-boundary, runtime-bounds, null-check, checked-overflow, and web-safety tests passed"

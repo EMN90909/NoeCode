@@ -1,0 +1,14 @@
+function write_register(address: usize, value: u32): void {
+    unsafe {
+        let register: *volatile u32 = address as *volatile u32
+        *register = value
+    }
+}
+
+function main(): int {
+    // Representative memory-mapped device address. This fixture is compiled as
+    // freestanding evidence; it is not executed on a hosted development machine.
+    let status_led: usize = 4096 as usize
+    write_register(status_led, 1 as u32)
+    return 0
+}

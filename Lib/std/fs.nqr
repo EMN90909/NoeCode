@@ -3,12 +3,75 @@ module noqeri.std.fs
 extern function fsExists(path: string): bool
 extern function fsIsDirectory(path: string): bool
 extern function fsCreateDirectory(path: string): isize
+extern function fsCreateDirectories(path: string): isize
 extern function fsRemove(path: string): isize
+extern function fsRemoveRecursive(path: string): isize
 extern function fsRename(from: string, to: string): isize
+extern function fsCopy(from: string, to: string): isize
+extern function fsReadText(path: string): string
+extern function fsWriteText(path: string, contents: string): isize
+extern function fsAppendText(path: string, contents: string): isize
+extern function fsFileSize(path: string): u64
+extern function fsModifiedMillis(path: string): i64
+extern function fsPermissions(path: string): u32
+extern function fsSetPermissions(path: string, mode: u32): isize
+extern function fsIsSymlink(path: string): bool
+extern function fsReadSymlink(path: string): string
+extern function fsCreateSymlink(target: string, linkPath: string): isize
+extern function fsTempFile(prefix: string): string
+extern function fsTempDirectory(prefix: string): string
+extern function fsAtomicReplace(from: string, to: string): isize
+extern function fsWatch(path: string, recursive: bool): usize
+extern function fsWatchPoll(watcher: usize, timeoutMillis: i64): string
+extern function fsWatchClose(watcher: usize): bool
+extern function fsMmapRead(path: string): usize
+extern function fsMmapLength(mapping: usize): usize
+extern function fsMmapClose(mapping: usize): bool
 
-export function fs_exists(path: string): bool { return fsExists(path) }
-export function fs_is_directory(path: string): bool { return fsIsDirectory(path) }
-export function fs_create_directory(path: string): isize { return fsCreateDirectory(path) }
-export function fs_remove(path: string): isize { return fsRemove(path) }
-export function fs_rename(from: string, to: string): isize { return fsRename(from,to) }
 export function fs_status_ok(status: isize): bool { return status >= 0 as isize }
+export function fs_handle_valid(handle: usize): bool { return handle != 0 as usize }
+export function fs_timeout_valid(timeoutMillis: i64): bool { return timeoutMillis >= 0 as i64 }
+
+export function fs_exists(path: string): bool { unsafe { return fsExists(path) } }
+export function fs_is_directory(path: string): bool { unsafe { return fsIsDirectory(path) } }
+export function fs_create_directory(path: string): isize { unsafe { return fsCreateDirectory(path) } }
+export function fs_create_directories(path: string): isize { unsafe { return fsCreateDirectories(path) } }
+export function fs_remove(path: string): isize { unsafe { return fsRemove(path) } }
+export function fs_remove_recursive(path: string): isize { unsafe { return fsRemoveRecursive(path) } }
+export function fs_rename(from: string, to: string): isize { unsafe { return fsRename(from, to) } }
+export function fs_copy(from: string, to: string): isize { unsafe { return fsCopy(from, to) } }
+export function fs_read_text(path: string): string { unsafe { return fsReadText(path) } }
+export function fs_write_text(path: string, contents: string): isize { unsafe { return fsWriteText(path, contents) } }
+export function fs_append_text(path: string, contents: string): isize { unsafe { return fsAppendText(path, contents) } }
+export function fs_file_size(path: string): u64 { unsafe { return fsFileSize(path) } }
+export function fs_modified_millis(path: string): i64 { unsafe { return fsModifiedMillis(path) } }
+export function fs_permissions(path: string): u32 { unsafe { return fsPermissions(path) } }
+export function fs_set_permissions(path: string, mode: u32): isize { unsafe { return fsSetPermissions(path, mode) } }
+export function fs_is_symlink(path: string): bool { unsafe { return fsIsSymlink(path) } }
+export function fs_read_symlink(path: string): string { unsafe { return fsReadSymlink(path) } }
+export function fs_create_symlink(target: string, linkPath: string): isize { unsafe { return fsCreateSymlink(target, linkPath) } }
+export function fs_temp_file(prefix: string): string { unsafe { return fsTempFile(prefix) } }
+export function fs_temp_directory(prefix: string): string { unsafe { return fsTempDirectory(prefix) } }
+export function fs_atomic_replace(from: string, to: string): isize { unsafe { return fsAtomicReplace(from, to) } }
+
+export function fs_watch(path: string, recursive: bool): usize {
+    unsafe { return fsWatch(path, recursive) }
+}
+export function fs_watch_poll(watcher: usize, timeoutMillis: i64): string {
+    if !fs_handle_valid(watcher) || !fs_timeout_valid(timeoutMillis) { return "" }
+    unsafe { return fsWatchPoll(watcher, timeoutMillis) }
+}
+export function fs_watch_close(watcher: usize): bool {
+    if !fs_handle_valid(watcher) { return false }
+    unsafe { return fsWatchClose(watcher) }
+}
+
+export function fs_mmap_read(path: string): usize { unsafe { return fsMmapRead(path) } }
+export function fs_mmap_length(mapping: usize): usize {
+    if !fs_handle_valid(mapping) { return 0 as usize }
+    unsafe { return fsMmapLength(mapping) }
+}
+export function fs_mmap_close(mapping: usize): bool {
+    if !fs_handle_valid(mapping) { return false }
+    unsafe { return fsMmapClose(mapping) }
+}

@@ -1,6 +1,70 @@
 module noqeri.std.buffer
 
+record Buffer<T> {
+    data: *T
+    length: usize
+    capacity: usize
+}
+
 export function buffer_capacity_valid(length: usize, capacity: usize): bool { return length <= capacity }
 export function buffer_remaining(length: usize, capacity: usize): usize { if length >= capacity { return 0 as usize } return capacity - length }
 export function buffer_nonempty(length: usize): bool { return length > 0 as usize }
 export function buffer_checked_end(offset: usize, length: usize, capacity: usize): bool { if offset > capacity { return false } return length <= capacity - offset }
+
+export function buffer_init<T>(buffer: *Buffer<T>, data: *T, capacity: usize): bool {
+    if buffer == null { return false }
+    if capacity > 0 as usize && data == null { return false }
+    buffer.data = data
+    buffer.length = 0 as usize
+    buffer.capacity = capacity
+    return true
+}
+
+export function buffer_invariant<T>(buffer: *Buffer<T>): bool { return buffer != null && buffer.length <= buffer.capacity && (buffer.capacity == 0 as usize || buffer.data != null) }
+export function buffer_length<T>(buffer: *Buffer<T>): usize { return buffer.length }
+export function buffer_capacity<T>(buffer: *Buffer<T>): usize { return buffer.capacity }
+export function buffer_available<T>(buffer: *Buffer<T>): usize { return buffer_remaining(buffer.length, buffer.capacity) }
+export function buffer_is_empty<T>(buffer: *Buffer<T>): bool { return buffer.length == 0 as usize }
+export function buffer_is_full<T>(buffer: *Buffer<T>): bool { return buffer.length >= buffer.capacity }
+
+export function buffer_push<T>(buffer: *Buffer<T>, value: T): bool {
+    if !buffer_invariant(buffer) || buffer.length >= buffer.capacity { return false }
+    buffer.data[buffer.length] = value
+    buffer.length = buffer.length + 1 as usize
+    return true
+}
+
+export function buffer_pop_or<T>(buffer: *Buffer<T>, fallback: T): T {
+    if !buffer_invariant(buffer) || buffer.length == 0 as usize { return fallback }
+    buffer.length = buffer.length - 1 as usize
+    return buffer.data[buffer.length]
+}
+
+export function buffer_get_or<T>(buffer: *Buffer<T>, index: usize, fallback: T): T {
+    if !buffer_invariant(buffer) || index >= buffer.length { return fallback }
+    return buffer.data[index]
+}
+
+export function buffer_set<T>(buffer: *Buffer<T>, index: usize, value: T): bool {
+    if !buffer_invariant(buffer) || index >= buffer.length { return false }
+    buffer.data[index] = value
+    return true
+}
+
+export function buffer_append<T>(buffer: *Buffer<T>, values: []T): bool {
+    if !buffer_invariant(buffer) || len(values) > buffer_available(buffer) { return false }
+    let index: usize = 0 as usize
+    while index < len(values) { buffer.data[buffer.length + index] = values[index] index = index + 1 as usize }
+    buffer.length = buffer.length + len(values)
+    return true
+}
+
+export function buffer_clear<T>(buffer: *Buffer<T>): void { if buffer != null { buffer.length = 0 as usize } }
+export function buffer_truncate<T>(buffer: *Buffer<T>, length: usize): bool { if !buffer_invariant(buffer) || length > buffer.length { return false } buffer.length = length return true }
+export function buffer_consume_prefix<T>(buffer: *Buffer<T>, count: usize): bool {
+    if !buffer_invariant(buffer) || count > buffer.length { return false }
+    let index: usize = count
+    while index < buffer.length { buffer.data[index - count] = buffer.data[index] index = index + 1 as usize }
+    buffer.length = buffer.length - count
+    return true
+}

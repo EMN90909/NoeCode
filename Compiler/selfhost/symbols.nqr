@@ -1,0 +1,78 @@
+module noqeri.compiler.selfhost.symbols
+
+record NqSymbol {
+    nameStart: usize
+    nameEnd: usize
+    typeCode: int
+    scopeDepth: usize
+    flags: u32
+}
+
+export function nqSymbolFlagConst(): u32 { return 1 as u32 }
+export function nqSymbolFlagFunction(): u32 { return 2 as u32 }
+export function nqSymbolFlagType(): u32 { return 4 as u32 }
+export function nqSymbolFlagParameter(): u32 { return 8 as u32 }
+export function nqSymbolNotFound(): isize { return -1 as isize }
+export function nqSymbolDuplicate(): isize { return -2 as isize }
+export function nqSymbolCapacity(): isize { return -3 as isize }
+
+export function nqSymbolNameEqual(source: []u8, symbol: *NqSymbol, start: usize, end: usize): bool {
+    if symbol == null || symbol.nameEnd < symbol.nameStart || end < start { return false }
+    if symbol.nameEnd - symbol.nameStart != end - start { return false }
+    let index: usize = 0 as usize
+    while index < end - start {
+        if source[symbol.nameStart + index] != source[start + index] { return false }
+        index = index + 1 as usize
+    }
+    return true
+}
+
+export function nqSymbolsFindInScope(source: []u8, symbols: []NqSymbol, count: usize, start: usize, end: usize, scopeDepth: usize): isize {
+    if count > len(symbols) { count = len(symbols) }
+    let cursor: isize = count as isize - 1 as isize
+    while cursor >= 0 as isize {
+        let symbol: *NqSymbol = &symbols[cursor as usize]
+        if symbol.scopeDepth == scopeDepth && nqSymbolNameEqual(source, symbol, start, end) { return cursor }
+        cursor = cursor - 1 as isize
+    }
+    return nqSymbolNotFound()
+}
+
+export function nqSymbolsLookup(source: []u8, symbols: []NqSymbol, count: usize, start: usize, end: usize, maximumScope: usize): isize {
+    if count > len(symbols) { count = len(symbols) }
+    let cursor: isize = count as isize - 1 as isize
+    while cursor >= 0 as isize {
+        let symbol: *NqSymbol = &symbols[cursor as usize]
+        if symbol.scopeDepth <= maximumScope && nqSymbolNameEqual(source, symbol, start, end) { return cursor }
+        cursor = cursor - 1 as isize
+    }
+    return nqSymbolNotFound()
+}
+
+export function nqSymbolsDefine(source: []u8, symbols: []NqSymbol, count: *usize, start: usize, end: usize, typeCode: int, scopeDepth: usize, flags: u32): isize {
+    if count == null || start >= end || end > len(source) { return nqSymbolCapacity() }
+    if nqSymbolsFindInScope(source, symbols, count[0], start, end, scopeDepth) >= 0 as isize { return nqSymbolDuplicate() }
+    if count[0] >= len(symbols) { return nqSymbolCapacity() }
+    let index: usize = count[0]
+    symbols[index].nameStart = start
+    symbols[index].nameEnd = end
+    symbols[index].typeCode = typeCode
+    symbols[index].scopeDepth = scopeDepth
+    symbols[index].flags = flags
+    count[0] = index + 1 as usize
+    return index as isize
+}
+
+export function nqSymbolsPopScope(symbols: []NqSymbol, count: *usize, scopeDepth: usize): usize {
+    if count == null || count[0] == 0 as usize { return 0 as usize }
+    let removed: usize = 0 as usize
+    while count[0] > 0 as usize {
+        let index: usize = count[0] - 1 as usize
+        if symbols[index].scopeDepth < scopeDepth { return removed }
+        count[0] = index
+        removed = removed + 1 as usize
+    }
+    return removed
+}
+
+export function nqSymbolConst(symbol: *NqSymbol): bool { return symbol != null && (symbol.flags / nqSymbolFlagConst()) % 2 as u32 == 1 as u32 }

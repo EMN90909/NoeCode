@@ -1,8 +1,35 @@
 module noqeri.std.atomic
 
-export function atomic_load_u64(value: *u64): u64 { return atomic.load(value) }
-export function atomic_store_u64(value: *u64, next: u64): void { atomic.store(value,next) }
-export function atomic_exchange_u64(value: *u64, next: u64): u64 { return atomic.exchange(value,next) }
-export function atomic_compare_exchange_u64(value: *u64, expected: u64, next: u64): u64 { return atomic.compareExchange(value,expected,next) }
-export function atomic_increment_u64(value: *u64): u64 { let current:u64=atomic.load(value) let next:u64=current+1 as u64 atomic.store(value,next) return next }
-export function atomic_fence_all(): void { atomic.fence() }
+// Safe callers use these typed helpers. The raw memory operation itself is deliberately
+// visible to auditors inside an unsafe block.
+export function atomic_load_u64(value: *u64): u64 {
+    unsafe { return atomic.load(value) }
+}
+
+export function atomic_store_u64(value: *u64, next: u64): void {
+    unsafe { atomic.store(value,next) }
+}
+
+export function atomic_exchange_u64(value: *u64, next: u64): u64 {
+    unsafe { return atomic.exchange(value,next) }
+}
+
+export function atomic_compare_exchange_u64(value: *u64, expected: u64, next: u64): u64 {
+    unsafe { return atomic.compareExchange(value,expected,next) }
+}
+
+export function atomic_increment_u64(value: *u64): u64 {
+    unsafe {
+        let current:u64=atomic.load(value)
+        let next:u64=current+1 as u64
+        while atomic.compareExchange(value,current,next)!=current {
+            current=atomic.load(value)
+            next=current+1 as u64
+        }
+        return next
+    }
+}
+
+export function atomic_fence_all(): void {
+    unsafe { atomic.fence() }
+}

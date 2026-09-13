@@ -15,7 +15,7 @@ using BlockId = std::uint32_t;
 enum class NirOp {
     Const,Load,Store,Unary,Binary,Cast,Call,
     AddressOf,LoadMemory,StoreMemory,PtrOffset,StackAlloc,
-    MakeSlice,SliceData,SliceLen,
+    MakeSlice,SliceData,SliceLen,NullCheck,BoundsCheck,
     AtomicLoad,AtomicStore,AtomicExchange,AtomicCompareExchange,AtomicFence,
     Intrinsic,InlineAsm,Try,Throw,
     Jump,JumpIfFalse,Return,Nop

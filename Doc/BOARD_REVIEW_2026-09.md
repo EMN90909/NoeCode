@@ -1,63 +1,55 @@
 # Noqeri Product Board Review — September 2026
 
-This review turns the language, runtime and ecosystem into one product problem instead of treating compiler, library and documentation work as unrelated tasks.
+This review treats the compiler, runtime, standard library, website and registry as one product. A language feature is not complete merely because syntax exists, and a package is not mature merely because its source file is large.
 
 ## Board roles
 
-- **Planning:** scans the repository, compares mature language ergonomics, prioritises the highest-leverage work and rejects cosmetic line-count targets.
-- **Kid tester:** approaches Noqeri like a curious nine-year-old. The test is not whether every feature is child-oriented; it is whether names, errors, examples and mental models can be understood without tribal knowledge.
-- **Design:** owns syntax, naming, error clarity, documentation hierarchy and teachability.
-- **Development:** owns compiler semantics, runtime guarantees, standard-library behaviour and ecosystem implementation.
+- **Planning:** scans the repositories, compares mature language ergonomics, identifies leverage and rejects cosmetic work.
+- **Kid tester:** approaches Noqeri like a curious nine-year-old: can the name, first example, failure and mental model be understood without compiler-internals knowledge?
+- **Design:** owns syntax, naming, diagnostics, documentation hierarchy and the safe/advanced boundary.
+- **Development:** owns compiler semantics, runtime guarantees and library behavior.
 - **Testing:** owns positive, negative, safety, portability and performance evidence.
-- **Marketing:** only makes claims that testing can substantiate. Safety and speed are evidence products, not slogans.
+- **Marketing:** may publish only claims supported by a test or benchmark evidence state.
 
 ## Repository scan
 
-The standard library contains a strong middle tier (`math`, `json`, `bytes`, `text`, `utf8`, `base64`, `csv`, `date`, `random`, collections and IO), but many modules were still placeholder-sized. Examples at the start of this review included `arena`, `ascii`, `backoff`, `binary`, `bitset`, `bloom`, `cache`, `calendar`, `channel`, `clock`, `crc`, `deque`, `duration`, `encoding`, `event`, `future`, `hash`, `heap`, `html`, `ini`, `iterator`, `lexer`, `markdown`, `metrics`, `mime`, `numeric`, `parser`, `pool` and `priority_queue`.
+The library contains a useful middle tier (`math`, `json`, `bytes`, `text`, `utf8`, `base64`, `csv`, `date`, `random`, collections and IO), but many catalog modules began this review as placeholder-shaped files containing little more than `len`, `is_empty`, `first` and `last` helpers under unrelated module names.
 
-The board explicitly rejects a rule that every module must exceed 30 KB. A file can reach 30 KB by repetition and still be useless. The maturity gate is instead:
+Examples included `bitset`, `bloom`, `cache`, `calendar`, `channel`, `clock`, `crc`, `deque`, `duration`, `encoding`, `event`, `future`, `hash`, `heap`, `html`, `ini`, `iterator`, `lexer`, `markdown`, `metrics`, `mime`, `numeric`, `parser`, `pool` and `priority_queue`. `arena`, `ascii`, `backoff` and `binary` had already started growing beyond the original placeholder pattern but still need the same evidence gates.
 
-1. a clear abstraction and vocabulary;
-2. useful core operations;
-3. validation and defined failure behaviour;
-4. safe defaults;
-5. examples that show the normal path first;
-6. focused tests, including failure tests;
-7. benchmarks for performance-sensitive code;
-8. no fake aliases added only to increase line count.
-
-For broad modules 200+ lines is a useful warning threshold, not a goal by itself. Narrow modules may legitimately be smaller when the entire useful domain is covered.
-
-## Kid-tester session
-
-The kid tester tried to answer five questions for each module: “What is this?”, “How do I make one?”, “What is the first useful thing I can do?”, “What happens when I make a mistake?”, and “Can I copy a tiny example and change it?”
-
-### Friction found
-
-- Several module names existed but the files contained only a handful of generic helpers, so the file did not teach the abstraction it named.
-- Low-level names such as `checked_end` are useful to experienced systems programmers but need a surrounding story: capacity, allocation, marks, alignment and failure.
-- Safety behaviour was split between compile-time analysis and backend behaviour. A beginner should not need to know which backend they are using to understand whether `items[i]` is checked.
-- Pointer/null behaviour was not represented as explicit NIR operations, making the guarantee difficult to audit and optimise consistently.
-- “Fast” had benchmarks, but the repository did not yet have one evidence document connecting benchmark method, safety mode and claims.
-- The standard library catalogue was wide enough to look mature before every individual module was deep enough to feel mature.
-
-### Kid-tester suggestions
-
-1. Keep the first program tiny: values, conditions, loops, functions and collections should stay readable before introducing systems concepts.
-2. Teach one mental model per module. `arena` should teach “a cursor inside a capacity”; `backoff` should teach “attempt -> delay -> stop”; `ascii` should teach “one byte, one classification”.
-3. Put advanced power behind explicit words, not punctuation puzzles. Unsafe memory operations should eventually live inside `unsafe { ... }` while ordinary arrays/slices remain checked.
-4. Make runtime errors say the two numbers that matter. Bounds failures should include the index and length.
-5. Keep safe code short. A checked index should still be written `items[i]`, not `checked_get(items, i)` everywhere.
-6. Teach failures with runnable examples, not prose alone.
+The board unanimously rejects padding every module to 30 KB. Thirty kilobytes of aliases, duplicated wrappers or comments is not maturity. Broad modules should naturally become substantial as real behavior, tests and examples accumulate; narrow modules can legitimately be smaller when their useful domain is complete.
 
 ## Planning research
 
-The planning board compared two useful precedents:
+The planning seat compared the direction with established safety models:
 
-- Go keeps indexing syntax ordinary while specifying that out-of-range array/slice indices panic at runtime when they cannot be rejected statically. Nil pointer indirection also has defined failure behaviour.
-- Rust makes the boundary for operations requiring programmer proof explicit with `unsafe { ... }`, while keeping the borrow checker and other safety checks active around that boundary.
+- Rust makes programmer proof obligations visible with explicit `unsafe { ... }` boundaries instead of silently turning ordinary code into unchecked code.
+- Swift combines static language guarantees with runtime checking and keeps unsafe pointer facilities explicit for interop/low-level work.
+- Noqeri should keep ordinary indexing and application code compact while exposing low-level escape hatches deliberately.
 
-The board vote is to combine those ideas without copying either language wholesale: **ordinary Noqeri stays compact and checked; operations that cannot be made safe by the compiler get an explicit unsafe boundary; NIR carries checks explicitly so optimisation can remove checks only when it proves them redundant.**
+The adopted rule is: **ordinary Noqeri stays compact and checked; operations that bypass ordinary guarantees require an explicit unsafe boundary; NIR represents runtime checks explicitly so optimizers may remove a check only when they can prove it redundant.**
+
+## Kid-tester session
+
+The kid tester tried to answer five questions: “What is this?”, “How do I make one?”, “What is the first useful thing I can do?”, “What happens when I make a mistake?”, and “Can I change the example and predict the result?”
+
+### Friction found
+
+1. **Placeholder modules were misleading.** Four generic helpers made unrelated modules look finished without teaching the abstraction named by the file.
+2. **Storage ownership appears too early in low-level containers.** A beginner who asks for a deque first meets backing storage, pointers and capacity instead of `push` and `pop`.
+3. **Generic constraints are powerful but unexplained.** `Copy`, `Eq` and `Ord` should be introduced as plain-language capabilities before monomorphisation details.
+4. **Boolean failure is simple but can be opaque.** Low-level/freestanding APIs benefit from cheap `bool`/status results; application-level teaching should eventually layer descriptive result values where the reason matters.
+5. **Safety modes are hard to discover when they live only in environment variables or advanced docs.** Development-mode recipes should be obvious from CLI help and beginner documentation.
+6. **Advanced vocabulary arrives too early.** Borrow, ABI, aggregate and NIR belong after a learner can create a value, use it, and see one safe failure.
+7. **Performance wording can outrun evidence.** “Fast” needs a result bundle, not a benchmark filename.
+
+### Kid-tester design rule
+
+Teach features in this order:
+
+`create -> do one useful thing -> read result -> show one safe mistake -> explain representation/advanced controls`
+
+Normal APIs should prefer short verbs such as `push`, `pop`, `set`, `get`, `clear`, `add` and `contains`. Systems controls remain available, but should not be the first mental model a new user must learn.
 
 ## Board vote
 
@@ -65,95 +57,162 @@ The board vote is to combine those ideas without copying either language wholesa
 |---|---:|---:|---:|---:|---:|---:|---|
 | Inflate every std file to 30 KB | No | No | No | No | No | No | Rejected |
 | Deepen modules by real API coverage | Yes | Yes | Yes | Yes | Yes | Yes | Adopted |
-| Bounds checks for dynamic slice/fixed-array indices | Yes | Yes | Yes | Yes | Yes | Yes | Adopted |
-| Runtime null checks before dereference | Yes | Yes | Yes | Yes | Yes | Yes | Adopted |
-| Explicit NIR safety operations | Yes | Neutral | Yes | Yes | Yes | Yes | Adopted |
-| Optional checked-overflow execution | Yes | Yes | Yes | Yes | Yes | Yes | Adopted |
-| Explicit `unsafe {}` syntax | Yes | Yes | Yes | Yes | Yes | Yes | Approved, compiler enforcement remains a gated follow-up |
-| Aggregate/interprocedural borrow summaries | Yes | Neutral | Yes | Yes | Yes | Yes | Approved, staged implementation required |
-| Publish performance claims without measurements | No | No | No | No | No | No | Rejected |
+| Runtime bounds checks for dynamic safe indices | Yes | Yes | Yes | Yes | Yes | Yes | Implemented; regression-gated |
+| Runtime null checks on checked raw access paths | Yes | Yes | Yes | Yes | Yes | Yes | Implemented; regression-gated |
+| Explicit `unsafe {}` around raw pointer operations | Yes | Yes | Yes | Yes | Yes | Yes | Implemented; regression-gated |
+| Aggregate/field-sensitive borrow tracking | Yes | Neutral | Yes | Yes | Yes | Yes | Implemented; expanded negative tests added |
+| Interprocedural borrow summaries | Yes | Neutral | Yes | Yes | Yes | Yes | Implemented; expanded negative tests added |
+| Checked-overflow execution mode | Yes | Yes | Yes | Yes | Yes | Yes | Implemented; regression-gated |
+| Publish unmeasured speed claims | No | No | No | No | No | No | Rejected |
 
-## Implemented in this tranche
+## Safety implementation audit
 
-- Added explicit NIR `CheckBounds` and `CheckNonNull` operations.
-- Lowered slice and fixed-bound indexing through runtime bounds checks in the reference execution pipeline when the compiler cannot simply rely on a literal/static rejection.
-- Lowered raw pointer/slice access through runtime null checks in the reference execution pipeline.
-- Added `NOQERI_CHECKED_OVERFLOW=1` to the reference interpreter. In that mode integer add/subtract/multiply/divide/negate overflow traps instead of silently continuing. Default integer execution is implemented with defined wrapping arithmetic rather than C++ signed-overflow undefined behaviour.
-- Deepened `std/ascii`, `std/arena` and `std/backoff` from placeholder-style helper files into cohesive modules.
+The requested safety work was not starting from zero. The current compiler already contains the mechanisms below, so this tranche strengthens evidence rather than creating duplicate systems.
 
-## Safety staging
+### Dynamic bounds checks
 
-The board does **not** call the following complete yet:
+The NIR/reference execution path contains explicit `CheckBounds` operations. Dynamic fixed-array/slice accesses are checked when they cannot be rejected statically. The safety test suite includes both a valid dynamic index and an out-of-range runtime failure, and inspects emitted NIR for `check_bounds`.
+
+### Runtime null checks
+
+The reference execution path contains explicit `CheckNonNull` operations and negative runtime coverage for null raw-pointer indexing. Compile-time lifetime analysis also rejects provably null dereference/index cases where possible.
 
 ### Explicit unsafe blocks
 
-The target surface is deliberately small:
+Raw-pointer indexing that bypasses ordinary safe guarantees is rejected outside `unsafe { ... }`. The safety suite contains a negative program without the block and a positive program using the explicit boundary.
 
-```noqeri
-unsafe {
-    *device_register = value
-}
-```
+`unsafe` is an escape hatch, not a switch that makes the rest of the compiler stop checking. Low-level implementation code should keep unsafe regions as small as practical and expose checked abstractions to normal callers.
 
-Safe code should not need `unsafe` for ordinary indexing, slices, records, strings, collections or FFI wrappers that expose a checked API. Raw pointer dereference, unchecked pointer arithmetic, volatile/raw device access and inline assembly are candidate unsafe operations. Parser support and enforcement must land together with migration of internal low-level code; adding a decorative keyword that does not enforce anything is not acceptable.
+### Aggregate and interprocedural borrowing
 
-### Full aggregate/interprocedural borrow analysis
+`Compiler/lifetime.cpp` maintains function summaries for returned/escaping parameter borrows and tracks aggregate field paths. Summary computation iterates to a fixpoint rather than treating every call as opaque.
 
-Current lifetime analysis already catches several local dangling/null/fixed-bound cases. The next maturity gate is function summaries containing at least:
+This tranche adds negative test contracts for:
 
-- which parameters can escape through the return value;
-- which parameters can escape into aggregates or longer-lived storage;
-- which aggregate fields contain borrows and their provenance;
-- invalidation after scope end or mutation;
-- call-site checking using summaries rather than treating a call as opaque;
-- conservative recursion/fixpoint handling;
-- diagnostics that name the value, field, call and lifetime that conflict.
+- an aggregate field retaining a borrow after the borrowed local leaves scope;
+- a helper function storing a caller-local borrow through a parameter, requiring interprocedural escape information at the call site.
 
-This must be tested before it is advertised as “full”.
+These tests strengthen the claim, but the project should still avoid saying “complete Rust-equivalent borrow checker” until broader aliasing, mutation, recursion and backend matrices have been demonstrated.
 
-## Standard-library depth queue
+### Checked overflow
 
-Priority A: `binary`, `bitset`, `bloom`, `cache`, `deque`, `heap`, `priority_queue`, `parser`, `lexer`, `encoding`.
+The reference interpreter supports `NOQERI_CHECKED_OVERFLOW=1`. In this mode overflowing integer arithmetic traps; default execution remains separately defined. The safety suite contains a negative i64 overflow test under checked mode.
 
-Priority B: `calendar`, `clock`, `duration`, `event`, `future`, `channel`, `pool`, `iterator`, `numeric`, `metrics`.
+## Foundational standard-library tranche
 
-Priority C: format/domain modules such as `html`, `markdown`, `mime`, `ini`, plus specialist checksum/hash wrappers.
+Five placeholder-shaped modules were replaced with real caller-owned structures on `main`.
 
-Each module exits the queue only with API tests and at least one real example. Modules involving cryptography, concurrency, parsing or networking require stricter adversarial tests than pure arithmetic helpers.
+### `std/bitset`
 
-## Performance evidence policy
+Implemented initialization/invariants, indexed test/set/clear/toggle, ranges, counts, first/last/next/previous scans, rank/select, equality/subset/intersection checks, union/intersection/difference/xor/not, shifts, byte import/export, density and Hamming distance.
 
-Every performance claim must record:
+### `std/bloom`
 
-- commit SHA;
-- compiler/build profile;
-- target OS/architecture;
-- CPU where available;
-- checked-overflow and other safety modes;
-- warmup count;
-- sample count;
-- median plus a tail statistic;
-- benchmark source file;
+Implemented configurable caller-owned storage, deterministic byte/u64 hashing, insertion/query, fill/saturation metrics, serialization helpers, union/intersection and sizing/hash-count guidance.
+
+### `std/deque`
+
+Implemented a generic fixed-capacity ring deque with front/back references and values, push/pop at both ends, rotation, reverse/swap, search/count, indexed removal, truncation/drop operations, bulk push/copy and invariant checks.
+
+### `std/heap`
+
+Implemented generic min/max binary heap behavior: push/pop, peek, sifts, heap build, root replacement, push-pop, update/remove, validation, bulk insertion, copy and sorted draining.
+
+### `std/priority_queue`
+
+Implemented a stable generic priority queue using caller-owned value/priority/sequence storage. Equal priorities preserve insertion order; the module supports push/pop, priority update, removal/search, bulk insertion, draining and invariant validation.
+
+Compatibility helpers matching the previous placeholder names remain temporarily so existing source does not break merely because the module became real. They are compatibility surface, not the primary API.
+
+## Test contract for the new structures
+
+`tests/stdlib_structures.nqr` imports all five public modules and exercises multi-operation behavior rather than copying algorithms into the test fixture. It covers boundaries and invariants such as bitset out-of-range rejection, Bloom add/query/reset behavior, deque ordering/rotation, heap ordering/update, and stable priority-queue ordering.
+
+The repository test command already runs `noqeri test tests`, so the new fixture joins the normal test discovery path.
+
+**Important evidence state:** the fixture is checked in, but this review environment could not obtain a local GitHub checkout because outbound DNS/network cloning was unavailable. Therefore this document records the new suite as a **test contract**, not a passed local result. A release may promote it to `verified` only after executing the suite on that release configuration.
+
+## Performance evidence
+
+`Benchmarks/suite.json` now has explicit evidence states and foundational-structure workload IDs for bitset, Bloom filter, deque, heap and priority queue. `Benchmarks/structures.nqr` provides a repeated mixed-operation workload for those structures.
+
+Those entries are deliberately marked `unmeasured`. No timing numbers were invented. The existing performance gate already refuses to report a passing comparison when result IDs are not comparable.
+
+Every future measured result should include:
+
+- source commit SHA;
+- backend and target;
+- compiler/build profile and flags;
+- OS/CPU where available;
+- safety and overflow modes;
 - input size;
-- whether the result is interpreter, native or web backend;
-- comparison baseline, if a comparison is claimed.
+- warmup/sample counts;
+- raw samples;
+- median and p95 (or another documented tail statistic);
+- memory/binary-size metrics where relevant;
+- exact benchmark fixture and baseline revision.
 
-Bounds/null checks are explicit NIR instructions so later optimisation can eliminate a check only with a proof (for example, a dominating range check or statically known index). The benchmark suite should measure checked code before and after elimination rather than disabling safety globally to win a chart.
+## Ecosystem/registry gate
 
-## Marketing language allowed today
+The registry quality policy now defines a deep-module contract. Foundational structures must demonstrate real state/algorithms, invariants, normal and failure paths, imported behavior tests, ownership/safety notes, teaching examples and performance fixtures when performance-sensitive.
 
-Allowed: “Noqeri is adding explicit runtime safety checks to the reference execution pipeline and a reproducible performance-evidence process.”
+A module containing only `len`, `is_empty`, `first` and `last` cannot qualify as deep regardless of metadata or file size.
 
-Not yet allowed: “all backends are memory safe”, “zero-cost bounds checks”, “full borrow checker”, “Rust-equivalent safety”, or any fixed speedup percentage without corresponding evidence.
+The registry also distinguishes `unmeasured`, `measured-local`, `measured-release` and `regression-gated` performance evidence so package/site metadata cannot silently convert an expectation into a benchmark claim.
+
+## Website evidence policy
+
+The website quality board and machine-readable policy distinguish:
+
+- `planned`;
+- `implemented`;
+- `test-contract`;
+- `verified`;
+- `measured`;
+- `regression-gated`.
+
+The site should never promote `implemented` or `test-contract` to `verified` merely because source or a fixture exists.
+
+## Remaining standard-library depth queue
+
+This tranche is deliberately not the entire catalog.
+
+**Priority A next:** `binary`, `cache`, `parser`, `lexer`, `encoding`, `numeric`.
+
+**Priority B:** `calendar`, `clock`, `duration`, `event`, `future`, `channel`, `pool`, `iterator`, `metrics`.
+
+**Priority C:** `crc`, `hash`, `html`, `markdown`, `mime`, `ini` and other specialist/domain modules.
+
+Each module exits the queue only with real API depth, imported behavioral tests, documented failure semantics, a beginner-facing normal path, and benchmark/security evidence when its domain demands it.
+
+## Marketing language allowed now
+
+Allowed:
+
+- “Noqeri’s reference execution pipeline contains explicit dynamic bounds and null checks.”
+- “Raw-pointer operations require explicit unsafe boundaries in checked source.”
+- “The lifetime pass contains aggregate field-path tracking and interprocedural summaries.”
+- “The foundational bitset/Bloom/deque/heap/priority-queue modules now have substantive implementations and checked-in behavior tests.”
+- “New structure benchmarks are registered as unmeasured until result bundles exist.”
+
+Not allowed without stronger evidence:
+
+- “all backends are memory safe”;
+- “full Rust-class borrow safety”;
+- “zero-cost checks”;
+- “all standard-library modules are mature”;
+- “every module exceeds 30 KB”;
+- any fixed faster-than percentage versus C/C++/Rust/Zig/Go without a reproducible result bundle.
 
 ## Release gate
 
-A safety/performance tranche can be called complete only when:
+A safety/performance/library tranche can be promoted from implementation to verified only when:
 
-1. compiler builds cleanly with warnings-as-errors on a supported host;
-2. positive language tests pass;
-3. OOB/null/overflow negative tests fail in the expected way;
-4. native and web backends either implement the new NIR checks or explicitly reject unsupported checked NIR instead of silently dropping it;
-5. std modules touched in the tranche pass focused tests;
-6. benchmark output records the metadata above;
-7. documentation and website claims match what testing actually proved.
+1. the compiler builds cleanly on a supported host;
+2. positive language and imported module tests pass;
+3. OOB/null/overflow/unsafe/borrow negative tests fail for the expected reason;
+4. native/web backends either preserve the stated guarantee or explicitly report unsupported behavior;
+5. touched modules pass focused multi-operation tests;
+6. performance-sensitive changes have fixtures, and measured claims have complete environment/raw-sample metadata;
+7. website and registry evidence states match the actual results;
+8. no source-size or line-count metric is substituted for behavior.

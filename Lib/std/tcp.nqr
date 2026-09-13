@@ -1,5 +1,47 @@
 module noqeri.std.tcp
 
-export function tcp_valid_port(port:u32):bool{return port>0 as u32&&port<=65535 as u32}
-export function tcp_default_backlog():int{return 128}
-export function tcp_is_ephemeral_port(port:u32):bool{return port>=49152 as u32&&port<=65535 as u32}
+extern function tcpConnect(host: string, port: u32, timeoutMillis: i64): isize
+extern function tcpListen(address: string, port: u32, backlog: int): isize
+extern function tcpAccept(listener: usize): isize
+extern function tcpRead(socket: usize, data: *u8, count: usize): isize
+extern function tcpWrite(socket: usize, data: *u8, count: usize): isize
+extern function tcpShutdown(socket: usize, direction: int): isize
+extern function tcpClose(socket: usize): void
+
+export function tcp_valid_port(port: u32): bool { return port > 0 as u32 && port <= 65535 as u32 }
+export function tcp_default_backlog(): int { return 128 }
+export function tcp_default_timeout_millis(): i64 { return 30000 as i64 }
+export function tcp_is_ephemeral_port(port: u32): bool { return port >= 49152 as u32 && port <= 65535 as u32 }
+export function tcp_handle_valid(handle: isize): bool { return handle >= 0 as isize }
+export function tcp_shutdown_read(): int { return 0 }
+export function tcp_shutdown_write(): int { return 1 }
+export function tcp_shutdown_both(): int { return 2 }
+
+export function tcp_connect(host: string, port: u32, timeoutMillis: i64): isize {
+    if textLength(host) == 0 as usize || !tcp_valid_port(port) { return -2 as isize }
+    if timeoutMillis < 0 as i64 { return -3 as isize }
+    return tcpConnect(host, port, timeoutMillis)
+}
+
+export function tcp_listen(address: string, port: u32, backlog: int): isize {
+    if !tcp_valid_port(port) || backlog <= 0 { return -2 as isize }
+    return tcpListen(address, port, backlog)
+}
+
+export function tcp_accept(listener: usize): isize { return tcpAccept(listener) }
+export function tcp_read(socket: usize, buffer: []u8): isize { if len(buffer) == 0 as usize { return 0 as isize } return tcpRead(socket, &buffer[0 as usize], len(buffer)) }
+export function tcp_write(socket: usize, buffer: []u8): isize { if len(buffer) == 0 as usize { return 0 as isize } return tcpWrite(socket, &buffer[0 as usize], len(buffer)) }
+
+export function tcp_write_all(socket: usize, buffer: []u8): isize {
+    let offset: usize = 0 as usize
+    while offset < len(buffer) {
+        let wrote: isize = tcpWrite(socket, &buffer[offset], len(buffer) - offset)
+        if wrote < 0 as isize { return wrote }
+        if wrote == 0 as isize { return -4 as isize }
+        offset = offset + wrote as usize
+    }
+    return offset as isize
+}
+
+export function tcp_shutdown(socket: usize, direction: int): isize { if direction < 0 || direction > 2 { return -2 as isize } return tcpShutdown(socket, direction) }
+export function tcp_close(socket: usize): void { tcpClose(socket) }

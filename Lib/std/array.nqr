@@ -2,5 +2,46 @@ module noqeri.std.array
 
 export function array_len<T>(items: []T): usize { return len(items) }
 export function array_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
+
+// Compatibility helpers. Prefer *_or / *_checked when the input may be empty.
 export function array_first<T>(items: []T): T { return items[0] }
 export function array_last<T>(items: []T): T { return items[len(items)-1] }
+
+export function array_index_valid<T>(items: []T, index: usize): bool { return index < len(items) }
+export function array_get_or<T>(items: []T, index: usize, fallback: T): T { if index >= len(items) { return fallback } return items[index] }
+export function array_first_or<T>(items: []T, fallback: T): T { if len(items) == 0 as usize { return fallback } return items[0] }
+export function array_last_or<T>(items: []T, fallback: T): T { if len(items) == 0 as usize { return fallback } return items[len(items) - 1 as usize] }
+export function array_set_checked<T>(items: []T, index: usize, value: T): bool { if index >= len(items) { return false } items[index] = value return true }
+
+export function array_contains<T: Eq>(items: []T, value: T): bool {
+    let index: usize = 0 as usize
+    while index < len(items) { if items[index] == value { return true } index = index + 1 as usize }
+    return false
+}
+
+export function array_index_of<T: Eq>(items: []T, value: T): isize {
+    let index: usize = 0 as usize
+    while index < len(items) { if items[index] == value { return index as isize } index = index + 1 as usize }
+    return -1 as isize
+}
+
+export function array_copy<T>(source: []T, destination: []T): usize {
+    let count: usize = len(source)
+    if len(destination) < count { count = len(destination) }
+    let index: usize = 0 as usize
+    while index < count { destination[index] = source[index] index = index + 1 as usize }
+    return count
+}
+
+export function array_reverse<T>(items: []T): void {
+    if len(items) < 2 as usize { return }
+    let left: usize = 0 as usize
+    let right: usize = len(items) - 1 as usize
+    while left < right {
+        let temporary: T = items[left]
+        items[left] = items[right]
+        items[right] = temporary
+        left = left + 1 as usize
+        right = right - 1 as usize
+    }
+}

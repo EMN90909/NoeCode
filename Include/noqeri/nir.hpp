@@ -16,11 +16,17 @@ enum class NirOp {
     Const,Load,Store,Unary,Binary,Cast,Call,
     AddressOf,LoadMemory,StoreMemory,PtrOffset,StackAlloc,
     MakeSlice,SliceData,SliceLen,
+    CheckNonNull,CheckBounds,
     AtomicLoad,AtomicStore,AtomicExchange,AtomicCompareExchange,AtomicFence,
     Intrinsic,InlineAsm,Try,Throw,
     Jump,JumpIfFalse,Return,Nop
 };
 
+// CheckNonNull: args[0] is a pointer/slice descriptor and execution traps if it is null.
+// CheckBounds: args[0] is a signed index and args[1] is a length; execution traps when
+//              index < 0 or index >= length. These operations are explicit in NIR so
+//              optimizers can later prove and remove redundant checks without weakening
+//              the source-language safety contract.
 struct NirInstruction { NirOp op=NirOp::Nop; std::optional<Reg> dest; Type type{}; std::string text; NirValue literal; std::vector<Reg> args; std::size_t target=0; std::size_t width=8; bool isVolatile=false; };
 struct NirBasicBlock { BlockId id=0; std::size_t begin=0; std::size_t end=0; std::vector<BlockId> successors; };
 struct NirFunction {

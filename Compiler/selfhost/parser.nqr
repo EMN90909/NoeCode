@@ -4,11 +4,23 @@ import "syntax.nqr"
 import "imports.nqr"
 import "ast.nqr"
 
+record NqParserCursor {
+    offset: usize
+    declarations: usize
+    errors: usize
+}
+
 export function nqParseOk(): isize { return 0 }
 export function nqParseUnexpected(): isize { return -100 }
 export function nqParseBadImport(): isize { return -101 }
 export function nqParseBadDeclaration(): isize { return -102 }
 export function nqParseEmpty(): isize { return -103 }
+export function nqParseBadType(): isize { return -104 }
+export function nqParseBadGeneric(): isize { return -105 }
+export function nqParseBadFunction(): isize { return -106 }
+export function nqParseBadRecord(): isize { return -107 }
+
+export function nqParserCursorInit(cursor: *NqParserCursor): void { cursor.offset = 0 as usize cursor.declarations = 0 as usize cursor.errors = 0 as usize }
 
 export function nqParserKeywordAt(source: []u8, start: usize, word: []u8): bool {
     if start + len(word) > len(source) { return false }
@@ -18,7 +30,89 @@ export function nqParserKeywordAt(source: []u8, start: usize, word: []u8): bool 
     if start + len(word) < len(source) && nqCompilerIsIdentifierContinue(source[start + len(word)]) { return false }
     return true
 }
+
 export function nqParserFindStringEnd(source: []u8, quote: usize): usize { if quote >= len(source) || source[quote] != 34 as u8 { return quote } return nqCompilerScanString(source, quote) }
+
+export function nqParserScanQualifiedName(source: []u8, start: usize): usize {
+    let index: usize = nqCompilerSkipTrivia(source, start)
+    let next: usize = nqCompilerScanIdentifier(source, index)
+    if next == index { return start }
+    index = next
+    while index < len(source) && source[index] == 46 as u8 {
+        let part: usize = nqCompilerScanIdentifier(source, index + 1 as usize)
+        if part == index + 1 as usize { return start }
+        index = part
+    }
+    return index
+}
+
+function nqParserScanIntegerToken(source: []u8, start: usize): usize {
+    let index: usize = nqCompilerSkipTrivia(source, start)
+    if index >= len(source) || !nqCompilerIsDigit(source[index]) { return start }
+    if index + 2 as usize <= len(source) && source[index] == 48 as u8 && index + 1 as usize < len(source) && (source[index + 1 as usize] == 120 as u8 || source[index + 1 as usize] == 88 as u8) {
+        let cursor: usize = index + 2 as usize
+        let digits: usize = 0 as usize
+        while cursor < len(source) {
+            let c: u8 = source[cursor]
+            let hex: bool = nqCompilerIsDigit(c) || (c >= 65 as u8 && c <= 70 as u8) || (c >= 97 as u8 && c <= 102 as u8)
+            if !hex { if digits == 0 as usize { return start } return cursor }
+            digits = digits + 1 as usize
+            cursor = cursor + 1 as usize
+        }
+        if digits == 0 as usize { return start }
+        return cursor
+    }
+    return nqCompilerScanNumber(source, index)
+}
+
+// Returns the first byte after a valid type, or start when the type is invalid.
+// Supports *T, *volatile T, []T, [T; N], qualified names and generic applications.
+export function nqParserScanType(source: []u8, start: usize): usize {
+    let index: usize = nqCompilerSkipTrivia(source, start)
+    if index >= len(source) { return start }
+    if source[index] == 42 as u8 {
+        index = nqCompilerSkipTrivia(source, index + 1 as usize)
+        if nqParserKeywordAt(source, index, slice([118 as u8,111 as u8,108 as u8,97 as u8,116 as u8,105 as u8,108 as u8,101 as u8])) { index = nqCompilerSkipTrivia(source, index + 8 as usize) }
+        return nqParserScanType(source, index)
+    }
+    if source[index] == 91 as u8 {
+        if index + 1 as usize < len(source) && source[index + 1 as usize] == 93 as u8 { return nqParserScanType(source, index + 2 as usize) }
+        let elementEnd: usize = nqParserScanType(source, index + 1 as usize)
+        if elementEnd <= index + 1 as usize { return start }
+        let cursor: usize = nqCompilerSkipTrivia(source, elementEnd)
+        if cursor >= len(source) || source[cursor] != 59 as u8 { return start }
+        let countEnd: usize = nqParserScanIntegerToken(source, cursor + 1 as usize)
+        if countEnd <= cursor + 1 as usize { return start }
+        let close: usize = nqCompilerSkipTrivia(source, countEnd)
+        if close >= len(source) || source[close] != 93 as u8 { return start }
+        return close + 1 as usize
+    }
+    let nameEnd: usize = nqParserScanQualifiedName(source, index)
+    if nameEnd <= index { return start }
+    index = nqCompilerSkipTrivia(source, nameEnd)
+    if index < len(source) && source[index] == 60 as u8 {
+        index = nqCompilerSkipTrivia(source, index + 1 as usize)
+        let argumentEnd: usize = nqParserScanType(source, index)
+        if argumentEnd <= index { return start }
+        index = nqCompilerSkipTrivia(source, argumentEnd)
+        while index < len(source) && source[index] == 44 as u8 {
+            index = nqCompilerSkipTrivia(source, index + 1 as usize)
+            let nextArgument: usize = nqParserScanType(source, index)
+            if nextArgument <= index { return start }
+            index = nqCompilerSkipTrivia(source, nextArgument)
+        }
+        if index >= len(source) || source[index] != 62 as u8 { return start }
+        return index + 1 as usize
+    }
+    return nameEnd
+}
+
+export function nqParserTypeValid(source: []u8): bool {
+    let start: usize = nqCompilerSkipTrivia(source, 0 as usize)
+    let end: usize = nqParserScanType(source, start)
+    return end > start && nqCompilerSkipTrivia(source, end) == len(source)
+}
+
 export function nqParserPackageImportValid(source: []u8, start: usize): bool {
     let index: usize = nqCompilerSkipTrivia(source, start)
     if !nqParserKeywordAt(source, index, slice([105 as u8,109 as u8,112 as u8,111 as u8,114 as u8,116 as u8])) { return false }
@@ -29,12 +123,55 @@ export function nqParserPackageImportValid(source: []u8, start: usize): bool {
     let end: usize = nqParserFindStringEnd(source, index)
     return end > index + 2 as usize && end <= len(source)
 }
+
+export function nqParserDeclarationTagAt(source: []u8, start: usize): int {
+    let index: usize = nqCompilerSkipTrivia(source, start)
+    if nqParserKeywordAt(source, index, slice([109 as u8,111 as u8,100 as u8,117 as u8,108 as u8,101 as u8])) { return nqAstModule() }
+    if nqParserKeywordAt(source, index, slice([105 as u8,109 as u8,112 as u8,111 as u8,114 as u8,116 as u8])) { return nqAstImport() }
+    if nqParserKeywordAt(source, index, slice([101 as u8,120 as u8,112 as u8,111 as u8,114 as u8,116 as u8])) { index = nqCompilerSkipTrivia(source, index + 6 as usize) }
+    if nqParserKeywordAt(source, index, slice([101 as u8,120 as u8,116 as u8,101 as u8,114 as u8,110 as u8])) { index = nqCompilerSkipTrivia(source, index + 6 as usize) }
+    if nqParserKeywordAt(source, index, slice([102 as u8,117 as u8,110 as u8,99 as u8,116 as u8,105 as u8,111 as u8,110 as u8])) { return nqAstFunction() }
+    if nqParserKeywordAt(source, index, slice([114 as u8,101 as u8,99 as u8,111 as u8,114 as u8,100 as u8])) { return nqAstRecord() }
+    if nqParserKeywordAt(source, index, slice([108 as u8,101 as u8,116 as u8])) || nqParserKeywordAt(source, index, slice([99 as u8,111 as u8,110 as u8,115 as u8,116 as u8])) { return nqAstBinding() }
+    return nqAstInvalid()
+}
+
+// Allocation-free top-level inventory used by Stage 2 before AST arena lowering.
+export function nqParserTopLevelDeclarationCount(source: []u8): usize {
+    let count: usize = 0 as usize
+    let index: usize = nqCompilerSkipTrivia(source, 0 as usize)
+    let braces: int = 0
+    while index < len(source) {
+        let c: u8 = source[index]
+        if c == 34 as u8 { index = nqCompilerScanString(source, index) }
+        else if c == 123 as u8 { braces = braces + 1 index = index + 1 as usize }
+        else if c == 125 as u8 { braces = braces - 1 index = index + 1 as usize }
+        else {
+            if braces == 0 && nqParserDeclarationTagAt(source, index) != nqAstInvalid() { count = count + 1 as usize }
+            let next: usize = nqCompilerTokenEnd(source, index)
+            if next <= index { return count }
+            index = nqCompilerSkipTrivia(source, next)
+        }
+    }
+    return count
+}
+
 export function nqParserTopLevelSanity(source: []u8): isize {
     let structure: isize = nqCompilerSyntaxCheck(source)
     if structure < 0 { return structure }
     if nqCompilerTokenCount(source) == 0 as usize { return nqParseEmpty() }
     let index: usize = nqCompilerSkipTrivia(source, 0 as usize)
     if index >= len(source) { return nqParseEmpty() }
+    // Reject malformed package-import spelling early; local imports remain valid.
+    while index < len(source) {
+        if nqParserKeywordAt(source, index, slice([105 as u8,109 as u8,112 as u8,111 as u8,114 as u8,116 as u8])) {
+            let afterImport: usize = nqCompilerSkipTrivia(source, index + 6 as usize)
+            if nqParserKeywordAt(source, afterImport, slice([112 as u8,97 as u8,99 as u8,107 as u8,97 as u8,103 as u8,101 as u8])) && !nqParserPackageImportValid(source, index) { return nqParseBadImport() }
+        }
+        let next: usize = nqCompilerTokenEnd(source, index)
+        if next <= index { return nqParseUnexpected() }
+        index = nqCompilerSkipTrivia(source, next)
+    }
     return nqParseOk()
 }
 export function nqParserCheck(source: []u8): isize { return nqParserTopLevelSanity(source) }

@@ -1,0 +1,21 @@
+module corpus.embedded_control
+
+function safe_divide(value: int, divisor: int): int {
+    if divisor == 0 {
+        return 0
+    }
+    return value / divisor
+}
+
+function control_checksum(seed: int): int {
+    let value: int = seed
+    let round: int = 0
+    while round < 32 {
+        value = (value * 33 + round) % 65521
+        round = round + 1
+    }
+    return value
+}
+
+let normal: int = control_checksum(7)
+let guarded_error_path: int = safe_divide(normal, 0)

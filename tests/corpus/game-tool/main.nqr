@@ -1,0 +1,22 @@
+module corpus.game_tool
+
+function advance(position: int, velocity: int): int {
+    return position + velocity
+}
+
+function checked_score(value: int): int {
+    if value < 0 {
+        return -1
+    }
+    return value
+}
+
+let position: int = 0
+let tick: int = 0
+while tick < 10 {
+    position = advance(position, tick + 1)
+    tick = tick + 1
+}
+
+print(position)
+print(checked_score(-5))

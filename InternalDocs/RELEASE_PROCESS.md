@@ -12,7 +12,15 @@ Every gate is reported as one of: `passed`, `failed`, `unsupported`, or `not-run
 
 Before packaging, run the native/compiler test suite, practical project corpus, package compatibility checks, deterministic fuzz targets, checked-overflow tests, memory-sanitizer mode and race mode on platforms that support the relevant instrumentation. A sanitizer/race finding is triaged before release rather than hidden by retrying.
 
-The current race mode is ThreadSanitizer-backed. It improves concurrency evidence but is not yet the future Noqeri-native language-aware race detector.
+Run the current active practical corpus locally:
+
+```sh
+node Tools/corpus/run.mjs --noqeri=build/noqeri
+```
+
+A release advertised as satisfying the complete practical corpus must use `--require-complete`; pending application classes then fail the gate rather than being counted as passes.
+
+Noqeri now contains a language-owned race event/instrumentation model in `Compiler/selfhost/race.nqr` and a bounded Noqeri runtime race core in `Runtime/race.nqr`. Until the native instrumentation path is proven end-to-end on the release toolchain, `noqeri test --race` also relies on the ThreadSanitizer-backed host build as execution evidence. Do not describe the native detector as fully integrated merely because its compiler/runtime components exist.
 
 Run the dependency/security audit with advisory data available. `unknown` advisory status is not clean status. Follow `InternalDocs/SECURITY_RESPONSE.md` for embargoed vulnerabilities.
 
@@ -57,4 +65,4 @@ The tool never manufactures a signature or silently calls an unsigned release si
 
 After upload, download every public artifact through the user-facing distribution path and verify SHA-256 plus signature. Verify installer/archive startup on its named OS/architecture, `noqeri --version`, a first program, package install/offline path, and at least one real corpus project.
 
-Publish the manifest, checksums, signature, SBOM, source revision, supported-version statement, known limitations, performance methodology/results, and security contact together. A release becomes `stable` because these support obligations are met, not because its version string says stable.
+Publish the manifest, checksums, signature, SBOM, source revision, supported-version statement, known limitations, performance methodology/results, security contact, compatibility evidence and corpus evidence together. A release becomes `stable` because these support obligations are met, not because its version string says stable.

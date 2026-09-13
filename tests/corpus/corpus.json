@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "policy": {
+    "required_classes": ["cli", "web-server", "rest-api", "database-app", "websocket-server", "file-processor", "tcp-service", "gui-application", "game-tool", "embedded-application"],
+    "active_definition": "An active entry has non-skeletal source, expected behavior, executable local checks, a negative/error path, and an explicit supported target/profile.",
+    "release_rule": "Use --require-complete for a release intended to claim the full practical corpus. Pending classes are never counted as passing evidence."
+  },
+  "entries": [
+    {
+      "id": "deterministic-simulation",
+      "class": "game-tool",
+      "status": "active",
+      "path": "tests/corpus/game-tool",
+      "target": "x86_64-unknown-none",
+      "profile": "application",
+      "behavior": "Runs ten deterministic update ticks, prints final position 55, then exercises an invalid-score path and prints -1.",
+      "checks": [
+        {"name":"compile","args":["check","main.nqr"],"expect_exit":0},
+        {"name":"run-positive-and-negative","args":["run","main.nqr"],"expect_exit":0,"expect_stdout":"55\n-1\n"}
+      ]
+    },
+    {
+      "id": "bounded-freestanding-control",
+      "class": "embedded-application",
+      "status": "active",
+      "path": "tests/corpus/embedded-application",
+      "target": "x86_64-unknown-none",
+      "profile": "freestanding",
+      "behavior": "Compiles bounded fixed-iteration control logic with an explicit divide-by-zero-safe error path and no host imports, externs, dynamic allocation or IO.",
+      "source_policy": {"forbid":["extern function","import ","print(","alloc(","malloc("]},
+      "checks": [
+        {"name":"freestanding-check","args":["check"],"expect_exit":0,"expect_stdout_contains":"target=x86_64-unknown-none"}
+      ]
+    },
+    {"id":"cli","class":"cli","status":"pending","blocker":"The public reference runtime does not yet expose application argv, so an argument-parsing CLI would be simulated rather than real."},
+    {"id":"web-server","class":"web-server","status":"pending","blocker":"The reference desktop ABI has no HTTP listen/accept/respond service implementation yet."},
+    {"id":"rest-api","class":"rest-api","status":"pending","blocker":"Requires the real HTTP host boundary before request/JSON/status integration can be release evidence."},
+    {"id":"database-app","class":"database-app","status":"pending","blocker":"NoqeriDB has its own executable path, but the ordinary application runtime does not yet expose a persistent DB service for a real app corpus entry."},
+    {"id":"websocket-server","class":"websocket-server","status":"pending","blocker":"Requires real socket/HTTP upgrade host services rather than parser-only coverage."},
+    {"id":"file-processor","class":"file-processor","status":"pending","blocker":"The reference desktop ABI does not yet expose bounded filesystem read/write services to ordinary programs."},
+    {"id":"tcp-service","class":"tcp-service","status":"pending","blocker":"The reference desktop ABI does not yet expose listen/connect/read/write/timeout socket services."},
+    {"id":"gui-application","class":"gui-application","status":"pending","blocker":"A supported GUI host adapter with event/input/render services is not yet part of the release runtime."}
+  ]
+}

@@ -1,5 +1,60 @@
 module noqeri.std.http
 
+unsafe extern function httpHostRequest(method: string, url: string, body: string, timeoutMillis: i64): isize
+unsafe extern function httpHostStatus(handle: usize): int
+unsafe extern function httpHostBody(handle: usize): string
+unsafe extern function httpHostHeader(handle: usize, name: string): string
+unsafe extern function httpHostClose(handle: usize): void
+unsafe extern function httpHostServe(address: string, handlerSymbol: string): isize
+unsafe extern function httpHostServerClose(handle: usize): void
+
+record Response {
+    handle: usize
+    status: int
+    body: string
+}
+
 export function http_is_token_char(c:u8):bool{return c>32 as u8&&c<127 as u8&&c!=40 as u8&&c!=41 as u8&&c!=60 as u8&&c!=62 as u8&&c!=64 as u8&&c!=44 as u8&&c!=59 as u8&&c!=58 as u8&&c!=92 as u8&&c!=34 as u8&&c!=47 as u8&&c!=91 as u8&&c!=93 as u8&&c!=63 as u8&&c!=61 as u8&&c!=123 as u8&&c!=125 as u8}
 export function http_status_has_body(status:int):bool{return status!=204&&status!=304&&(status<100||status>=200)}
 export function http_status_is_success(status:int):bool{return status>=200&&status<300}
+export function http_status_valid(status:int):bool{return status>=100&&status<=599}
+export function default_timeout_millis():i64{return 30000 as i64}
+
+export function request(method:string,url:string,body:string,timeoutMillis:i64):Response {
+    if len(method)==0 as usize||len(url)==0 as usize||timeoutMillis<0 as i64 { throw 2 }
+    let raw:isize=0 as isize
+    unsafe { raw=httpHostRequest(method,url,body,timeoutMillis) }
+    if raw<0 as isize { throw (-raw) as int }
+    let handle:usize=raw as usize
+    let status:int=0
+    let responseBody:string=""
+    unsafe {
+        status=httpHostStatus(handle)
+        responseBody=httpHostBody(handle)
+    }
+    if !http_status_valid(status) { unsafe{httpHostClose(handle)} throw 3 }
+    return Response { handle:handle, status:status, body:responseBody }
+}
+
+export function get(url:string):Response { return request("GET",url,"",default_timeout_millis()) }
+export function get_timeout(url:string,timeoutMillis:i64):Response { return request("GET",url,"",timeoutMillis) }
+export function post(url:string,body:string):Response { return request("POST",url,body,default_timeout_millis()) }
+export function put(url:string,body:string):Response { return request("PUT",url,body,default_timeout_millis()) }
+export function delete(url:string):Response { return request("DELETE",url,"",default_timeout_millis()) }
+
+export function header(response:Response,name:string):string {
+    if response.handle==0 as usize||len(name)==0 as usize{return ""}
+    unsafe{return httpHostHeader(response.handle,name)}
+}
+
+export function close(response:Response):void {
+    if response.handle!=0 as usize { unsafe{httpHostClose(response.handle)} }
+}
+
+// handlerSymbol names an exported Noqeri request handler. Socket details remain a host concern.
+export function serve(address:string,handlerSymbol:string):isize {
+    if len(address)==0 as usize||len(handlerSymbol)==0 as usize{return -2 as isize}
+    unsafe{return httpHostServe(address,handlerSymbol)}
+}
+
+export function stop(server:usize):void { if server!=0 as usize{unsafe{httpHostServerClose(server)}} }

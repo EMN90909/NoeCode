@@ -1,21 +1,156 @@
 module noqeri.std.validation
 
-export function nqValidIndex(index: usize, count: usize): bool {
-    return index < count
+export function nqValidIndex(index: usize, count: usize): bool { return index < count }
+export function nqValidCapacity(count: usize, capacity: usize): bool { return count <= capacity }
+export function nqNonEmpty(count: usize): bool { return count > 0 as usize }
+export function nqPositiveI64(value: i64): bool { return value > 0 as i64 }
+export function nqNonNegativeI64(value: i64): bool { return value >= 0 as i64 }
+
+export function validation_is_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
+export function validation_is_lower(c: u8): bool { return c >= 97 as u8 && c <= 122 as u8 }
+export function validation_is_upper(c: u8): bool { return c >= 65 as u8 && c <= 90 as u8 }
+export function validation_is_alpha(c: u8): bool { return validation_is_lower(c) || validation_is_upper(c) }
+export function validation_is_alnum(c: u8): bool { return validation_is_alpha(c) || validation_is_digit(c) }
+export function validation_is_hex(c: u8): bool { return validation_is_digit(c) || (c >= 65 as u8 && c <= 70 as u8) || (c >= 97 as u8 && c <= 102 as u8) }
+export function validation_is_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
+export function validation_is_printable_ascii(c: u8): bool { return c >= 32 as u8 && c <= 126 as u8 }
+
+export function validation_ascii(text: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(text) { if text[i] > 127 as u8 { return false } i = i + 1 as usize }
+    return true
 }
 
-export function nqValidCapacity(count: usize, capacity: usize): bool {
-    return count <= capacity
+export function validation_printable_ascii(text: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(text) { if !validation_is_printable_ascii(text[i]) { return false } i = i + 1 as usize }
+    return true
 }
 
-export function nqNonEmpty(count: usize): bool {
-    return count > 0 as usize
+export function validation_identifier(text: []u8): bool {
+    if len(text) == 0 as usize { return false }
+    if !validation_is_alpha(text[0]) && text[0] != 95 as u8 { return false }
+    let i: usize = 1 as usize
+    while i < len(text) {
+        let c: u8 = text[i]
+        if !validation_is_alnum(c) && c != 95 as u8 { return false }
+        i = i + 1 as usize
+    }
+    return true
 }
 
-export function nqPositiveI64(value: i64): bool {
-    return value > 0 as i64
+export function validation_slug(text: []u8): bool {
+    if len(text) == 0 as usize { return false }
+    if text[0] == 45 as u8 || text[len(text) - 1 as usize] == 45 as u8 { return false }
+    let i: usize = 0 as usize
+    let previousDash: bool = false
+    while i < len(text) {
+        let c: u8 = text[i]
+        if validation_is_lower(c) || validation_is_digit(c) { previousDash = false }
+        else if c == 45 as u8 { if previousDash { return false } previousDash = true }
+        else { return false }
+        i = i + 1 as usize
+    }
+    return true
 }
 
-export function nqNonNegativeI64(value: i64): bool {
-    return value >= 0 as i64
+export function validation_hostname_label(text: []u8): bool {
+    if len(text) == 0 as usize || len(text) > 63 as usize { return false }
+    if text[0] == 45 as u8 || text[len(text) - 1 as usize] == 45 as u8 { return false }
+    let i: usize = 0 as usize
+    while i < len(text) {
+        let c: u8 = text[i]
+        if !validation_is_alnum(c) && c != 45 as u8 { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function validation_hostname(text: []u8): bool {
+    if len(text) == 0 as usize || len(text) > 253 as usize { return false }
+    let labelStart: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i <= len(text) {
+        if i == len(text) || text[i] == 46 as u8 {
+            let width: usize = i - labelStart
+            if width == 0 as usize || width > 63 as usize { return false }
+            if text[labelStart] == 45 as u8 || text[i - 1 as usize] == 45 as u8 { return false }
+            let j: usize = labelStart
+            while j < i { let c: u8 = text[j] if !validation_is_alnum(c) && c != 45 as u8 { return false } j = j + 1 as usize }
+            labelStart = i + 1 as usize
+        }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function validation_email_ascii(text: []u8): bool {
+    if len(text) < 3 as usize || len(text) > 254 as usize { return false }
+    let at: usize = len(text)
+    let i: usize = 0 as usize
+    while i < len(text) {
+        let c: u8 = text[i]
+        if c == 64 as u8 { if at != len(text) { return false } at = i }
+        else if !validation_is_alnum(c) && c != 46 as u8 && c != 95 as u8 && c != 45 as u8 && c != 43 as u8 { return false }
+        i = i + 1 as usize
+    }
+    if at == 0 as usize || at + 1 as usize >= len(text) { return false }
+    if text[0] == 46 as u8 || text[at - 1 as usize] == 46 as u8 { return false }
+    let dotAfter: bool = false
+    i = at + 1 as usize
+    while i < len(text) {
+        let c: u8 = text[i]
+        if c == 46 as u8 { if i == at + 1 as usize || i + 1 as usize == len(text) { return false } dotAfter = true }
+        else if !validation_is_alnum(c) && c != 45 as u8 { return false }
+        i = i + 1 as usize
+    }
+    return dotAfter
+}
+
+export function validation_u64_decimal(text: []u8): bool {
+    if len(text) == 0 as usize { return false }
+    let value: u64 = 0 as u64
+    let max: u64 = 18446744073709551615 as u64
+    let i: usize = 0 as usize
+    while i < len(text) {
+        let c: u8 = text[i]
+        if !validation_is_digit(c) { return false }
+        let digit: u64 = (c - 48 as u8) as u64
+        if value > (max - digit) / 10 as u64 { return false }
+        value = value * 10 as u64 + digit
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function validation_i64_decimal(text: []u8): bool {
+    if len(text) == 0 as usize { return false }
+    let start: usize = 0 as usize
+    if text[0] == 45 as u8 || text[0] == 43 as u8 { start = 1 as usize }
+    if start == len(text) { return false }
+    let i: usize = start
+    while i < len(text) { if !validation_is_digit(text[i]) { return false } i = i + 1 as usize }
+    return true
+}
+
+export function validation_length_between(text: []u8, minimum: usize, maximum: usize): bool {
+    if minimum > maximum { return false }
+    return len(text) >= minimum && len(text) <= maximum
+}
+
+export function validation_all_zero(data: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 as usize }
+    return true
+}
+
+export function validation_constant_time_equal(a: []u8, b: []u8): bool {
+    if len(a) != len(b) { return false }
+    let different: u8 = 0 as u8
+    let i: usize = 0 as usize
+    while i < len(a) {
+        if a[i] != b[i] { different = 1 as u8 }
+        i = i + 1 as usize
+    }
+    return different == 0 as u8
 }

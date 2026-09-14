@@ -1,6 +1,275 @@
 module noqeri.std.lexer
 
+// A compact allocation-free ASCII/UTF-8 byte lexer foundation. It does not
+// prescribe a language grammar: identifiers, numbers, strings and punctuation
+// are returned as spans into caller-owned source bytes.
+record LexToken {
+    kind: int
+    start: usize
+    length: usize
+    line: usize
+    column: usize
+}
+
+record Lexer {
+    data: *u8
+    length: usize
+    offset: usize
+    line: usize
+    column: usize
+    error_offset: usize
+    has_error: bool
+}
+
+export function lexer_token_eof(): int { return 0 }
+export function lexer_token_identifier(): int { return 1 }
+export function lexer_token_integer(): int { return 2 }
+export function lexer_token_float(): int { return 3 }
+export function lexer_token_string(): int { return 4 }
+export function lexer_token_punctuation(): int { return 5 }
+export function lexer_token_error(): int { return 6 }
+
 export function lexer_is_ascii_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
 export function lexer_is_ascii_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
 export function lexer_is_ascii_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
-export function lexer_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && lexer_is_ascii_space(value[i]) { i = i + 1 } return i }
+export function lexer_is_identifier_start(c: u8): bool { return lexer_is_ascii_alpha(c) || c == 95 as u8 || c >= 128 as u8 }
+export function lexer_is_identifier_continue(c: u8): bool { return lexer_is_identifier_start(c) || lexer_is_ascii_digit(c) }
+export function lexer_is_hex_digit(c: u8): bool { return lexer_is_ascii_digit(c) || (c >= 65 as u8 && c <= 70 as u8) || (c >= 97 as u8 && c <= 102 as u8) }
+
+export function lexer_trim_left_count(value: []u8): usize {
+    let i: usize = 0 as usize
+    while i < len(value) && lexer_is_ascii_space(value[i]) { i = i + 1 as usize }
+    return i
+}
+
+export function lexer_init(lexer: *Lexer, data: *u8, length: usize): bool {
+    if lexer == null { return false }
+    if length > 0 as usize && data == null { return false }
+    lexer.data = data
+    lexer.length = length
+    lexer.offset = 0 as usize
+    lexer.line = 1 as usize
+    lexer.column = 1 as usize
+    lexer.error_offset = 0 as usize
+    lexer.has_error = false
+    return true
+}
+
+export function lexer_done(lexer: *Lexer): bool {
+    return lexer == null || lexer.offset >= lexer.length
+}
+
+export function lexer_offset(lexer: *Lexer): usize {
+    if lexer == null { return 0 as usize }
+    return lexer.offset
+}
+
+export function lexer_line(lexer: *Lexer): usize {
+    if lexer == null { return 0 as usize }
+    return lexer.line
+}
+
+export function lexer_column(lexer: *Lexer): usize {
+    if lexer == null { return 0 as usize }
+    return lexer.column
+}
+
+export function lexer_has_error(lexer: *Lexer): bool { return lexer != null && lexer.has_error }
+
+export function lexer_peek(lexer: *Lexer, lookahead: usize, fallback: u8): u8 {
+    if lexer == null || lexer.data == null { return fallback }
+    if lookahead > lexer.length - lexer.offset { return fallback }
+    let index: usize = lexer.offset + lookahead
+    if index >= lexer.length { return fallback }
+    unsafe { return lexer.data[index] }
+}
+
+export function lexer_advance(lexer: *Lexer): u8 {
+    if lexer_done(lexer) || lexer.data == null { return 0 as u8 }
+    let c: u8 = 0 as u8
+    unsafe { c = lexer.data[lexer.offset] }
+    lexer.offset = lexer.offset + 1 as usize
+    if c == 10 as u8 {
+        lexer.line = lexer.line + 1 as usize
+        lexer.column = 1 as usize
+    } else {
+        lexer.column = lexer.column + 1 as usize
+    }
+    return c
+}
+
+export function lexer_skip_spaces(lexer: *Lexer): usize {
+    if lexer == null { return 0 as usize }
+    let start: usize = lexer.offset
+    while !lexer_done(lexer) && lexer_is_ascii_space(lexer_peek(lexer, 0 as usize, 0 as u8)) { lexer_advance(lexer) }
+    return lexer.offset - start
+}
+
+export function lexer_skip_line_comment(lexer: *Lexer): bool {
+    if lexer == null { return false }
+    if lexer_peek(lexer, 0 as usize, 0 as u8) != 47 as u8 || lexer_peek(lexer, 1 as usize, 0 as u8) != 47 as u8 { return false }
+    lexer_advance(lexer)
+    lexer_advance(lexer)
+    while !lexer_done(lexer) && lexer_peek(lexer, 0 as usize, 0 as u8) != 10 as u8 { lexer_advance(lexer) }
+    return true
+}
+
+export function lexer_skip_hash_comment(lexer: *Lexer): bool {
+    if lexer == null || lexer_peek(lexer, 0 as usize, 0 as u8) != 35 as u8 { return false }
+    while !lexer_done(lexer) && lexer_peek(lexer, 0 as usize, 0 as u8) != 10 as u8 { lexer_advance(lexer) }
+    return true
+}
+
+export function lexer_skip_ignored(lexer: *Lexer): usize {
+    if lexer == null { return 0 as usize }
+    let start: usize = lexer.offset
+    let again: bool = true
+    while again {
+        again = false
+        if lexer_skip_spaces(lexer) > 0 as usize { again = true }
+        if lexer_skip_line_comment(lexer) { again = true }
+        if lexer_skip_hash_comment(lexer) { again = true }
+    }
+    return lexer.offset - start
+}
+
+function lexer_set_token(token: *LexToken, kind: int, start: usize, length: usize, line: usize, column: usize): bool {
+    if token == null { return false }
+    token.kind = kind
+    token.start = start
+    token.length = length
+    token.line = line
+    token.column = column
+    return true
+}
+
+function lexer_scan_identifier(lexer: *Lexer, token: *LexToken, start: usize, line: usize, column: usize): bool {
+    lexer_advance(lexer)
+    while !lexer_done(lexer) && lexer_is_identifier_continue(lexer_peek(lexer, 0 as usize, 0 as u8)) { lexer_advance(lexer) }
+    return lexer_set_token(token, lexer_token_identifier(), start, lexer.offset - start, line, column)
+}
+
+function lexer_scan_number(lexer: *Lexer, token: *LexToken, start: usize, line: usize, column: usize): bool {
+    let kind: int = lexer_token_integer()
+    if lexer_peek(lexer, 0 as usize, 0 as u8) == 48 as u8 && (lexer_peek(lexer, 1 as usize, 0 as u8) == 120 as u8 || lexer_peek(lexer, 1 as usize, 0 as u8) == 88 as u8) {
+        lexer_advance(lexer)
+        lexer_advance(lexer)
+        while !lexer_done(lexer) && lexer_is_hex_digit(lexer_peek(lexer, 0 as usize, 0 as u8)) { lexer_advance(lexer) }
+        return lexer_set_token(token, kind, start, lexer.offset - start, line, column)
+    }
+    while !lexer_done(lexer) && lexer_is_ascii_digit(lexer_peek(lexer, 0 as usize, 0 as u8)) { lexer_advance(lexer) }
+    if lexer_peek(lexer, 0 as usize, 0 as u8) == 46 as u8 && lexer_is_ascii_digit(lexer_peek(lexer, 1 as usize, 0 as u8)) {
+        kind = lexer_token_float()
+        lexer_advance(lexer)
+        while !lexer_done(lexer) && lexer_is_ascii_digit(lexer_peek(lexer, 0 as usize, 0 as u8)) { lexer_advance(lexer) }
+    }
+    let exponent: u8 = lexer_peek(lexer, 0 as usize, 0 as u8)
+    if exponent == 101 as u8 || exponent == 69 as u8 {
+        let next: u8 = lexer_peek(lexer, 1 as usize, 0 as u8)
+        let digit_offset: usize = 1 as usize
+        if next == 43 as u8 || next == 45 as u8 { digit_offset = 2 as usize }
+        if lexer_is_ascii_digit(lexer_peek(lexer, digit_offset, 0 as u8)) {
+            kind = lexer_token_float()
+            lexer_advance(lexer)
+            if lexer_peek(lexer, 0 as usize, 0 as u8) == 43 as u8 || lexer_peek(lexer, 0 as usize, 0 as u8) == 45 as u8 { lexer_advance(lexer) }
+            while !lexer_done(lexer) && lexer_is_ascii_digit(lexer_peek(lexer, 0 as usize, 0 as u8)) { lexer_advance(lexer) }
+        }
+    }
+    return lexer_set_token(token, kind, start, lexer.offset - start, line, column)
+}
+
+function lexer_scan_string(lexer: *Lexer, token: *LexToken, start: usize, line: usize, column: usize): bool {
+    let quote: u8 = lexer_advance(lexer)
+    let escaped: bool = false
+    while !lexer_done(lexer) {
+        let c: u8 = lexer_advance(lexer)
+        if escaped {
+            escaped = false
+        } else {
+            if c == 92 as u8 { escaped = true }
+            else if c == quote { return lexer_set_token(token, lexer_token_string(), start, lexer.offset - start, line, column) }
+            else if c == 10 as u8 {
+                lexer.has_error = true
+                lexer.error_offset = lexer.offset - 1 as usize
+                return lexer_set_token(token, lexer_token_error(), start, lexer.offset - start, line, column)
+            }
+        }
+    }
+    lexer.has_error = true
+    lexer.error_offset = start
+    return lexer_set_token(token, lexer_token_error(), start, lexer.offset - start, line, column)
+}
+
+function lexer_punctuation_width(lexer: *Lexer): usize {
+    let a: u8 = lexer_peek(lexer, 0 as usize, 0 as u8)
+    let b: u8 = lexer_peek(lexer, 1 as usize, 0 as u8)
+    if (a == 61 as u8 && b == 61 as u8) || (a == 33 as u8 && b == 61 as u8) || (a == 60 as u8 && b == 61 as u8) || (a == 62 as u8 && b == 61 as u8) { return 2 as usize }
+    if (a == 38 as u8 && b == 38 as u8) || (a == 124 as u8 && b == 124 as u8) || (a == 45 as u8 && b == 62 as u8) { return 2 as usize }
+    if (a == 43 as u8 && b == 61 as u8) || (a == 45 as u8 && b == 61 as u8) || (a == 42 as u8 && b == 61 as u8) || (a == 47 as u8 && b == 61 as u8) { return 2 as usize }
+    return 1 as usize
+}
+
+export function lexer_next(lexer: *Lexer, token: *LexToken): bool {
+    if lexer == null || token == null { return false }
+    lexer_skip_ignored(lexer)
+    let start: usize = lexer.offset
+    let line: usize = lexer.line
+    let column: usize = lexer.column
+    if lexer_done(lexer) { return lexer_set_token(token, lexer_token_eof(), start, 0 as usize, line, column) }
+    let c: u8 = lexer_peek(lexer, 0 as usize, 0 as u8)
+    if lexer_is_identifier_start(c) { return lexer_scan_identifier(lexer, token, start, line, column) }
+    if lexer_is_ascii_digit(c) { return lexer_scan_number(lexer, token, start, line, column) }
+    if c == 34 as u8 || c == 39 as u8 { return lexer_scan_string(lexer, token, start, line, column) }
+    let width: usize = lexer_punctuation_width(lexer)
+    let i: usize = 0 as usize
+    while i < width { lexer_advance(lexer) i = i + 1 as usize }
+    return lexer_set_token(token, lexer_token_punctuation(), start, width, line, column)
+}
+
+export function lexer_token_equals_bytes(lexer: *Lexer, token: *LexToken, value: []u8): bool {
+    if lexer == null || token == null || lexer.data == null || token.length != len(value) { return false }
+    if token.start > lexer.length || token.length > lexer.length - token.start { return false }
+    let i: usize = 0 as usize
+    while i < token.length {
+        unsafe { if lexer.data[token.start + i] != value[i] { return false } }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function lexer_token_copy(lexer: *Lexer, token: *LexToken, out: []u8): usize {
+    if lexer == null || token == null || lexer.data == null { return 0 as usize }
+    if token.start > lexer.length || token.length > lexer.length - token.start { return 0 as usize }
+    let count: usize = token.length
+    if len(out) < count { count = len(out) }
+    let i: usize = 0 as usize
+    while i < count {
+        unsafe { out[i] = lexer.data[token.start + i] }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function lexer_count_tokens(lexer: *Lexer): usize {
+    if lexer == null { return 0 as usize }
+    let saved_offset: usize = lexer.offset
+    let saved_line: usize = lexer.line
+    let saved_column: usize = lexer.column
+    let saved_error: bool = lexer.has_error
+    let saved_error_offset: usize = lexer.error_offset
+    let token_bytes: [u8; 64] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let token: *LexToken = (&token_bytes[0 as usize]) as *LexToken
+    let count: usize = 0 as usize
+    let finished: bool = false
+    while !finished {
+        lexer_next(lexer, token)
+        if token.kind == lexer_token_eof() { finished = true }
+        else { count = count + 1 as usize }
+    }
+    lexer.offset = saved_offset
+    lexer.line = saved_line
+    lexer.column = saved_column
+    lexer.has_error = saved_error
+    lexer.error_offset = saved_error_offset
+    return count
+}

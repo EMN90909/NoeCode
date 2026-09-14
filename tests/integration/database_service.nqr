@@ -1,0 +1,31 @@
+import "../../Database/noqeridb.nqr"
+
+function require(ok: bool): void {
+    if !ok { print("ASSERT-FAIL") }
+}
+
+let keys: [i64; 4] = [0 as i64, 0 as i64, 0 as i64, 0 as i64]
+let values: [i64; 4] = [0 as i64, 0 as i64, 0 as i64, 0 as i64]
+let count: usize = 0 as usize
+
+let first: isize = dbInsertInt(&keys[0], &values[0], count, 4 as usize, 10 as i64, 100 as i64)
+require(first == 0 as isize)
+count = count + 1 as usize
+
+let second: isize = dbInsertInt(&keys[0], &values[0], count, 4 as usize, 20 as i64, 200 as i64)
+require(second == 1 as isize)
+count = count + 1 as usize
+
+require(dbInsertInt(&keys[0], &values[0], count, 4 as usize, 20 as i64, 999 as i64) < 0 as isize)
+require(dbUpdateInt(&keys[0], &values[0], count, 20 as i64, 250 as i64) >= 0 as isize)
+require(dbReadInt(&values[0], count, 1 as usize) == 250 as i64)
+require(dbContainsIntKey(&keys[0], count, 10 as i64))
+require(!dbContainsIntKey(&keys[0], count, 30 as i64))
+
+let remaining: isize = dbDeleteInt(&keys[0], &values[0], count, 10 as i64)
+require(remaining == 1 as isize)
+count = remaining as usize
+require(dbFindIntKey(&keys[0], count, 20 as i64) == 0 as isize)
+require(dbReadInt(&values[0], count, 0 as usize) == 250 as i64)
+
+print("database-service: ok")

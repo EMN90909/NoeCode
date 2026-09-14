@@ -1,0 +1,20 @@
+import "../../Lib/std/scheduler.nqr"
+
+function require(ok: bool): void {
+    if !ok { print("ASSERT-FAIL") }
+}
+
+require(scheduler_state_valid(scheduler_created()))
+require(scheduler_state_valid(scheduler_running()))
+require(scheduler_state_valid(scheduler_draining()))
+require(scheduler_state_valid(scheduler_stopped()))
+require(scheduler_state_valid(scheduler_failed()))
+require(!scheduler_state_valid(9))
+require(scheduler_can_transition(scheduler_created(), scheduler_running()))
+require(scheduler_can_transition(scheduler_running(), scheduler_draining()))
+require(scheduler_can_transition(scheduler_draining(), scheduler_stopped()))
+require(!scheduler_can_transition(scheduler_stopped(), scheduler_running()))
+require(scheduler_bounded_count(4 as usize, 8 as usize) == 4 as usize)
+require(scheduler_bounded_count(12 as usize, 8 as usize) == 8 as usize)
+
+print("concurrency-service: ok")

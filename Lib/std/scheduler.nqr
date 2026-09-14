@@ -1,6 +1,41 @@
 module noqeri.std.scheduler
 
-export function scheduler_state_valid(state: int): bool { return state >= 0 && state <= 4 }
-export function scheduler_can_transition(current: int, next: int): bool { if current < 0 || next < 0 { return false } return next >= current || next == 0 }
-export function scheduler_default_spin_limit(): usize { return 64 as usize }
-export function scheduler_bounded_count(count: usize, limit: usize): usize { if count > limit { return limit } return count }
+record CancellationToken { cancelled: u64 }
+record Scheduler { state: u64 submitted: u64 running: u64 completed: u64 failed: u64 cancelled: u64 maxInFlight: u64 spinLimit: u64 }
+record TaskGroup { open: u64 pending: u64 failed: u64 cancelled: u64 }
+
+export function scheduler_created():int{return 0}
+export function scheduler_running():int{return 1}
+export function scheduler_draining():int{return 2}
+export function scheduler_stopped():int{return 3}
+export function scheduler_failed():int{return 4}
+export function scheduler_state_valid(state:int):bool{return state>=0&&state<=4}
+export function scheduler_can_transition(current:int,next:int):bool{if !scheduler_state_valid(current)||!scheduler_state_valid(next){return false}if current==scheduler_created(){return next==scheduler_running()||next==scheduler_stopped()||next==scheduler_failed()}if current==scheduler_running(){return next==scheduler_draining()||next==scheduler_stopped()||next==scheduler_failed()}if current==scheduler_draining(){return next==scheduler_stopped()||next==scheduler_failed()}return false}
+export function scheduler_default_spin_limit():usize{return 64 as usize}
+export function scheduler_bounded_count(count:usize,limit:usize):usize{if count>limit{return limit}return count}
+
+export function scheduler_atomic_increment(value:*u64):u64{let current:u64=atomic.load(value) while true { let observed:u64=atomic.compareExchange(value,current,current+1 as u64) if observed==current{return current+1 as u64} current=observed } return current}
+export function scheduler_atomic_decrement_nonzero(value:*u64):bool{let current:u64=atomic.load(value) while current>0 as u64 { let observed:u64=atomic.compareExchange(value,current,current-1 as u64) if observed==current{return true} current=observed } return false}
+export function cancellation_init(token:*CancellationToken):bool{if token==null{return false}atomic.store(&token.cancelled,0 as u64)return true}
+export function cancellation_request(token:*CancellationToken):bool{if token==null{return false}return atomic.compareExchange(&token.cancelled,0 as u64,1 as u64)==0 as u64}
+export function cancellation_requested(token:*CancellationToken):bool{if token==null{return true}return atomic.load(&token.cancelled)!=0 as u64}
+
+export function scheduler_init(scheduler:*Scheduler,maxInFlight:u64):bool{if scheduler==null||maxInFlight==0 as u64{return false}atomic.store(&scheduler.state,scheduler_created()as u64)atomic.store(&scheduler.submitted,0 as u64)atomic.store(&scheduler.running,0 as u64)atomic.store(&scheduler.completed,0 as u64)atomic.store(&scheduler.failed,0 as u64)atomic.store(&scheduler.cancelled,0 as u64)scheduler.maxInFlight=maxInFlight scheduler.spinLimit=scheduler_default_spin_limit()as u64 return true}
+export function scheduler_start(scheduler:*Scheduler):bool{if scheduler==null{return false}return atomic.compareExchange(&scheduler.state,scheduler_created()as u64,scheduler_running()as u64)==scheduler_created()as u64}
+export function scheduler_state(scheduler:*Scheduler):int{if scheduler==null{return scheduler_failed()}return atomic.load(&scheduler.state)as int}
+export function scheduler_in_flight(scheduler:*Scheduler):u64{if scheduler==null{return 0 as u64}return atomic.load(&scheduler.running)}
+export function scheduler_try_submit(scheduler:*Scheduler):bool{if scheduler==null||scheduler_state(scheduler)!=scheduler_running(){return false}let observed:u64=atomic.load(&scheduler.running)while observed<scheduler.maxInFlight{let previous:u64=atomic.compareExchange(&scheduler.running,observed,observed+1 as u64)if previous==observed{scheduler_atomic_increment(&scheduler.submitted)return true}observed=previous}return false}
+export function scheduler_complete(scheduler:*Scheduler):bool{if scheduler==null||!scheduler_atomic_decrement_nonzero(&scheduler.running){return false}scheduler_atomic_increment(&scheduler.completed)return true}
+export function scheduler_fail_task(scheduler:*Scheduler):bool{if scheduler==null||!scheduler_atomic_decrement_nonzero(&scheduler.running){return false}scheduler_atomic_increment(&scheduler.failed)return true}
+export function scheduler_cancel_task(scheduler:*Scheduler):bool{if scheduler==null||!scheduler_atomic_decrement_nonzero(&scheduler.running){return false}scheduler_atomic_increment(&scheduler.cancelled)return true}
+export function scheduler_begin_drain(scheduler:*Scheduler):bool{if scheduler==null{return false}return atomic.compareExchange(&scheduler.state,scheduler_running()as u64,scheduler_draining()as u64)==scheduler_running()as u64}
+export function scheduler_quiescent(scheduler:*Scheduler):bool{if scheduler==null{return true}return atomic.load(&scheduler.running)==0 as u64}
+export function scheduler_stop(scheduler:*Scheduler):bool{if scheduler==null{return false}let current:u64=atomic.load(&scheduler.state)if current==scheduler_stopped()as u64{return true}if (current==scheduler_running()as u64||current==scheduler_draining()as u64)&&!scheduler_quiescent(scheduler){return false}if current==scheduler_created()as u64||current==scheduler_running()as u64||current==scheduler_draining()as u64{return atomic.compareExchange(&scheduler.state,current,scheduler_stopped()as u64)==current}return false}
+export function scheduler_mark_failed(scheduler:*Scheduler):bool{if scheduler==null{return false}let current:u64=atomic.load(&scheduler.state)while current!=scheduler_stopped()as u64&&current!=scheduler_failed()as u64{let observed:u64=atomic.compareExchange(&scheduler.state,current,scheduler_failed()as u64)if observed==current{return true}current=observed}return current==scheduler_failed()as u64}
+
+export function task_group_init(group:*TaskGroup):bool{if group==null{return false}atomic.store(&group.open,1 as u64)atomic.store(&group.pending,0 as u64)atomic.store(&group.failed,0 as u64)atomic.store(&group.cancelled,0 as u64)return true}
+export function task_group_add(group:*TaskGroup):bool{if group==null||atomic.load(&group.open)==0 as u64{return false}scheduler_atomic_increment(&group.pending)return true}
+export function task_group_done(group:*TaskGroup,failed:bool,cancelled:bool):bool{if group==null||!scheduler_atomic_decrement_nonzero(&group.pending){return false}if failed{scheduler_atomic_increment(&group.failed)}if cancelled{scheduler_atomic_increment(&group.cancelled)}return true}
+export function task_group_close(group:*TaskGroup):bool{if group==null{return false}return atomic.exchange(&group.open,0 as u64)!=0 as u64}
+export function task_group_finished(group:*TaskGroup):bool{if group==null{return true}return atomic.load(&group.open)==0 as u64&&atomic.load(&group.pending)==0 as u64}
+export function task_group_success(group:*TaskGroup):bool{if !task_group_finished(group){return false}return atomic.load(&group.failed)==0 as u64&&atomic.load(&group.cancelled)==0 as u64}

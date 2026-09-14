@@ -1,0 +1,23 @@
+module integration.backend.web
+
+import "../../Lib/std/http.nqr"
+
+export function healthPayload(): string {
+    return "{\"status\":\"ok\",\"service\":\"noqeri\"}"
+}
+
+export function routeStatus(method: string, path: string): int {
+    if method == "GET" && path == "/health" { return 200 }
+    if method == "GET" && path == "/users" { return 200 }
+    if method == "POST" && path == "/users" { return 201 }
+    if method == "DELETE" && path == "/users/1" { return 204 }
+    return 404
+}
+
+export function isSuccess(status: int): bool {
+    return http_status_is_success(status)
+}
+
+export function responseHasBody(status: int): bool {
+    return http_status_has_body(status)
+}

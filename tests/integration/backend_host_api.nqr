@@ -1,0 +1,24 @@
+module integration.backend.host
+
+import "../../Lib/std/http/server.nqr"
+import "../../Lib/std/http/client.nqr"
+
+export function startApi(port: u32): isize {
+    return http_server_listen("127.0.0.1", port)
+}
+
+export function sendHealth(client: usize): isize {
+    return http_server_respond_json(client, 200, "{\"status\":\"ok\"}")
+}
+
+export function fetchHealth(url: string): isize {
+    return http_client_get(url)
+}
+
+export function backendStatusHealthy(status: int): bool {
+    return http_client_success(status) && status == 200
+}
+
+export function backendStatusRetryable(status: int): bool {
+    return http_client_retryable(status)
+}

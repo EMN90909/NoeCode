@@ -4,3 +4,76 @@ export function timezone_seconds_to_millis(value:i64):i64{return value*1000 as i
 export function timezone_minutes_to_seconds(value:i64):i64{return value*60 as i64}
 export function timezone_hours_to_seconds(value:i64):i64{return value*3600 as i64}
 export function timezone_nonnegative(value:i64):bool{return value>=0 as i64}
+
+export function timezone_is_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
+export function timezone_digit(c: u8): i64 { return (c - 48 as u8) as i64 }
+export function timezone_offset_valid(seconds: i64): bool { return seconds >= -50400 as i64 && seconds <= 50400 as i64 }
+
+// Parses ISO-8601 numeric offsets: Z, +HH:MM, -HH:MM, +HHMM and -HHMM.
+export function timezone_parse_offset(value: []u8, out: *i64): bool {
+    if out == null { return false }
+    if len(value) == 1 as usize && (value[0 as usize] == 90 as u8 || value[0 as usize] == 122 as u8) { out.* = 0 as i64 return true }
+    if len(value) != 5 as usize && len(value) != 6 as usize { return false }
+    let sign: i64 = 1 as i64
+    if value[0 as usize] == 45 as u8 { sign = -1 as i64 }
+    else if value[0 as usize] != 43 as u8 { return false }
+    let h0: usize = 1 as usize
+    let m0: usize = 3 as usize
+    if len(value) == 6 as usize {
+        if value[3 as usize] != 58 as u8 { return false }
+        m0 = 4 as usize
+    }
+    if !timezone_is_digit(value[h0]) || !timezone_is_digit(value[h0 + 1 as usize]) || !timezone_is_digit(value[m0]) || !timezone_is_digit(value[m0 + 1 as usize]) { return false }
+    let hours: i64 = timezone_digit(value[h0]) * 10 as i64 + timezone_digit(value[h0 + 1 as usize])
+    let minutes: i64 = timezone_digit(value[m0]) * 10 as i64 + timezone_digit(value[m0 + 1 as usize])
+    if hours > 14 as i64 || minutes > 59 as i64 { return false }
+    if hours == 14 as i64 && minutes != 0 as i64 { return false }
+    let seconds: i64 = sign * (hours * 3600 as i64 + minutes * 60 as i64)
+    if !timezone_offset_valid(seconds) { return false }
+    out.* = seconds
+    return true
+}
+
+export function timezone_format_offset(offsetSeconds: i64, out: []u8): isize {
+    if !timezone_offset_valid(offsetSeconds) { return -1 as isize }
+    if offsetSeconds == 0 as i64 {
+        if len(out) < 1 as usize { return -2 as isize }
+        out[0 as usize] = 90 as u8
+        return 1 as isize
+    }
+    if len(out) < 6 as usize { return -2 as isize }
+    let magnitude: i64 = offsetSeconds
+    if magnitude < 0 as i64 { magnitude = -magnitude out[0 as usize] = 45 as u8 }
+    else { out[0 as usize] = 43 as u8 }
+    let hours: i64 = magnitude / 3600 as i64
+    let minutes: i64 = (magnitude % 3600 as i64) / 60 as i64
+    out[1 as usize] = (48 as i64 + hours / 10 as i64) as u8
+    out[2 as usize] = (48 as i64 + hours % 10 as i64) as u8
+    out[3 as usize] = 58 as u8
+    out[4 as usize] = (48 as i64 + minutes / 10 as i64) as u8
+    out[5 as usize] = (48 as i64 + minutes % 10 as i64) as u8
+    return 6 as isize
+}
+
+export function timezone_utc_to_local(epochSeconds: i64, offsetSeconds: i64, out: *i64): bool {
+    if out == null || !timezone_offset_valid(offsetSeconds) { return false }
+    if offsetSeconds > 0 as i64 && epochSeconds > 9223372036854775807 as i64 - offsetSeconds { return false }
+    if offsetSeconds < 0 as i64 && epochSeconds < -9223372036854775807 as i64 - 1 as i64 - offsetSeconds { return false }
+    out.* = epochSeconds + offsetSeconds
+    return true
+}
+
+export function timezone_local_to_utc(localSeconds: i64, offsetSeconds: i64, out: *i64): bool {
+    if out == null || !timezone_offset_valid(offsetSeconds) { return false }
+    if offsetSeconds < 0 as i64 && localSeconds > 9223372036854775807 as i64 + offsetSeconds { return false }
+    if offsetSeconds > 0 as i64 && localSeconds < -9223372036854775807 as i64 - 1 as i64 + offsetSeconds { return false }
+    out.* = localSeconds - offsetSeconds
+    return true
+}
+
+export function timezone_same_offset(a: []u8, b: []u8): bool {
+    let left: i64 = 0 as i64
+    let right: i64 = 0 as i64
+    if !timezone_parse_offset(a, &left) || !timezone_parse_offset(b, &right) { return false }
+    return left == right
+}

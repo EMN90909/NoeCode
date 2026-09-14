@@ -1,7 +1,384 @@
-function identity_int(value: int): int {
-    return value
+module noqeri.std.core
+
+record NqIndexRange {
+    start: usize
+    end: usize
 }
 
-function identity_bool(value: bool): bool {
-    return value
+record NqByteSpan {
+    start: usize
+    length: usize
 }
+
+record NqI64Bounds {
+    minimum: i64
+    maximum: i64
+}
+
+record NqU64Bounds {
+    minimum: u64
+    maximum: u64
+}
+
+export function core_index_range(start: usize, end: usize): NqIndexRange {
+    let out: NqIndexRange
+    out.start = start
+    out.end = end
+    return out
+}
+
+export function core_range_valid(range: NqIndexRange): bool { return range.start <= range.end }
+export function core_range_length(range: NqIndexRange): usize { if range.end < range.start { return 0 as usize } return range.end - range.start }
+export function core_range_empty(range: NqIndexRange): bool { return !core_range_valid(range) || range.start == range.end }
+export function core_range_contains(range: NqIndexRange, index: usize): bool { return core_range_valid(range) && index >= range.start && index < range.end }
+export function core_range_contains_range(outer: NqIndexRange, inner: NqIndexRange): bool { return core_range_valid(outer) && core_range_valid(inner) && inner.start >= outer.start && inner.end <= outer.end }
+export function core_range_overlaps(a: NqIndexRange, b: NqIndexRange): bool { return core_range_valid(a) && core_range_valid(b) && a.start < b.end && b.start < a.end }
+
+export function core_range_intersection(a: NqIndexRange, b: NqIndexRange): NqIndexRange {
+    let start: usize = a.start
+    let end: usize = a.end
+    if b.start > start { start = b.start }
+    if b.end < end { end = b.end }
+    if end < start { end = start }
+    return core_index_range(start, end)
+}
+
+export function core_range_clamp(range: NqIndexRange, length: usize): NqIndexRange {
+    let start: usize = range.start
+    let end: usize = range.end
+    if start > length { start = length }
+    if end > length { end = length }
+    if end < start { end = start }
+    return core_index_range(start, end)
+}
+
+export function core_span(start: usize, length: usize): NqByteSpan {
+    let out: NqByteSpan
+    out.start = start
+    out.length = length
+    return out
+}
+
+export function core_span_end(span: NqByteSpan): usize {
+    if span.length > 18446744073709551615 as usize - span.start { return 18446744073709551615 as usize }
+    return span.start + span.length
+}
+export function core_span_valid_for(span: NqByteSpan, length: usize): bool { return span.start <= length && span.length <= length - span.start }
+export function core_span_empty(span: NqByteSpan): bool { return span.length == 0 as usize }
+export function core_span_contains(span: NqByteSpan, index: usize): bool { return index >= span.start && index - span.start < span.length }
+
+export function core_min_i8(a: i8, b: i8): i8 { if a < b { return a } return b }
+export function core_max_i8(a: i8, b: i8): i8 { if a > b { return a } return b }
+export function core_clamp_i8(value: i8, low: i8, high: i8): i8 { if high < low { return low } if value < low { return low } if value > high { return high } return value }
+export function core_between_i8(value: i8, low: i8, high: i8): bool { return high >= low && value >= low && value <= high }
+export function core_equal_i8(a: i8, b: i8): bool { return a == b }
+export function core_not_equal_i8(a: i8, b: i8): bool { return a != b }
+export function core_min_i16(a: i16, b: i16): i16 { if a < b { return a } return b }
+export function core_max_i16(a: i16, b: i16): i16 { if a > b { return a } return b }
+export function core_clamp_i16(value: i16, low: i16, high: i16): i16 { if high < low { return low } if value < low { return low } if value > high { return high } return value }
+export function core_between_i16(value: i16, low: i16, high: i16): bool { return high >= low && value >= low && value <= high }
+export function core_equal_i16(a: i16, b: i16): bool { return a == b }
+export function core_not_equal_i16(a: i16, b: i16): bool { return a != b }
+export function core_min_i32(a: i32, b: i32): i32 { if a < b { return a } return b }
+export function core_max_i32(a: i32, b: i32): i32 { if a > b { return a } return b }
+export function core_clamp_i32(value: i32, low: i32, high: i32): i32 { if high < low { return low } if value < low { return low } if value > high { return high } return value }
+export function core_between_i32(value: i32, low: i32, high: i32): bool { return high >= low && value >= low && value <= high }
+export function core_equal_i32(a: i32, b: i32): bool { return a == b }
+export function core_not_equal_i32(a: i32, b: i32): bool { return a != b }
+export function core_min_i64(a: i64, b: i64): i64 { if a < b { return a } return b }
+export function core_max_i64(a: i64, b: i64): i64 { if a > b { return a } return b }
+export function core_clamp_i64(value: i64, low: i64, high: i64): i64 { if high < low { return low } if value < low { return low } if value > high { return high } return value }
+export function core_between_i64(value: i64, low: i64, high: i64): bool { return high >= low && value >= low && value <= high }
+export function core_equal_i64(a: i64, b: i64): bool { return a == b }
+export function core_not_equal_i64(a: i64, b: i64): bool { return a != b }
+export function core_min_isize(a: isize, b: isize): isize { if a < b { return a } return b }
+export function core_max_isize(a: isize, b: isize): isize { if a > b { return a } return b }
+export function core_clamp_isize(value: isize, low: isize, high: isize): isize { if high < low { return low } if value < low { return low } if value > high { return high } return value }
+export function core_between_isize(value: isize, low: isize, high: isize): bool { return high >= low && value >= low && value <= high }
+export function core_equal_isize(a: isize, b: isize): bool { return a == b }
+export function core_not_equal_isize(a: isize, b: isize): bool { return a != b }
+export function core_min_int(a: int, b: int): int { if a < b { return a } return b }
+export function core_max_int(a: int, b: int): int { if a > b { return a } return b }
+export function core_clamp_int(value: int, low: int, high: int): int { if high < low { return low } if value < low { return low } if value > high { return high } return value }
+export function core_between_int(value: int, low: int, high: int): bool { return high >= low && value >= low && value <= high }
+export function core_equal_int(a: int, b: int): bool { return a == b }
+export function core_not_equal_int(a: int, b: int): bool { return a != b }
+export function core_min_u8(a: u8, b: u8): u8 { if a < b { return a } return b }
+export function core_max_u8(a: u8, b: u8): u8 { if a > b { return a } return b }
+export function core_clamp_u8(value: u8, low: u8, high: u8): u8 { if high < low { return low } if value < low { return low } if value > high { return high } return value }
+export function core_between_u8(value: u8, low: u8, high: u8): bool { return high >= low && value >= low && value <= high }
+export function core_equal_u8(a: u8, b: u8): bool { return a == b }
+export function core_not_equal_u8(a: u8, b: u8): bool { return a != b }
+export function core_min_u16(a: u16, b: u16): u16 { if a < b { return a } return b }
+export function core_max_u16(a: u16, b: u16): u16 { if a > b { return a } return b }
+export function core_clamp_u16(value: u16, low: u16, high: u16): u16 { if high < low { return low } if value < low { return low } if value > high { return high } return value }
+export function core_between_u16(value: u16, low: u16, high: u16): bool { return high >= low && value >= low && value <= high }
+export function core_equal_u16(a: u16, b: u16): bool { return a == b }
+export function core_not_equal_u16(a: u16, b: u16): bool { return a != b }
+export function core_min_u32(a: u32, b: u32): u32 { if a < b { return a } return b }
+export function core_max_u32(a: u32, b: u32): u32 { if a > b { return a } return b }
+export function core_clamp_u32(value: u32, low: u32, high: u32): u32 { if high < low { return low } if value < low { return low } if value > high { return high } return value }
+export function core_between_u32(value: u32, low: u32, high: u32): bool { return high >= low && value >= low && value <= high }
+export function core_equal_u32(a: u32, b: u32): bool { return a == b }
+export function core_not_equal_u32(a: u32, b: u32): bool { return a != b }
+export function core_min_u64(a: u64, b: u64): u64 { if a < b { return a } return b }
+export function core_max_u64(a: u64, b: u64): u64 { if a > b { return a } return b }
+export function core_clamp_u64(value: u64, low: u64, high: u64): u64 { if high < low { return low } if value < low { return low } if value > high { return high } return value }
+export function core_between_u64(value: u64, low: u64, high: u64): bool { return high >= low && value >= low && value <= high }
+export function core_equal_u64(a: u64, b: u64): bool { return a == b }
+export function core_not_equal_u64(a: u64, b: u64): bool { return a != b }
+export function core_min_usize(a: usize, b: usize): usize { if a < b { return a } return b }
+export function core_max_usize(a: usize, b: usize): usize { if a > b { return a } return b }
+export function core_clamp_usize(value: usize, low: usize, high: usize): usize { if high < low { return low } if value < low { return low } if value > high { return high } return value }
+export function core_between_usize(value: usize, low: usize, high: usize): bool { return high >= low && value >= low && value <= high }
+export function core_equal_usize(a: usize, b: usize): bool { return a == b }
+export function core_not_equal_usize(a: usize, b: usize): bool { return a != b }
+export function core_sign_i8(value: i8): int { if value < 0 as i8 { return -1 } if value > 0 as i8 { return 1 } return 0 }
+export function core_abs_i8(value: i8): i8 { if value < 0 as i8 { return -value } return value }
+export function core_distance_i8(a: i8, b: i8): i8 { if a >= b { return a - b } return b - a }
+export function core_sign_i16(value: i16): int { if value < 0 as i16 { return -1 } if value > 0 as i16 { return 1 } return 0 }
+export function core_abs_i16(value: i16): i16 { if value < 0 as i16 { return -value } return value }
+export function core_distance_i16(a: i16, b: i16): i16 { if a >= b { return a - b } return b - a }
+export function core_sign_i32(value: i32): int { if value < 0 as i32 { return -1 } if value > 0 as i32 { return 1 } return 0 }
+export function core_abs_i32(value: i32): i32 { if value < 0 as i32 { return -value } return value }
+export function core_distance_i32(a: i32, b: i32): i32 { if a >= b { return a - b } return b - a }
+export function core_sign_i64(value: i64): int { if value < 0 as i64 { return -1 } if value > 0 as i64 { return 1 } return 0 }
+export function core_abs_i64(value: i64): i64 { if value < 0 as i64 { return -value } return value }
+export function core_distance_i64(a: i64, b: i64): i64 { if a >= b { return a - b } return b - a }
+export function core_sign_isize(value: isize): int { if value < 0 as isize { return -1 } if value > 0 as isize { return 1 } return 0 }
+export function core_abs_isize(value: isize): isize { if value < 0 as isize { return -value } return value }
+export function core_distance_isize(a: isize, b: isize): isize { if a >= b { return a - b } return b - a }
+export function core_sign_int(value: int): int { if value < 0 as int { return -1 } if value > 0 as int { return 1 } return 0 }
+export function core_abs_int(value: int): int { if value < 0 as int { return -value } return value }
+export function core_distance_int(a: int, b: int): int { if a >= b { return a - b } return b - a }
+export function core_distance_u8(a: u8, b: u8): u8 { if a >= b { return a - b } return b - a }
+export function core_distance_u16(a: u16, b: u16): u16 { if a >= b { return a - b } return b - a }
+export function core_distance_u32(a: u32, b: u32): u32 { if a >= b { return a - b } return b - a }
+export function core_distance_u64(a: u64, b: u64): u64 { if a >= b { return a - b } return b - a }
+export function core_distance_usize(a: usize, b: usize): usize { if a >= b { return a - b } return b - a }
+
+export function core_checked_add_u64(a: u64, b: u64, out: *u64): bool {
+    if out == null || b > 18446744073709551615 as u64 - a { return false }
+    out[0] = a + b
+    return true
+}
+export function core_checked_sub_u64(a: u64, b: u64, out: *u64): bool {
+    if out == null || b > a { return false }
+    out[0] = a - b
+    return true
+}
+export function core_checked_mul_u64(a: u64, b: u64, out: *u64): bool {
+    if out == null { return false }
+    if a != 0 as u64 && b > 18446744073709551615 as u64 / a { return false }
+    out[0] = a * b
+    return true
+}
+export function core_saturating_add_u64(a: u64, b: u64): u64 { let out: u64 = 0 as u64 if !core_checked_add_u64(a,b,&out) { return 18446744073709551615 as u64 } return out }
+export function core_saturating_sub_u64(a: u64, b: u64): u64 { if b > a { return 0 as u64 } return a - b }
+export function core_saturating_mul_u64(a: u64, b: u64): u64 { let out: u64 = 0 as u64 if !core_checked_mul_u64(a,b,&out) { return 18446744073709551615 as u64 } return out }
+
+export function core_checked_add_usize(a: usize, b: usize, out: *usize): bool {
+    if out == null || b > 18446744073709551615 as usize - a { return false }
+    out[0] = a + b
+    return true
+}
+export function core_checked_sub_usize(a: usize, b: usize, out: *usize): bool {
+    if out == null || b > a { return false }
+    out[0] = a - b
+    return true
+}
+export function core_checked_mul_usize(a: usize, b: usize, out: *usize): bool {
+    if out == null { return false }
+    if a != 0 as usize && b > 18446744073709551615 as usize / a { return false }
+    out[0] = a * b
+    return true
+}
+export function core_saturating_add_usize(a: usize, b: usize): usize { let out: usize = 0 as usize if !core_checked_add_usize(a,b,&out) { return 18446744073709551615 as usize } return out }
+export function core_saturating_sub_usize(a: usize, b: usize): usize { if b > a { return 0 as usize } return a - b }
+export function core_saturating_mul_usize(a: usize, b: usize): usize { let out: usize = 0 as usize if !core_checked_mul_usize(a,b,&out) { return 18446744073709551615 as usize } return out }
+
+export function core_align_down(value: usize, alignment: usize): usize {
+    if alignment == 0 as usize { return value }
+    return value - value % alignment
+}
+export function core_align_up(value: usize, alignment: usize): usize {
+    if alignment == 0 as usize { return value }
+    let remainder: usize = value % alignment
+    if remainder == 0 as usize { return value }
+    let delta: usize = alignment - remainder
+    return core_saturating_add_usize(value, delta)
+}
+export function core_is_aligned(value: usize, alignment: usize): bool { return alignment != 0 as usize && value % alignment == 0 as usize }
+
+export function core_slice_range_valid<T>(values: []T, range: NqIndexRange): bool { return core_range_valid(range) && range.end <= len(values) }
+export function core_slice_span_valid<T>(values: []T, span: NqByteSpan): bool { return core_span_valid_for(span, len(values)) }
+export function core_copy_u8(source: []u8, destination: []u8): usize {
+    let count: usize = core_min_usize(len(source), len(destination))
+    let index: usize = 0 as usize
+    while index < count { destination[index] = source[index] index = index + 1 as usize }
+    return count
+}
+export function core_fill_u8(values: []u8, value: u8): void { let index: usize = 0 as usize while index < len(values) { values[index] = value index = index + 1 as usize } }
+export function core_zero_u8(values: []u8): void { core_fill_u8(values, 0 as u8) }
+export function core_equal_u8_slice(a: []u8, b: []u8): bool {
+    if len(a) != len(b) { return false }
+    let index: usize = 0 as usize
+    while index < len(a) { if a[index] != b[index] { return false } index = index + 1 as usize }
+    return true
+}
+export function core_prefix_equal_u8(a: []u8, b: []u8, count: usize): bool {
+    if count > len(a) || count > len(b) { return false }
+    let index: usize = 0 as usize
+    while index < count { if a[index] != b[index] { return false } index = index + 1 as usize }
+    return true
+}
+export function core_swap_u8(values: []u8, a: usize, b: usize): bool {
+    if a >= len(values) || b >= len(values) { return false }
+    let tmp: u8 = values[a]
+    values[a] = values[b]
+    values[b] = tmp
+    return true
+}
+export function core_swap_i64(values: []i64, a: usize, b: usize): bool {
+    if a >= len(values) || b >= len(values) { return false }
+    let tmp: i64 = values[a]
+    values[a] = values[b]
+    values[b] = tmp
+    return true
+}
+export function core_swap_u64(values: []u64, a: usize, b: usize): bool {
+    if a >= len(values) || b >= len(values) { return false }
+    let tmp: u64 = values[a]
+    values[a] = values[b]
+    values[b] = tmp
+    return true
+}
+
+export function core_i64_bounds(values: []i64, out: *NqI64Bounds): bool {
+    if out == null || len(values) == 0 as usize { return false }
+    let minimum: i64 = values[0]
+    let maximum: i64 = values[0]
+    let index: usize = 1 as usize
+    while index < len(values) {
+        if values[index] < minimum { minimum = values[index] }
+        if values[index] > maximum { maximum = values[index] }
+        index = index + 1 as usize
+    }
+    out.minimum = minimum
+    out.maximum = maximum
+    return true
+}
+export function core_u64_bounds(values: []u64, out: *NqU64Bounds): bool {
+    if out == null || len(values) == 0 as usize { return false }
+    let minimum: u64 = values[0]
+    let maximum: u64 = values[0]
+    let index: usize = 1 as usize
+    while index < len(values) {
+        if values[index] < minimum { minimum = values[index] }
+        if values[index] > maximum { maximum = values[index] }
+        index = index + 1 as usize
+    }
+    out.minimum = minimum
+    out.maximum = maximum
+    return true
+}
+
+export function core_index_advance(index: usize, amount: usize, limit: usize): usize {
+    if index >= limit { return limit }
+    let remaining: usize = limit - index
+    if amount >= remaining { return limit }
+    return index + amount
+}
+export function core_index_retreat(index: usize, amount: usize): usize { if amount >= index { return 0 as usize } return index - amount }
+export function core_capacity_remaining(length: usize, capacity: usize): usize { if length >= capacity { return 0 as usize } return capacity - length }
+export function core_capacity_can_fit(length: usize, capacity: usize, additional: usize): bool { return length <= capacity && additional <= capacity - length }
+
+export function core_sum_i64(values: []i64): i64 {
+    let total: i64 = 0 as i64
+    let index: usize = 0 as usize
+    while index < len(values) { total = total + values[index] index = index + 1 as usize }
+    return total
+}
+export function core_product_i64(values: []i64): i64 {
+    let total: i64 = 1 as i64
+    let index: usize = 0 as usize
+    while index < len(values) { total = total * values[index] index = index + 1 as usize }
+    return total
+}
+export function core_count_equal_i64(values: []i64, target: i64): usize {
+    let count: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(values) { if values[index] == target { count = count + 1 as usize } index = index + 1 as usize }
+    return count
+}
+export function core_find_i64(values: []i64, target: i64): isize {
+    let index: usize = 0 as usize
+    while index < len(values) { if values[index] == target { return index as isize } index = index + 1 as usize }
+    return -1 as isize
+}
+export function core_all_equal_i64(values: []i64, target: i64): bool {
+    let index: usize = 0 as usize
+    while index < len(values) { if values[index] != target { return false } index = index + 1 as usize }
+    return true
+}
+export function core_any_equal_i64(values: []i64, target: i64): bool { return core_find_i64(values, target) >= 0 as isize }
+
+export function core_sum_u64(values: []u64): u64 {
+    let total: u64 = 0 as u64
+    let index: usize = 0 as usize
+    while index < len(values) { total = total + values[index] index = index + 1 as usize }
+    return total
+}
+export function core_product_u64(values: []u64): u64 {
+    let total: u64 = 1 as u64
+    let index: usize = 0 as usize
+    while index < len(values) { total = total * values[index] index = index + 1 as usize }
+    return total
+}
+export function core_count_equal_u64(values: []u64, target: u64): usize {
+    let count: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(values) { if values[index] == target { count = count + 1 as usize } index = index + 1 as usize }
+    return count
+}
+export function core_find_u64(values: []u64, target: u64): isize {
+    let index: usize = 0 as usize
+    while index < len(values) { if values[index] == target { return index as isize } index = index + 1 as usize }
+    return -1 as isize
+}
+export function core_all_equal_u64(values: []u64, target: u64): bool {
+    let index: usize = 0 as usize
+    while index < len(values) { if values[index] != target { return false } index = index + 1 as usize }
+    return true
+}
+export function core_any_equal_u64(values: []u64, target: u64): bool { return core_find_u64(values, target) >= 0 as isize }
+
+export function core_sum_usize(values: []usize): usize {
+    let total: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(values) { total = total + values[index] index = index + 1 as usize }
+    return total
+}
+export function core_product_usize(values: []usize): usize {
+    let total: usize = 1 as usize
+    let index: usize = 0 as usize
+    while index < len(values) { total = total * values[index] index = index + 1 as usize }
+    return total
+}
+export function core_count_equal_usize(values: []usize, target: usize): usize {
+    let count: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(values) { if values[index] == target { count = count + 1 as usize } index = index + 1 as usize }
+    return count
+}
+export function core_find_usize(values: []usize, target: usize): isize {
+    let index: usize = 0 as usize
+    while index < len(values) { if values[index] == target { return index as isize } index = index + 1 as usize }
+    return -1 as isize
+}
+export function core_all_equal_usize(values: []usize, target: usize): bool {
+    let index: usize = 0 as usize
+    while index < len(values) { if values[index] != target { return false } index = index + 1 as usize }
+    return true
+}
+export function core_any_equal_usize(values: []usize, target: usize): bool { return core_find_usize(values, target) >= 0 as isize }

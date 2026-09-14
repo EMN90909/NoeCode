@@ -22,12 +22,16 @@ reject() {
 "$NQ" run tests/stdlib_structures.nqr >/dev/null
 "$NQ" check tests/storage_structures.nqr >/dev/null
 "$NQ" run tests/storage_structures.nqr >/dev/null
+"$NQ" check tests/stdlib_foundations2.nqr >/dev/null
+"$NQ" run tests/stdlib_foundations2.nqr >/dev/null
 "$NQ" check tests/time_modules.nqr >/dev/null
 "$NQ" run tests/time_modules.nqr >/dev/null
 "$NQ" check tests/data_integrity.nqr >/dev/null
 "$NQ" run tests/data_integrity.nqr >/dev/null
 "$NQ" check tests/encoding_foundations.nqr >/dev/null
 "$NQ" run tests/encoding_foundations.nqr >/dev/null
+"$NQ" check tests/repeat_loop.nqr >/dev/null
+"$NQ" run tests/repeat_loop.nqr >/dev/null
 
 cat > build/invalid_pointer_escape.nqr <<'EOF'
 function bad_pointer(): *u32 {

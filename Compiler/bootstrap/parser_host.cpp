@@ -144,6 +144,7 @@ StmtPtr Parser::letDeclaration(bool isConst){
 StmtPtr Parser::statement(){
     if(match({TokenKind::If}))return ifStatement();
     if(match({TokenKind::While}))return whileStatement();
+    if(match({TokenKind::Repeat}))return repeatStatement();
     if(match({TokenKind::Return}))return returnStatement();
     if(match({TokenKind::Throw}))return throwStatement();
     if(match({TokenKind::Unsafe})){
@@ -159,6 +160,39 @@ StmtPtr Parser::statement(){
 }
 StmtPtr Parser::ifStatement(){Token start=previous();ExprPtr cond;if(match({TokenKind::LParen})){cond=expression();consume(TokenKind::RParen,"expected ')' after if condition");}else cond=expression();auto s=std::make_shared<IfStmt>();s->span=start.span;s->condition=cond;s->thenBranch=statement();if(match({TokenKind::Else}))s->elseBranch=statement();return s;}
 StmtPtr Parser::whileStatement(){Token start=previous();ExprPtr cond;if(match({TokenKind::LParen})){cond=expression();consume(TokenKind::RParen,"expected ')' after while condition");}else cond=expression();auto s=std::make_shared<WhileStmt>();s->span=start.span;s->condition=cond;s->body=statement();return s;}
+StmtPtr Parser::repeatStatement(){
+    Token start=previous();
+    auto count=expression();
+    consume(TokenKind::LBrace,"expected '{' after repeat count");
+    auto userBody=block();
+
+    const std::string suffix=std::to_string(start.span.source)+"_"+std::to_string(start.span.start);
+    const std::string limitName="__nq_repeat_limit_"+suffix;
+    const std::string indexName="__nq_repeat_index_"+suffix;
+
+    auto countCast=std::make_shared<CastExpr>();countCast->span=start.span;countCast->value=count;countCast->typeName="int";
+    auto limit=std::make_shared<LetStmt>();limit->span=start.span;limit->name=limitName;limit->annotation=std::string("int");limit->initializer=countCast;
+
+    auto zero=std::make_shared<LiteralExpr>();zero->span=start.span;zero->value=static_cast<std::int64_t>(0);
+    auto index=std::make_shared<LetStmt>();index->span=start.span;index->name=indexName;index->annotation=std::string("int");index->initializer=zero;
+
+    auto indexCond=std::make_shared<NameExpr>();indexCond->span=start.span;indexCond->name=indexName;
+    auto limitCond=std::make_shared<NameExpr>();limitCond->span=start.span;limitCond->name=limitName;
+    auto condition=std::make_shared<BinaryExpr>();condition->span=start.span;condition->left=indexCond;condition->op=TokenKind::Less;condition->right=limitCond;
+
+    auto indexLeft=std::make_shared<NameExpr>();indexLeft->span=start.span;indexLeft->name=indexName;
+    auto indexRead=std::make_shared<NameExpr>();indexRead->span=start.span;indexRead->name=indexName;
+    auto one=std::make_shared<LiteralExpr>();one->span=start.span;one->value=static_cast<std::int64_t>(1);
+    auto add=std::make_shared<BinaryExpr>();add->span=start.span;add->left=indexRead;add->op=TokenKind::Plus;add->right=one;
+    auto assign=std::make_shared<BinaryExpr>();assign->span=start.span;assign->left=indexLeft;assign->op=TokenKind::Equal;assign->right=add;
+    auto increment=std::make_shared<ExprStmt>();increment->span=start.span;increment->expr=assign;
+
+    auto loopBody=std::make_shared<BlockStmt>();loopBody->span=userBody->span;loopBody->statements=userBody->statements;loopBody->statements.push_back(increment);
+    auto loop=std::make_shared<WhileStmt>();loop->span=start.span;loop->condition=condition;loop->body=loopBody;
+
+    auto outer=std::make_shared<BlockStmt>();outer->span=start.span;outer->statements.push_back(limit);outer->statements.push_back(index);outer->statements.push_back(loop);
+    return outer;
+}
 StmtPtr Parser::returnStatement(){Token start=previous();auto s=std::make_shared<ReturnStmt>();s->span=start.span;if(!check(TokenKind::Semicolon)&&!check(TokenKind::RBrace)&&!check(TokenKind::Eof))s->value=expression();match({TokenKind::Semicolon});return s;}
 StmtPtr Parser::throwStatement(){Token start=previous();auto s=std::make_shared<ThrowStmt>();s->span=start.span;s->value=expression();match({TokenKind::Semicolon});return s;}
 std::shared_ptr<BlockStmt> Parser::block(){auto b=std::make_shared<BlockStmt>();b->span=previous().span;while(!check(TokenKind::RBrace)&&!check(TokenKind::Eof)){try{b->statements.push_back(declaration());}catch(const ParseError&){synchronize();}}consume(TokenKind::RBrace,"expected '}' after block");return b;}
@@ -217,5 +251,5 @@ const Token& Parser::advance(){if(!check(TokenKind::Eof))++current_;return previ
 const Token& Parser::previous()const{return tokens_[current_-1];}
 const Token& Parser::peek()const{return tokens_[current_];}
 const Token& Parser::consume(TokenKind kind,const std::string& message){if(check(kind))return advance();diagnostics_.error("NOE-P2000",peek().span,message);throw ParseError("parse");}
-void Parser::synchronize(){if(!check(TokenKind::Eof))advance();while(!check(TokenKind::Eof)){if(previous().kind==TokenKind::Semicolon)return;switch(peek().kind){case TokenKind::Function:case TokenKind::Record:case TokenKind::Module:case TokenKind::Import:case TokenKind::Extern:case TokenKind::Export:case TokenKind::Let:case TokenKind::Const:case TokenKind::If:case TokenKind::While:case TokenKind::Return:case TokenKind::Throw:case TokenKind::Unsafe:return;default:break;}advance();}}
+void Parser::synchronize(){if(!check(TokenKind::Eof))advance();while(!check(TokenKind::Eof)){if(previous().kind==TokenKind::Semicolon)return;switch(peek().kind){case TokenKind::Function:case TokenKind::Record:case TokenKind::Module:case TokenKind::Import:case TokenKind::Extern:case TokenKind::Export:case TokenKind::Let:case TokenKind::Const:case TokenKind::If:case TokenKind::While:case TokenKind::Repeat:case TokenKind::Return:case TokenKind::Throw:case TokenKind::Unsafe:return;default:break;}advance();}}
 } // namespace noe

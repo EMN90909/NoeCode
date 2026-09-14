@@ -1,6 +1,219 @@
 module noqeri.std.mime
 
+record MimeSpan {
+    start: usize
+    length: usize
+}
+
+record MimeType {
+    type_name: MimeSpan
+    subtype: MimeSpan
+    parameters: MimeSpan
+    valid: bool
+}
+
 export function mime_is_ascii_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
 export function mime_is_ascii_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
 export function mime_is_ascii_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
-export function mime_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && mime_is_ascii_space(value[i]) { i = i + 1 } return i }
+export function mime_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && mime_is_ascii_space(value[i]) { i = i + 1 as usize } return i }
+
+function mime_ascii_lower(c: u8): u8 { if c >= 65 as u8 && c <= 90 as u8 { return c + 32 as u8 } return c }
+
+export function mime_is_token_char(c: u8): bool {
+    if mime_is_ascii_alpha(c) || mime_is_ascii_digit(c) { return true }
+    return c == 33 as u8 || c == 35 as u8 || c == 36 as u8 || c == 37 as u8 || c == 38 as u8 || c == 39 as u8 || c == 42 as u8 || c == 43 as u8 || c == 45 as u8 || c == 46 as u8 || c == 94 as u8 || c == 95 as u8 || c == 96 as u8 || c == 124 as u8 || c == 126 as u8
+}
+
+export function mime_span(start: usize, length: usize): MimeSpan {
+    let span: MimeSpan
+    span.start = start
+    span.length = length
+    return span
+}
+
+export function mime_span_valid(value: []u8, span: MimeSpan): bool {
+    if span.start > len(value) { return false }
+    return span.length <= len(value) - span.start
+}
+
+export function mime_span_equals_ascii_case(value: []u8, span: MimeSpan, expected: []u8): bool {
+    if !mime_span_valid(value, span) || span.length != len(expected) { return false }
+    let i: usize = 0 as usize
+    while i < span.length {
+        if mime_ascii_lower(value[span.start + i]) != mime_ascii_lower(expected[i]) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function mime_span_copy(value: []u8, span: MimeSpan, out: []u8): isize {
+    if !mime_span_valid(value, span) || len(out) < span.length { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < span.length { out[i] = value[span.start + i] i = i + 1 as usize }
+    return span.length as isize
+}
+
+function mime_trim_range(value: []u8, start: usize, end: usize, out_start: *usize, out_end: *usize): bool {
+    if out_start == null || out_end == null || start > end || end > len(value) { return false }
+    let first: usize = start
+    while first < end && mime_is_ascii_space(value[first]) { first = first + 1 as usize }
+    let last: usize = end
+    while last > first && mime_is_ascii_space(value[last - 1 as usize]) { last = last - 1 as usize }
+    unsafe {
+        *out_start = first
+        *out_end = last
+    }
+    return true
+}
+
+function mime_token_range_valid(value: []u8, start: usize, end: usize): bool {
+    if start >= end || end > len(value) { return false }
+    let i: usize = start
+    while i < end { if !mime_is_token_char(value[i]) { return false } i = i + 1 as usize }
+    return true
+}
+
+export function mime_parse(value: []u8, out: *MimeType): bool {
+    if out == null { return false }
+    out.type_name.start = 0 as usize
+    out.type_name.length = 0 as usize
+    out.subtype.start = 0 as usize
+    out.subtype.length = 0 as usize
+    out.parameters.start = 0 as usize
+    out.parameters.length = 0 as usize
+    out.valid = false
+
+    let start: usize = 0 as usize
+    let end: usize = len(value)
+    mime_trim_range(value, 0 as usize, len(value), &start, &end)
+    if start >= end { return false }
+
+    let semicolon: usize = end
+    let i: usize = start
+    while i < end {
+        if value[i] == 59 as u8 { semicolon = i i = end }
+        else { i = i + 1 as usize }
+    }
+
+    let main_end: usize = semicolon
+    while main_end > start && mime_is_ascii_space(value[main_end - 1 as usize]) { main_end = main_end - 1 as usize }
+    let slash: usize = main_end
+    i = start
+    while i < main_end {
+        if value[i] == 47 as u8 { slash = i i = main_end }
+        else { i = i + 1 as usize }
+    }
+    if slash == start || slash >= main_end - 1 as usize { return false }
+
+    let type_start: usize = start
+    let type_end: usize = slash
+    let subtype_start: usize = slash + 1 as usize
+    let subtype_end: usize = main_end
+    if !mime_token_range_valid(value, type_start, type_end) || !mime_token_range_valid(value, subtype_start, subtype_end) { return false }
+
+    out.type_name.start = type_start
+    out.type_name.length = type_end - type_start
+    out.subtype.start = subtype_start
+    out.subtype.length = subtype_end - subtype_start
+    if semicolon < end {
+        let parameter_start: usize = semicolon + 1 as usize
+        while parameter_start < end && mime_is_ascii_space(value[parameter_start]) { parameter_start = parameter_start + 1 as usize }
+        out.parameters.start = parameter_start
+        out.parameters.length = end - parameter_start
+    }
+    out.valid = true
+    return true
+}
+
+export function mime_valid(value: []u8): bool {
+    let state: [u8; 64] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let parsed: *MimeType = (&state[0 as usize]) as *MimeType
+    return mime_parse(value, parsed)
+}
+
+export function mime_matches(value: []u8, parsed: *MimeType, type_name: []u8, subtype: []u8): bool {
+    if parsed == null || !parsed.valid { return false }
+    return mime_span_equals_ascii_case(value, parsed.type_name, type_name) && mime_span_equals_ascii_case(value, parsed.subtype, subtype)
+}
+
+export function mime_is_textual(value: []u8, parsed: *MimeType): bool {
+    if parsed == null || !parsed.valid { return false }
+    let text_name: [u8; 4] = [116 as u8,101 as u8,120 as u8,116 as u8]
+    if mime_span_equals_ascii_case(value, parsed.type_name, slice(text_name)) { return true }
+    let app: [u8; 11] = [97 as u8,112 as u8,112 as u8,108 as u8,105 as u8,99 as u8,97 as u8,116 as u8,105 as u8,111 as u8,110 as u8]
+    if !mime_span_equals_ascii_case(value, parsed.type_name, slice(app)) { return false }
+    let json: [u8; 4] = [106 as u8,115 as u8,111 as u8,110 as u8]
+    let xml: [u8; 3] = [120 as u8,109 as u8,108 as u8]
+    let javascript: [u8; 10] = [106 as u8,97 as u8,118 as u8,97 as u8,115 as u8,99 as u8,114 as u8,105 as u8,112 as u8,116 as u8]
+    return mime_span_equals_ascii_case(value, parsed.subtype, slice(json)) || mime_span_equals_ascii_case(value, parsed.subtype, slice(xml)) || mime_span_equals_ascii_case(value, parsed.subtype, slice(javascript))
+}
+
+export function mime_parameter_value(value: []u8, parsed: *MimeType, name: []u8, out: *MimeSpan): bool {
+    if parsed == null || out == null || !parsed.valid || parsed.parameters.length == 0 as usize { return false }
+    let cursor: usize = parsed.parameters.start
+    let end: usize = parsed.parameters.start + parsed.parameters.length
+    while cursor < end {
+        while cursor < end && (mime_is_ascii_space(value[cursor]) || value[cursor] == 59 as u8) { cursor = cursor + 1 as usize }
+        let key_start: usize = cursor
+        while cursor < end && mime_is_token_char(value[cursor]) { cursor = cursor + 1 as usize }
+        let key_end: usize = cursor
+        while cursor < end && mime_is_ascii_space(value[cursor]) { cursor = cursor + 1 as usize }
+        if cursor >= end || value[cursor] != 61 as u8 {
+            while cursor < end && value[cursor] != 59 as u8 { cursor = cursor + 1 as usize }
+        } else {
+            cursor = cursor + 1 as usize
+            while cursor < end && mime_is_ascii_space(value[cursor]) { cursor = cursor + 1 as usize }
+            let value_start: usize = cursor
+            let value_end: usize = cursor
+            if cursor < end && value[cursor] == 34 as u8 {
+                cursor = cursor + 1 as usize
+                value_start = cursor
+                while cursor < end && value[cursor] != 34 as u8 { cursor = cursor + 1 as usize }
+                value_end = cursor
+                if cursor < end { cursor = cursor + 1 as usize }
+            } else {
+                while cursor < end && value[cursor] != 59 as u8 { cursor = cursor + 1 as usize }
+                value_end = cursor
+                while value_end > value_start && mime_is_ascii_space(value[value_end - 1 as usize]) { value_end = value_end - 1 as usize }
+            }
+            let key_span: MimeSpan = mime_span(key_start, key_end - key_start)
+            if mime_span_equals_ascii_case(value, key_span, name) {
+                out.start = value_start
+                out.length = value_end - value_start
+                return true
+            }
+        }
+    }
+    return false
+}
+
+// Common extension mapping. Returns a small stable code so callers can choose
+// whether to emit a string, table entry or protocol header without allocation.
+export function mime_extension_code(extension: []u8): int {
+    let html: [u8; 4] = [104 as u8,116 as u8,109 as u8,108 as u8]
+    let htm: [u8; 3] = [104 as u8,116 as u8,109 as u8]
+    let css: [u8; 3] = [99 as u8,115 as u8,115 as u8]
+    let js: [u8; 2] = [106 as u8,115 as u8]
+    let json: [u8; 4] = [106 as u8,115 as u8,111 as u8,110 as u8]
+    let csv: [u8; 3] = [99 as u8,115 as u8,118 as u8]
+    let txt: [u8; 3] = [116 as u8,120 as u8,116 as u8]
+    let png: [u8; 3] = [112 as u8,110 as u8,103 as u8]
+    let jpg: [u8; 3] = [106 as u8,112 as u8,103 as u8]
+    let jpeg: [u8; 4] = [106 as u8,112 as u8,101 as u8,103 as u8]
+    let svg: [u8; 3] = [115 as u8,118 as u8,103 as u8]
+    let pdf: [u8; 3] = [112 as u8,100 as u8,102 as u8]
+    let wasm: [u8; 4] = [119 as u8,97 as u8,115 as u8,109 as u8]
+    let span: MimeSpan = mime_span(0 as usize, len(extension))
+    if mime_span_equals_ascii_case(extension, span, slice(html)) || mime_span_equals_ascii_case(extension, span, slice(htm)) { return 1 }
+    if mime_span_equals_ascii_case(extension, span, slice(css)) { return 2 }
+    if mime_span_equals_ascii_case(extension, span, slice(js)) { return 3 }
+    if mime_span_equals_ascii_case(extension, span, slice(json)) { return 4 }
+    if mime_span_equals_ascii_case(extension, span, slice(csv)) { return 5 }
+    if mime_span_equals_ascii_case(extension, span, slice(txt)) { return 6 }
+    if mime_span_equals_ascii_case(extension, span, slice(png)) { return 7 }
+    if mime_span_equals_ascii_case(extension, span, slice(jpg)) || mime_span_equals_ascii_case(extension, span, slice(jpeg)) { return 8 }
+    if mime_span_equals_ascii_case(extension, span, slice(svg)) { return 9 }
+    if mime_span_equals_ascii_case(extension, span, slice(pdf)) { return 10 }
+    if mime_span_equals_ascii_case(extension, span, slice(wasm)) { return 11 }
+    return 0
+}

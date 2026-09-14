@@ -1,0 +1,1 @@
+insert users { id: 2, name: "Duplicate", active: true }

@@ -1,0 +1,10 @@
+table users {
+    id: int key,
+    name: text required,
+    active: bool required
+}
+delete users
+insert users { id: 1, name: "Ada", active: true }
+insert users { id: 2, name: "Linus", active: false }
+update users set { name: "Ada Lovelace" } where id = 1
+select users where active = true

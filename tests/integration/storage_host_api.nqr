@@ -1,0 +1,20 @@
+module integration.storage.host
+
+import "../../Lib/std/fs.nqr"
+import "../../Lib/std/file.nqr"
+
+export function ensureDataDirectory(path: string): isize {
+    return fs_ensure_directory(path)
+}
+
+export function createDataFile(path: string): isize {
+    return file_open_replace(path)
+}
+
+export function storagePathExists(path: string): bool {
+    return fs_exists(path)
+}
+
+export function storageStatusOk(status: isize): bool {
+    return fs_status_ok(status) && file_status_ok(status)
+}

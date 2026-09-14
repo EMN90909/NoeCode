@@ -1,6 +1,546 @@
 module noqeri.std.adler
 
-export function adler_byte_sum(data: []u8): u64 { let sum: u64 = 0 as u64 let i: usize = 0 as usize while i < len(data) { sum = sum + data[i] as u64 i = i + 1 } return sum }
-export function adler_all_zero(data: []u8): bool { let i: usize = 0 as usize while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 } return true }
+// Streaming Adler-family checksums. The canonical Adler-32 implementation uses
+// modulus 65521 and supports incremental updates, checksum combination, framing,
+// verification and caller-controlled chunking.
+
+record Adler32State {
+    a: u32
+    b: u32
+    bytes: u64
+    updates: u64
+}
+
+record Adler16State {
+    a: u16
+    b: u16
+    bytes: u64
+}
+
+record AdlerResult {
+    checksum: u32
+    bytes: u64
+}
+
+record AdlerFrame {
+    payloadLength: usize
+    checksum: u32
+}
+
+export function adler32_modulus(): u32 { return 65521 as u32 }
+export function adler32_initial(): u32 { return 1 as u32 }
+export function adler32_empty(): u32 { return 1 as u32 }
+export function adler32_a(checksum: u32): u32 { return checksum % 65536 as u32 }
+export function adler32_b(checksum: u32): u32 { return checksum / 65536 as u32 }
+export function adler32_pack(a: u32, b: u32): u32 { return (b % 65536 as u32) * 65536 as u32 + (a % 65536 as u32) }
+
+export function adler32_state_init(out: *Adler32State): bool {
+    if out == null { return false }
+    out.a = 1 as u32
+    out.b = 0 as u32
+    out.bytes = 0 as u64
+    out.updates = 0 as u64
+    return true
+}
+export function adler32_state_reset(state: *Adler32State): bool { return adler32_state_init(state) }
+export function adler32_state_valid(state: *Adler32State): bool {
+    if state == null { return false }
+    return state.a < adler32_modulus() && state.b < adler32_modulus()
+}
+export function adler32_state_checksum(state: *Adler32State): u32 {
+    if !adler32_state_valid(state) { return 0 as u32 }
+    return adler32_pack(state.a, state.b)
+}
+export function adler32_state_bytes(state: *Adler32State): u64 { if state == null { return 0 as u64 } return state.bytes }
+export function adler32_state_updates(state: *Adler32State): u64 { if state == null { return 0 as u64 } return state.updates }
+
+export function adler32_state_update_byte(state: *Adler32State, value: u8): bool {
+    if !adler32_state_valid(state) { return false }
+    state.a = (state.a + value as u32) % adler32_modulus()
+    state.b = (state.b + state.a) % adler32_modulus()
+    if state.bytes < 18446744073709551615 as u64 { state.bytes = state.bytes + 1 as u64 }
+    if state.updates < 18446744073709551615 as u64 { state.updates = state.updates + 1 as u64 }
+    return true
+}
+
+export function adler32_state_update(state: *Adler32State, data: []u8): bool {
+    if !adler32_state_valid(state) { return false }
+    let a: u32 = state.a
+    let b: u32 = state.b
+    let i: usize = 0 as usize
+    while i < len(data) {
+        a = (a + data[i] as u32) % adler32_modulus()
+        b = (b + a) % adler32_modulus()
+        i = i + 1 as usize
+    }
+    state.a = a
+    state.b = b
+    if len(data) as u64 <= 18446744073709551615 as u64 - state.bytes { state.bytes = state.bytes + len(data) as u64 } else { state.bytes = 18446744073709551615 as u64 }
+    if state.updates < 18446744073709551615 as u64 { state.updates = state.updates + 1 as u64 }
+    return true
+}
+
+export function adler32_state_update_range(state: *Adler32State, data: []u8, offset: usize, count: usize): bool {
+    if !adler32_state_valid(state) || offset > len(data) || count > len(data) - offset { return false }
+    let a: u32 = state.a
+    let b: u32 = state.b
+    let i: usize = 0 as usize
+    while i < count {
+        a = (a + data[offset + i] as u32) % adler32_modulus()
+        b = (b + a) % adler32_modulus()
+        i = i + 1 as usize
+    }
+    state.a = a
+    state.b = b
+    if count as u64 <= 18446744073709551615 as u64 - state.bytes { state.bytes = state.bytes + count as u64 } else { state.bytes = 18446744073709551615 as u64 }
+    if state.updates < 18446744073709551615 as u64 { state.updates = state.updates + 1 as u64 }
+    return true
+}
+
+export function adler32(data: []u8): u32 {
+    let state: Adler32State
+    adler32_state_init(&state)
+    adler32_state_update(&state, data)
+    return adler32_state_checksum(&state)
+}
+export function adler32_range(data: []u8, offset: usize, count: usize, out: *u32): bool {
+    if out == null || offset > len(data) || count > len(data) - offset { return false }
+    let state: Adler32State
+    adler32_state_init(&state)
+    if !adler32_state_update_range(&state, data, offset, count) { return false }
+    out[0] = adler32_state_checksum(&state)
+    return true
+}
+export function adler32_seeded(data: []u8, seed: u32): u32 {
+    let state: Adler32State
+    state.a = adler32_a(seed) % adler32_modulus()
+    state.b = adler32_b(seed) % adler32_modulus()
+    state.bytes = 0 as u64
+    state.updates = 0 as u64
+    adler32_state_update(&state, data)
+    return adler32_state_checksum(&state)
+}
+export function adler32_verify(data: []u8, expected: u32): bool { return adler32(data) == expected }
+export function adler32_verify_range(data: []u8, offset: usize, count: usize, expected: u32): bool {
+    let actual: u32 = 0 as u32
+    return adler32_range(data, offset, count, &actual) && actual == expected
+}
+
+export function adler32_chunked(data: []u8, chunkSize: usize): u32 {
+    if chunkSize == 0 as usize { return adler32(data) }
+    let state: Adler32State
+    adler32_state_init(&state)
+    let offset: usize = 0 as usize
+    while offset < len(data) {
+        let count: usize = len(data) - offset
+        if count > chunkSize { count = chunkSize }
+        adler32_state_update_range(&state, data, offset, count)
+        offset = offset + count
+    }
+    return adler32_state_checksum(&state)
+}
+
+export function adler32_result(data: []u8): AdlerResult {
+    let result: AdlerResult
+    result.checksum = adler32(data)
+    result.bytes = len(data) as u64
+    return result
+}
+
+export function adler32_combine(first: u32, second: u32, secondLength: u64): u32 {
+    let base: u64 = adler32_modulus() as u64
+    let rem: u64 = secondLength % base
+    let a1: u64 = adler32_a(first) as u64
+    let b1: u64 = adler32_b(first) as u64
+    let a2: u64 = adler32_a(second) as u64
+    let b2: u64 = adler32_b(second) as u64
+    let a: u64 = (a1 + a2 + base - 1 as u64) % base
+    let b: u64 = (b1 + b2 + rem * a1) % base
+    let correction: u64 = rem % base
+    if b >= correction { b = b - correction } else { b = b + base - correction }
+    return adler32_pack(a as u32, b as u32)
+}
+
+export function adler32_combine3(first: u32, firstLength: u64, second: u32, secondLength: u64, third: u32, thirdLength: u64): u32 {
+    let combined: u32 = adler32_combine(first, second, secondLength)
+    return adler32_combine(combined, third, thirdLength)
+}
+export function adler32_combine_empty_left(checksum: u32, length: u64): u32 { return adler32_combine(adler32_empty(), checksum, length) }
+export function adler32_combine_empty_right(checksum: u32): u32 { return adler32_combine(checksum, adler32_empty(), 0 as u64) }
+
+export function adler32_to_big_endian(checksum: u32, out: []u8): bool {
+    if len(out) < 4 as usize { return false }
+    out[0] = ((checksum / 16777216 as u32) % 256 as u32) as u8
+    out[1] = ((checksum / 65536 as u32) % 256 as u32) as u8
+    out[2] = ((checksum / 256 as u32) % 256 as u32) as u8
+    out[3] = (checksum % 256 as u32) as u8
+    return true
+}
+export function adler32_from_big_endian(data: []u8, out: *u32): bool {
+    if out == null || len(data) < 4 as usize { return false }
+    out[0] = data[0] as u32 * 16777216 as u32 + data[1] as u32 * 65536 as u32 + data[2] as u32 * 256 as u32 + data[3] as u32
+    return true
+}
+export function adler32_to_little_endian(checksum: u32, out: []u8): bool {
+    if len(out) < 4 as usize { return false }
+    out[0] = (checksum % 256 as u32) as u8
+    out[1] = ((checksum / 256 as u32) % 256 as u32) as u8
+    out[2] = ((checksum / 65536 as u32) % 256 as u32) as u8
+    out[3] = ((checksum / 16777216 as u32) % 256 as u32) as u8
+    return true
+}
+export function adler32_from_little_endian(data: []u8, out: *u32): bool {
+    if out == null || len(data) < 4 as usize { return false }
+    out[0] = data[0] as u32 + data[1] as u32 * 256 as u32 + data[2] as u32 * 65536 as u32 + data[3] as u32 * 16777216 as u32
+    return true
+}
+
+export function adler32_append_big_endian(payload: []u8, out: []u8): isize {
+    if len(out) < len(payload) + 4 as usize { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < len(payload) { out[i] = payload[i] i = i + 1 as usize }
+    let checksum: u32 = adler32(payload)
+    let trailer: [u8; 4]
+    adler32_to_big_endian(checksum, slice(trailer))
+    i = 0 as usize
+    while i < 4 as usize { out[len(payload) + i] = trailer[i] i = i + 1 as usize }
+    return (len(payload) + 4 as usize) as isize
+}
+export function adler32_verify_appended_big_endian(frame: []u8): bool {
+    if len(frame) < 4 as usize { return false }
+    let payloadLength: usize = len(frame) - 4 as usize
+    let expected: u32 = 0 as u32
+    let trailer: [u8; 4]
+    let i: usize = 0 as usize
+    while i < 4 as usize { trailer[i] = frame[payloadLength + i] i = i + 1 as usize }
+    if !adler32_from_big_endian(slice(trailer), &expected) { return false }
+    let actual: u32 = 0 as u32
+    if !adler32_range(frame, 0 as usize, payloadLength, &actual) { return false }
+    return actual == expected
+}
+export function adler32_frame_info(frame: []u8, out: *AdlerFrame): bool {
+    if out == null || len(frame) < 4 as usize { return false }
+    out.payloadLength = len(frame) - 4 as usize
+    let trailer: [u8; 4]
+    let i: usize = 0 as usize
+    while i < 4 as usize { trailer[i] = frame[out.payloadLength + i] i = i + 1 as usize }
+    return adler32_from_big_endian(slice(trailer), &out.checksum)
+}
+
+export function adler16_modulus(): u16 { return 251 as u16 }
+export function adler16_pack(a: u16, b: u16): u16 { return ((b % 256 as u16) * 256 as u16 + (a % 256 as u16)) as u16 }
+export function adler16_a(checksum: u16): u16 { return checksum % 256 as u16 }
+export function adler16_b(checksum: u16): u16 { return checksum / 256 as u16 }
+export function adler16_state_init(out: *Adler16State): bool {
+    if out == null { return false }
+    out.a = 1 as u16
+    out.b = 0 as u16
+    out.bytes = 0 as u64
+    return true
+}
+export function adler16_state_update(state: *Adler16State, data: []u8): bool {
+    if state == null { return false }
+    let a: u32 = state.a as u32
+    let b: u32 = state.b as u32
+    let i: usize = 0 as usize
+    while i < len(data) {
+        a = (a + data[i] as u32) % adler16_modulus() as u32
+        b = (b + a) % adler16_modulus() as u32
+        i = i + 1 as usize
+    }
+    state.a = a as u16
+    state.b = b as u16
+    if len(data) as u64 <= 18446744073709551615 as u64 - state.bytes { state.bytes = state.bytes + len(data) as u64 } else { state.bytes = 18446744073709551615 as u64 }
+    return true
+}
+export function adler16_state_checksum(state: *Adler16State): u16 { if state == null { return 0 as u16 } return adler16_pack(state.a, state.b) }
+export function adler16(data: []u8): u16 {
+    let state: Adler16State
+    adler16_state_init(&state)
+    adler16_state_update(&state, data)
+    return adler16_state_checksum(&state)
+}
+export function adler16_verify(data: []u8, expected: u16): bool { return adler16(data) == expected }
+export function adler16_to_big_endian(checksum: u16, out: []u8): bool {
+    if len(out) < 2 as usize { return false }
+    out[0] = ((checksum / 256 as u16) % 256 as u16) as u8
+    out[1] = (checksum % 256 as u16) as u8
+    return true
+}
+export function adler16_from_big_endian(data: []u8, out: *u16): bool {
+    if out == null || len(data) < 2 as usize { return false }
+    out[0] = (data[0] as u16 * 256 as u16 + data[1] as u16) as u16
+    return true
+}
+
+export function adler_byte_sum(data: []u8): u64 {
+    let sum: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < len(data) { sum = sum + data[i] as u64 i = i + 1 as usize }
+    return sum
+}
+export function adler_weighted_byte_sum(data: []u8): u64 {
+    let sum: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < len(data) {
+        let weight: u64 = (len(data) - i) as u64
+        if data[i] as u64 != 0 as u64 && weight > 18446744073709551615 as u64 / data[i] as u64 { return 18446744073709551615 as u64 }
+        let term: u64 = data[i] as u64 * weight
+        if term > 18446744073709551615 as u64 - sum { return 18446744073709551615 as u64 }
+        sum = sum + term
+        i = i + 1 as usize
+    }
+    return sum
+}
+export function adler_all_zero(data: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 as usize }
+    return true
+}
 export function adler_bounded_length(data: []u8, max: usize): bool { return len(data) <= max }
 export function adler_nonempty(data: []u8): bool { return len(data) > 0 as usize }
+export function adler_same_checksum(left: []u8, right: []u8): bool { return adler32(left) == adler32(right) }
+export function adler_checksum_nonzero(data: []u8): bool { return adler32(data) != 0 as u32 }
+
+export function adler32_repeat_byte(value: u8, count: usize): u32 {
+    let state: Adler32State
+    adler32_state_init(&state)
+    let i: usize = 0 as usize
+    while i < count { adler32_state_update_byte(&state, value) i = i + 1 as usize }
+    return adler32_state_checksum(&state)
+}
+export function adler32_zeros(count: usize): u32 { return adler32_repeat_byte(0 as u8, count) }
+export function adler32_ones(count: usize): u32 { return adler32_repeat_byte(1 as u8, count) }
+
+export function adler32_prefixes(data: []u8, out: []u32): usize {
+    let count: usize = len(data)
+    if len(out) < count { count = len(out) }
+    let state: Adler32State
+    adler32_state_init(&state)
+    let i: usize = 0 as usize
+    while i < count {
+        adler32_state_update_byte(&state, data[i])
+        out[i] = adler32_state_checksum(&state)
+        i = i + 1 as usize
+    }
+    return count
+}
+export function adler32_blocks(data: []u8, blockSize: usize, out: []u32): usize {
+    if blockSize == 0 as usize { return 0 as usize }
+    let block: usize = 0 as usize
+    let offset: usize = 0 as usize
+    while offset < len(data) && block < len(out) {
+        let count: usize = len(data) - offset
+        if count > blockSize { count = blockSize }
+        let checksum: u32 = 0 as u32
+        adler32_range(data, offset, count, &checksum)
+        out[block] = checksum
+        block = block + 1 as usize
+        offset = offset + count
+    }
+    return block
+}
+export function adler32_verify_blocks(data: []u8, blockSize: usize, expected: []u32): bool {
+    if blockSize == 0 as usize { return len(data) == 0 as usize && len(expected) == 0 as usize }
+    let needed: usize = len(data) / blockSize
+    if len(data) % blockSize != 0 as usize { needed = needed + 1 as usize }
+    if len(expected) != needed { return false }
+    let block: usize = 0 as usize
+    let offset: usize = 0 as usize
+    while offset < len(data) {
+        let count: usize = len(data) - offset
+        if count > blockSize { count = blockSize }
+        let checksum: u32 = 0 as u32
+        if !adler32_range(data, offset, count, &checksum) || checksum != expected[block] { return false }
+        block = block + 1 as usize
+        offset = offset + count
+    }
+    return true
+}
+
+export function adler32_copy_and_checksum(source: []u8, destination: []u8, out: *u32): isize {
+    if out == null || len(destination) < len(source) { return -1 as isize }
+    let state: Adler32State
+    adler32_state_init(&state)
+    let i: usize = 0 as usize
+    while i < len(source) {
+        destination[i] = source[i]
+        adler32_state_update_byte(&state, source[i])
+        i = i + 1 as usize
+    }
+    out[0] = adler32_state_checksum(&state)
+    return len(source) as isize
+}
+export function adler32_copy_verify(source: []u8, destination: []u8, expected: u32): bool {
+    let actual: u32 = 0 as u32
+    let copied: isize = adler32_copy_and_checksum(source, destination, &actual)
+    return copied == len(source) as isize && actual == expected
+}
+
+export function adler32_known_empty_valid(): bool { return adler32_empty() == 1 as u32 }
+export function adler32_known_wikipedia(data: []u8): u32 { return adler32(data) }
+export function adler32_chunked_1(data: []u8): u32 { return adler32_chunked(data, 1 as usize) }
+export function adler32_chunked_16(data: []u8): u32 { return adler32_chunked(data, 16 as usize) }
+export function adler32_chunked_32(data: []u8): u32 { return adler32_chunked(data, 32 as usize) }
+export function adler32_chunked_64(data: []u8): u32 { return adler32_chunked(data, 64 as usize) }
+export function adler32_chunked_128(data: []u8): u32 { return adler32_chunked(data, 128 as usize) }
+export function adler32_chunked_256(data: []u8): u32 { return adler32_chunked(data, 256 as usize) }
+export function adler32_chunked_512(data: []u8): u32 { return adler32_chunked(data, 512 as usize) }
+export function adler32_chunked_1024(data: []u8): u32 { return adler32_chunked(data, 1024 as usize) }
+export function adler32_chunked_2048(data: []u8): u32 { return adler32_chunked(data, 2048 as usize) }
+export function adler32_chunked_4096(data: []u8): u32 { return adler32_chunked(data, 4096 as usize) }
+export function adler32_chunked_8192(data: []u8): u32 { return adler32_chunked(data, 8192 as usize) }
+export function adler32_chunked_16384(data: []u8): u32 { return adler32_chunked(data, 16384 as usize) }
+export function adler32_chunked_32768(data: []u8): u32 { return adler32_chunked(data, 32768 as usize) }
+export function adler32_chunked_65536(data: []u8): u32 { return adler32_chunked(data, 65536 as usize) }
+export function adler32_checksum_valid(checksum: u32): bool { return adler32_a(checksum) < adler32_modulus() && adler32_b(checksum) < adler32_modulus() }
+export function adler32_state_matches(state: *Adler32State, expected: u32): bool { return adler32_state_valid(state) && adler32_state_checksum(state) == expected }
+export function adler32_result_matches(result: *AdlerResult, expected: u32, bytes: u64): bool { return result != null && result.checksum == expected && result.bytes == bytes }
+export function adler32_frame_valid(frame: []u8): bool { return adler32_verify_appended_big_endian(frame) }
+export function adler32_payload_length_from_frame(frame: []u8): usize { if len(frame) < 4 as usize { return 0 as usize } return len(frame) - 4 as usize }
+
+export function adler32_state_clone(source: *Adler32State, destination: *Adler32State): bool {
+    if source == null || destination == null || !adler32_state_valid(source) { return false }
+    destination.a = source.a
+    destination.b = source.b
+    destination.bytes = source.bytes
+    destination.updates = source.updates
+    return true
+}
+export function adler32_state_restore(state: *Adler32State, checksum: u32, bytes: u64): bool {
+    if state == null || !adler32_checksum_valid(checksum) { return false }
+    state.a = adler32_a(checksum)
+    state.b = adler32_b(checksum)
+    state.bytes = bytes
+    state.updates = 0 as u64
+    return true
+}
+export function adler32_two(first: []u8, second: []u8): u32 {
+    let state: Adler32State
+    adler32_state_init(&state)
+    adler32_state_update(&state, first)
+    adler32_state_update(&state, second)
+    return adler32_state_checksum(&state)
+}
+export function adler32_three(first: []u8, second: []u8, third: []u8): u32 {
+    let state: Adler32State
+    adler32_state_init(&state)
+    adler32_state_update(&state, first)
+    adler32_state_update(&state, second)
+    adler32_state_update(&state, third)
+    return adler32_state_checksum(&state)
+}
+export function adler32_four(first: []u8, second: []u8, third: []u8, fourth: []u8): u32 {
+    let state: Adler32State
+    adler32_state_init(&state)
+    adler32_state_update(&state, first)
+    adler32_state_update(&state, second)
+    adler32_state_update(&state, third)
+    adler32_state_update(&state, fourth)
+    return adler32_state_checksum(&state)
+}
+export function adler32_segments_match(first: []u8, second: []u8, expected: u32): bool { return adler32_two(first, second) == expected }
+export function adler32_state_update_zeroes(state: *Adler32State, count: usize): bool {
+    if !adler32_state_valid(state) { return false }
+    let i: usize = 0 as usize
+    while i < count { if !adler32_state_update_byte(state, 0 as u8) { return false } i = i + 1 as usize }
+    return true
+}
+export function adler32_state_update_repeated(state: *Adler32State, value: u8, count: usize): bool {
+    if !adler32_state_valid(state) { return false }
+    let i: usize = 0 as usize
+    while i < count { if !adler32_state_update_byte(state, value) { return false } i = i + 1 as usize }
+    return true
+}
+export function adler32_to_hex_digits(checksum: u32, out: []u8): bool {
+    if len(out) < 8 as usize { return false }
+    let value: u32 = checksum
+    let i: isize = 7 as isize
+    while i >= 0 as isize {
+        let digit: u32 = value % 16 as u32
+        if digit < 10 as u32 { out[i as usize] = (48 as u32 + digit) as u8 }
+        else { out[i as usize] = (87 as u32 + digit) as u8 }
+        value = value / 16 as u32
+        i = i - 1 as isize
+    }
+    return true
+}
+export function adler32_from_hex_digits(data: []u8, out: *u32): bool {
+    if out == null || len(data) != 8 as usize { return false }
+    let value: u32 = 0 as u32
+    let i: usize = 0 as usize
+    while i < 8 as usize {
+        let c: u8 = data[i]
+        let digit: u32 = 0 as u32
+        if c >= 48 as u8 && c <= 57 as u8 { digit = (c - 48 as u8) as u32 }
+        else if c >= 65 as u8 && c <= 70 as u8 { digit = (c - 65 as u8 + 10 as u8) as u32 }
+        else if c >= 97 as u8 && c <= 102 as u8 { digit = (c - 97 as u8 + 10 as u8) as u32 }
+        else { return false }
+        value = value * 16 as u32 + digit
+        i = i + 1 as usize
+    }
+    out[0] = value
+    return true
+}
+export function adler32_verify_hex(data: []u8, expectedHex: []u8): bool {
+    let expected: u32 = 0 as u32
+    return adler32_from_hex_digits(expectedHex, &expected) && adler32(data) == expected
+}
+export function adler32_append_little_endian(payload: []u8, out: []u8): isize {
+    if len(out) < len(payload) + 4 as usize { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < len(payload) { out[i] = payload[i] i = i + 1 as usize }
+    let checksum: u32 = adler32(payload)
+    let trailer: [u8; 4]
+    adler32_to_little_endian(checksum, slice(trailer))
+    i = 0 as usize
+    while i < 4 as usize { out[len(payload) + i] = trailer[i] i = i + 1 as usize }
+    return (len(payload) + 4 as usize) as isize
+}
+export function adler32_verify_appended_little_endian(frame: []u8): bool {
+    if len(frame) < 4 as usize { return false }
+    let payloadLength: usize = len(frame) - 4 as usize
+    let expected: u32 = 0 as u32
+    let trailer: [u8; 4]
+    let i: usize = 0 as usize
+    while i < 4 as usize { trailer[i] = frame[payloadLength + i] i = i + 1 as usize }
+    if !adler32_from_little_endian(slice(trailer), &expected) { return false }
+    let actual: u32 = 0 as u32
+    if !adler32_range(frame, 0 as usize, payloadLength, &actual) { return false }
+    return actual == expected
+}
+export function adler32_frame_checksum_big_endian(frame: []u8, out: *u32): bool {
+    if out == null || len(frame) < 4 as usize { return false }
+    let trailer: [u8; 4]
+    let base: usize = len(frame) - 4 as usize
+    let i: usize = 0 as usize
+    while i < 4 as usize { trailer[i] = frame[base + i] i = i + 1 as usize }
+    return adler32_from_big_endian(slice(trailer), out)
+}
+export function adler32_frame_checksum_little_endian(frame: []u8, out: *u32): bool {
+    if out == null || len(frame) < 4 as usize { return false }
+    let trailer: [u8; 4]
+    let base: usize = len(frame) - 4 as usize
+    let i: usize = 0 as usize
+    while i < 4 as usize { trailer[i] = frame[base + i] i = i + 1 as usize }
+    return adler32_from_little_endian(slice(trailer), out)
+}
+export function adler32_block_count(length: usize, blockSize: usize): usize {
+    if blockSize == 0 as usize || length == 0 as usize { return 0 as usize }
+    let blocks: usize = length / blockSize
+    if length % blockSize != 0 as usize { blocks = blocks + 1 as usize }
+    return blocks
+}
+export function adler32_block_offset(block: usize, blockSize: usize, out: *usize): bool {
+    if out == null || blockSize == 0 as usize { return false }
+    if block != 0 as usize && blockSize > 9223372036854775807 as usize / block { return false }
+    out[0] = block * blockSize
+    return true
+}
+export function adler32_block_length(total: usize, block: usize, blockSize: usize): usize {
+    let offset: usize = 0 as usize
+    if !adler32_block_offset(block, blockSize, &offset) || offset >= total { return 0 as usize }
+    let remaining: usize = total - offset
+    if remaining > blockSize { return blockSize }
+    return remaining
+}

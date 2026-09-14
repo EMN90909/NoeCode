@@ -1,6 +1,134 @@
 module noqeri.std.markdown
 
+record MarkdownLine {
+    kind: int
+    level: usize
+    contentStart: usize
+    contentEnd: usize
+}
+
+export function markdown_blank(): int { return 0 }
+export function markdown_paragraph(): int { return 1 }
+export function markdown_heading(): int { return 2 }
+export function markdown_unordered_list(): int { return 3 }
+export function markdown_ordered_list(): int { return 4 }
+export function markdown_quote(): int { return 5 }
+export function markdown_fence(): int { return 6 }
+export function markdown_rule(): int { return 7 }
+
 export function markdown_is_ascii_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
 export function markdown_is_ascii_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
 export function markdown_is_ascii_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
-export function markdown_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && markdown_is_ascii_space(value[i]) { i = i + 1 } return i }
+export function markdown_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && (value[i] == 32 as u8 || value[i] == 9 as u8) { i = i + 1 as usize } return i }
+export function markdown_trim_right_count(value: []u8): usize { let i: usize = len(value) while i > 0 as usize && markdown_is_ascii_space(value[i - 1 as usize]) { i = i - 1 as usize } return len(value) - i }
+
+export function markdown_is_fence_at(line: []u8, start: usize): bool {
+    if start + 2 as usize >= len(line) { return false }
+    let c: u8 = line[start]
+    if c != 96 as u8 && c != 126 as u8 { return false }
+    return line[start + 1 as usize] == c && line[start + 2 as usize] == c
+}
+
+export function markdown_is_rule(line: []u8, start: usize): bool {
+    if start >= len(line) { return false }
+    let marker: u8 = line[start]
+    if marker != 45 as u8 && marker != 42 as u8 && marker != 95 as u8 { return false }
+    let count: usize = 0 as usize
+    let i: usize = start
+    while i < len(line) {
+        if line[i] == marker { count = count + 1 as usize }
+        else if line[i] != 32 as u8 && line[i] != 9 as u8 && line[i] != 10 as u8 && line[i] != 13 as u8 { return false }
+        i = i + 1 as usize
+    }
+    return count >= 3 as usize
+}
+
+export function markdown_scan_line(line: []u8, out: *MarkdownLine): bool {
+    if out == null { return false }
+    let start: usize = markdown_trim_left_count(line)
+    let end: usize = len(line) - markdown_trim_right_count(line)
+    out.kind = markdown_blank()
+    out.level = 0 as usize
+    out.contentStart = start
+    out.contentEnd = end
+    if start >= end { return true }
+
+    if markdown_is_fence_at(line, start) {
+        out.kind = markdown_fence()
+        out.contentStart = start + 3 as usize
+        return true
+    }
+    if markdown_is_rule(line, start) { out.kind = markdown_rule() return true }
+
+    if line[start] == 35 as u8 {
+        let level: usize = 0 as usize
+        let i: usize = start
+        while i < end && line[i] == 35 as u8 && level < 6 as usize { level = level + 1 as usize i = i + 1 as usize }
+        if level > 0 as usize && (i == end || line[i] == 32 as u8 || line[i] == 9 as u8) {
+            out.kind = markdown_heading()
+            out.level = level
+            out.contentStart = i
+            while out.contentStart < end && (line[out.contentStart] == 32 as u8 || line[out.contentStart] == 9 as u8) { out.contentStart = out.contentStart + 1 as usize }
+            return true
+        }
+    }
+
+    if line[start] == 62 as u8 {
+        out.kind = markdown_quote()
+        out.contentStart = start + 1 as usize
+        while out.contentStart < end && (line[out.contentStart] == 32 as u8 || line[out.contentStart] == 9 as u8) { out.contentStart = out.contentStart + 1 as usize }
+        return true
+    }
+
+    if (line[start] == 45 as u8 || line[start] == 42 as u8 || line[start] == 43 as u8) && start + 1 as usize < end && (line[start + 1 as usize] == 32 as u8 || line[start + 1 as usize] == 9 as u8) {
+        out.kind = markdown_unordered_list()
+        out.contentStart = start + 2 as usize
+        while out.contentStart < end && (line[out.contentStart] == 32 as u8 || line[out.contentStart] == 9 as u8) { out.contentStart = out.contentStart + 1 as usize }
+        return true
+    }
+
+    if markdown_is_ascii_digit(line[start]) {
+        let i: usize = start
+        while i < end && markdown_is_ascii_digit(line[i]) { i = i + 1 as usize }
+        if i < end && (line[i] == 46 as u8 || line[i] == 41 as u8) && i + 1 as usize < end && (line[i + 1 as usize] == 32 as u8 || line[i + 1 as usize] == 9 as u8) {
+            out.kind = markdown_ordered_list()
+            out.contentStart = i + 2 as usize
+            while out.contentStart < end && (line[out.contentStart] == 32 as u8 || line[out.contentStart] == 9 as u8) { out.contentStart = out.contentStart + 1 as usize }
+            return true
+        }
+    }
+
+    out.kind = markdown_paragraph()
+    return true
+}
+
+export function markdown_count_inline_code(value: []u8): usize {
+    let count: usize = 0 as usize
+    let open: bool = false
+    let i: usize = 0 as usize
+    while i < len(value) {
+        if value[i] == 96 as u8 { open = !open if !open { count = count + 1 as usize } }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function markdown_balanced_inline_code(value: []u8): bool {
+    let open: bool = false
+    let i: usize = 0 as usize
+    while i < len(value) { if value[i] == 96 as u8 { open = !open } i = i + 1 as usize }
+    return !open
+}
+
+export function markdown_link_shape(value: []u8): bool {
+    let closeLabel: isize = -1 as isize
+    let openTarget: isize = -1 as isize
+    let i: usize = 0 as usize
+    while i < len(value) {
+        if value[i] == 93 as u8 && closeLabel < 0 as isize { closeLabel = i as isize }
+        else if value[i] == 40 as u8 && closeLabel >= 0 as isize && i == closeLabel as usize + 1 as usize { openTarget = i as isize }
+        else if value[i] == 41 as u8 && openTarget >= 0 as isize && i > openTarget as usize + 1 as usize { return true }
+        i = i + 1 as usize
+    }
+    return false
+}

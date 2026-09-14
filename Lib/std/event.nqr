@@ -1,5 +1,123 @@
 module noqeri.std.event
 
+// Event is a small allocation-free signal primitive. It models the state that
+// schedulers, reactors and tests need without pretending to block an OS thread.
+// manual_reset=true keeps the event signaled until reset; false consumes the
+// signal when event_take observes it.
+record Event {
+    signaled: bool
+    manual_reset: bool
+    generation: u64
+    set_count: u64
+    take_count: u64
+}
+
+export function event_init(event: *Event, manual_reset: bool, initially_set: bool): bool {
+    if event == null { return false }
+    event.signaled = initially_set
+    event.manual_reset = manual_reset
+    event.generation = 1 as u64
+    event.set_count = if initially_set { 1 as u64 } else { 0 as u64 }
+    event.take_count = 0 as u64
+    return true
+}
+
+export function event_is_set(event: *Event): bool {
+    return event != null && event.signaled
+}
+
+export function event_is_manual_reset(event: *Event): bool {
+    return event != null && event.manual_reset
+}
+
+export function event_generation(event: *Event): u64 {
+    if event == null { return 0 as u64 }
+    return event.generation
+}
+
+export function event_set_count(event: *Event): u64 {
+    if event == null { return 0 as u64 }
+    return event.set_count
+}
+
+export function event_take_count(event: *Event): u64 {
+    if event == null { return 0 as u64 }
+    return event.take_count
+}
+
+export function event_set(event: *Event): bool {
+    if event == null { return false }
+    if !event.signaled {
+        event.signaled = true
+        event.generation = event.generation + 1 as u64
+    }
+    event.set_count = event.set_count + 1 as u64
+    return true
+}
+
+export function event_reset(event: *Event): bool {
+    if event == null { return false }
+    if event.signaled {
+        event.signaled = false
+        event.generation = event.generation + 1 as u64
+    }
+    return true
+}
+
+// pulse records a state transition that consumers can detect with generation,
+// but leaves the event unsignaled afterwards.
+export function event_pulse(event: *Event): bool {
+    if event == null { return false }
+    event.set_count = event.set_count + 1 as u64
+    event.generation = event.generation + 1 as u64
+    event.signaled = false
+    return true
+}
+
+// take is the non-blocking observation operation. Auto-reset events consume the
+// signal; manual-reset events remain set for additional observers.
+export function event_take(event: *Event): bool {
+    if event == null || !event.signaled { return false }
+    event.take_count = event.take_count + 1 as u64
+    if !event.manual_reset {
+        event.signaled = false
+        event.generation = event.generation + 1 as u64
+    }
+    return true
+}
+
+export function event_changed_since(event: *Event, generation: u64): bool {
+    return event != null && event.generation != generation
+}
+
+export function event_set_if_clear(event: *Event): bool {
+    if event == null || event.signaled { return false }
+    return event_set(event)
+}
+
+export function event_reset_if_set(event: *Event): bool {
+    if event == null || !event.signaled { return false }
+    return event_reset(event)
+}
+
+export function event_configure(event: *Event, manual_reset: bool): bool {
+    if event == null { return false }
+    if event.manual_reset != manual_reset {
+        event.manual_reset = manual_reset
+        event.generation = event.generation + 1 as u64
+    }
+    return true
+}
+
+export function event_clear_counters(event: *Event): bool {
+    if event == null { return false }
+    event.set_count = 0 as u64
+    event.take_count = 0 as u64
+    return true
+}
+
+// Compatibility helpers retained for source that used the former placeholder.
+// New code should use Event and the operations above.
 export function event_state_valid(state: int): bool { return state >= 0 && state <= 4 }
 export function event_can_transition(current: int, next: int): bool { if current < 0 || next < 0 { return false } return next >= current || next == 0 }
 export function event_default_spin_limit(): usize { return 64 as usize }

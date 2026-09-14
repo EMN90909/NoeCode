@@ -1,0 +1,77 @@
+name: compiler-maturity
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DNOQERI_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build --config Debug --parallel
+      - name: Compiler maturity tests
+        if: runner.os != 'Windows'
+        run: node scripts/test-compiler-maturity.mjs build/noqeri
+      - name: Compiler maturity tests (Windows)
+        if: runner.os == 'Windows'
+        run: node scripts/test-compiler-maturity.mjs build/Debug/noqeri.exe
+      - name: CTest
+        run: ctest --test-dir build -C Debug --output-on-failure
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: cmake -S . -B build-san -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DNOQERI_ENABLE_SANITIZERS=ON
+      - run: cmake --build build-san --parallel
+      - run: ctest --test-dir build-san --output-on-failure -R 'noqeri-(compiler-maturity|check-hello|library-suite|fuzz-quick)'
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+
+  clean-bootstrap:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Bootstrap Stage-2 without preinstalled Noqeri
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          unset NOQERI_STAGE0
+          BUILD_DIR="$PWD/bootstrap-build" sh scripts/build.sh
+          bootstrap-build/noqeri selftest
+          bootstrap-build/noqeri stage2-status
+      - name: Bootstrap Stage-2 without preinstalled Noqeri (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Remove-Item Env:NOQERI_STAGE0 -ErrorAction SilentlyContinue
+          $env:BUILD_DIR = Join-Path $PWD 'bootstrap-build'
+          ./scripts/build.ps1
+          & ./bootstrap-build/noqeri.cmd selftest
+          & ./bootstrap-build/noqeri.cmd stage2-status

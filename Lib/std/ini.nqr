@@ -1,6 +1,208 @@
 module noqeri.std.ini
 
+record IniSpan {
+    start: usize
+    length: usize
+}
+
+record IniEntry {
+    kind: int
+    name: IniSpan
+    value: IniSpan
+    line_length: usize
+}
+
+export function ini_entry_blank(): int { return 0 }
+export function ini_entry_section(): int { return 1 }
+export function ini_entry_property(): int { return 2 }
+export function ini_entry_comment(): int { return 3 }
+export function ini_entry_error(): int { return 4 }
+
 export function ini_is_ascii_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
 export function ini_is_ascii_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
 export function ini_is_ascii_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
-export function ini_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && ini_is_ascii_space(value[i]) { i = i + 1 } return i }
+export function ini_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && ini_is_ascii_space(value[i]) { i = i + 1 as usize } return i }
+
+export function ini_trim_right_index(value: []u8, start: usize, end: usize): usize {
+    let result: usize = end
+    if result > len(value) { result = len(value) }
+    while result > start && ini_is_ascii_space(value[result - 1 as usize]) { result = result - 1 as usize }
+    return result
+}
+
+export function ini_span(start: usize, length: usize): IniSpan {
+    let span: IniSpan
+    span.start = start
+    span.length = length
+    return span
+}
+
+export function ini_span_valid(value: []u8, span: IniSpan): bool {
+    if span.start > len(value) { return false }
+    return span.length <= len(value) - span.start
+}
+
+export function ini_span_empty(span: IniSpan): bool { return span.length == 0 as usize }
+
+export function ini_span_equals(value: []u8, span: IniSpan, expected: []u8): bool {
+    if !ini_span_valid(value, span) || span.length != len(expected) { return false }
+    let i: usize = 0 as usize
+    while i < span.length {
+        if value[span.start + i] != expected[i] { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function ini_span_copy(value: []u8, span: IniSpan, out: []u8): isize {
+    if !ini_span_valid(value, span) || len(out) < span.length { return -1 as isize }
+    let i: usize = 0 as usize
+    while i < span.length { out[i] = value[span.start + i] i = i + 1 as usize }
+    return span.length as isize
+}
+
+function ini_entry_reset(entry: *IniEntry, line_length: usize): bool {
+    if entry == null { return false }
+    entry.kind = ini_entry_blank()
+    entry.name.start = 0 as usize
+    entry.name.length = 0 as usize
+    entry.value.start = 0 as usize
+    entry.value.length = 0 as usize
+    entry.line_length = line_length
+    return true
+}
+
+function ini_trim_range(line: []u8, start: usize, end: usize, out_start: *usize, out_end: *usize): bool {
+    if out_start == null || out_end == null || start > end || end > len(line) { return false }
+    let first: usize = start
+    while first < end && ini_is_ascii_space(line[first]) { first = first + 1 as usize }
+    let last: usize = end
+    while last > first && ini_is_ascii_space(line[last - 1 as usize]) { last = last - 1 as usize }
+    unsafe { *out_start = first *out_end = last }
+    return true
+}
+
+export function ini_parse_line(line: []u8, entry: *IniEntry): bool {
+    if !ini_entry_reset(entry, len(line)) { return false }
+    let start: usize = 0 as usize
+    let end: usize = len(line)
+    if !ini_trim_range(line, 0 as usize, len(line), &start, &end) { return false }
+    if start >= end { entry.kind = ini_entry_blank() return true }
+
+    let first: u8 = line[start]
+    if first == 59 as u8 || first == 35 as u8 {
+        entry.kind = ini_entry_comment()
+        entry.value.start = start + 1 as usize
+        entry.value.length = end - entry.value.start
+        return true
+    }
+
+    if first == 91 as u8 {
+        if end <= start + 2 as usize || line[end - 1 as usize] != 93 as u8 { entry.kind = ini_entry_error() return false }
+        let name_start: usize = start + 1 as usize
+        let name_end: usize = end - 1 as usize
+        if !ini_trim_range(line, name_start, name_end, &name_start, &name_end) { entry.kind = ini_entry_error() return false }
+        if name_start >= name_end { entry.kind = ini_entry_error() return false }
+        entry.kind = ini_entry_section()
+        entry.name.start = name_start
+        entry.name.length = name_end - name_start
+        return true
+    }
+
+    let separator: usize = end
+    let i: usize = start
+    while i < end {
+        if line[i] == 61 as u8 || line[i] == 58 as u8 { separator = i i = end }
+        else { i = i + 1 as usize }
+    }
+    if separator >= end { entry.kind = ini_entry_error() return false }
+
+    let key_start: usize = start
+    let key_end: usize = separator
+    let value_start: usize = separator + 1 as usize
+    let value_end: usize = end
+    ini_trim_range(line, key_start, key_end, &key_start, &key_end)
+    ini_trim_range(line, value_start, value_end, &value_start, &value_end)
+    if key_start >= key_end { entry.kind = ini_entry_error() return false }
+
+    entry.kind = ini_entry_property()
+    entry.name.start = key_start
+    entry.name.length = key_end - key_start
+    entry.value.start = value_start
+    entry.value.length = value_end - value_start
+    return true
+}
+
+export function ini_value_is_quoted(line: []u8, entry: *IniEntry): bool {
+    if entry == null || entry.kind != ini_entry_property() || entry.value.length < 2 as usize { return false }
+    let start: usize = entry.value.start
+    let end: usize = start + entry.value.length
+    if end > len(line) { return false }
+    let first: u8 = line[start]
+    let last: u8 = line[end - 1 as usize]
+    return (first == 34 as u8 && last == 34 as u8) || (first == 39 as u8 && last == 39 as u8)
+}
+
+export function ini_value_content_span(line: []u8, entry: *IniEntry): IniSpan {
+    let result: IniSpan = entry.value
+    if ini_value_is_quoted(line, entry) {
+        result.start = result.start + 1 as usize
+        result.length = result.length - 2 as usize
+    }
+    return result
+}
+
+function ini_ascii_lower(c: u8): u8 { if c >= 65 as u8 && c <= 90 as u8 { return c + 32 as u8 } return c }
+
+export function ini_span_equals_ascii_case(line: []u8, span: IniSpan, expected: []u8): bool {
+    if !ini_span_valid(line, span) || span.length != len(expected) { return false }
+    let i: usize = 0 as usize
+    while i < span.length {
+        if ini_ascii_lower(line[span.start + i]) != ini_ascii_lower(expected[i]) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function ini_parse_bool(line: []u8, entry: *IniEntry, out: *bool): bool {
+    if entry == null || out == null || entry.kind != ini_entry_property() { return false }
+    let span: IniSpan = ini_value_content_span(line, entry)
+    let true1: [u8; 4] = [116 as u8,114 as u8,117 as u8,101 as u8]
+    let true2: [u8; 3] = [121 as u8,101 as u8,115 as u8]
+    let true3: [u8; 2] = [111 as u8,110 as u8]
+    let false1: [u8; 5] = [102 as u8,97 as u8,108 as u8,115 as u8,101 as u8]
+    let false2: [u8; 2] = [110 as u8,111 as u8]
+    let false3: [u8; 3] = [111 as u8,102 as u8,102 as u8]
+    if ini_span_equals_ascii_case(line, span, slice(true1)) || ini_span_equals_ascii_case(line, span, slice(true2)) || ini_span_equals_ascii_case(line, span, slice(true3)) { unsafe { *out = true } return true }
+    if ini_span_equals_ascii_case(line, span, slice(false1)) || ini_span_equals_ascii_case(line, span, slice(false2)) || ini_span_equals_ascii_case(line, span, slice(false3)) { unsafe { *out = false } return true }
+    return false
+}
+
+export function ini_parse_i64(line: []u8, entry: *IniEntry, out: *i64): bool {
+    if entry == null || out == null || entry.kind != ini_entry_property() { return false }
+    let span: IniSpan = ini_value_content_span(line, entry)
+    if span.length == 0 as usize || !ini_span_valid(line, span) { return false }
+    let i: usize = 0 as usize
+    let negative: bool = false
+    if line[span.start] == 45 as u8 { negative = true i = 1 as usize }
+    else if line[span.start] == 43 as u8 { i = 1 as usize }
+    if i >= span.length { return false }
+    let value: i64 = 0 as i64
+    while i < span.length {
+        let c: u8 = line[span.start + i]
+        if !ini_is_ascii_digit(c) { return false }
+        value = value * 10 as i64 + (c - 48 as u8) as i64
+        i = i + 1 as usize
+    }
+    if negative { value = -value }
+    unsafe { *out = value }
+    return true
+}
+
+export function ini_property_matches(line: []u8, entry: *IniEntry, key: []u8): bool {
+    return entry != null && entry.kind == ini_entry_property() && ini_span_equals(line, entry.name, key)
+}
+
+export function ini_section_matches(line: []u8, entry: *IniEntry, section: []u8): bool {
+    return entry != null && entry.kind == ini_entry_section() && ini_span_equals(line, entry.name, section)
+}

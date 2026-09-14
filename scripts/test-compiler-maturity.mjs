@@ -17,6 +17,8 @@ function runCase(name, source, { ok = true, diagnostic = '', run = false, stdout
   else console.log(`PASS ${name}`)
 }
 try {
+  runCase('generic-whitespace-pointer-cast', `function probe(): void {\n  let p: *u8 = 0 as *u8\n  print("ok")\n}\n`)
+  runCase('generic-whitespace-record-fields', `record Box<T> {\n  value: T\n  generation: u64\n}\n`)
   runCase('comptime-arithmetic', `const FACTOR: int = 7\nlet x: int = comptime(FACTOR + 5)\nprint(x)\n`, { run: true, stdout: ['12'] })
   runCase('comptime-function', `function twice(x: int): int { return x * 2 }\nfunction choose(flag: bool, a: int, b: int): int { if flag { return a } else { return b } }\nlet x: int = comptime(twice(9) + choose(true, 4, 99))\nprint(x)\n`, { run: true, stdout: ['22'] })
   runCase('comptime-runtime-rejected', `function runtime_value(x: int): int { let y: int = comptime(x + 1) return y }\n`, { ok: false, diagnostic: 'NQR-C5001' })
@@ -29,4 +31,4 @@ try {
   runCase('ownership-borrow-scope-ends', `let owner: int = 7\n{ let reference: *int = &owner print(*reference) }\nowner = 9\nprint(owner)\n`, { run: true, stdout: ['7', '9'] })
 } finally { rmSync(root, { recursive: true, force: true }) }
 if (failures) { console.error(`compiler-maturity: ${failures} case(s) failed`); process.exit(1) }
-console.log('compiler-maturity: all ownership/comptime cases passed')
+console.log('compiler-maturity: all ownership/comptime/generic preprocessing cases passed')

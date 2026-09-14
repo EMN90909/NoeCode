@@ -78,7 +78,10 @@ function ini_trim_range(line: []u8, start: usize, end: usize, out_start: *usize,
     while first < end && ini_is_ascii_space(line[first]) { first = first + 1 as usize }
     let last: usize = end
     while last > first && ini_is_ascii_space(line[last - 1 as usize]) { last = last - 1 as usize }
-    unsafe { *out_start = first *out_end = last }
+    unsafe {
+        *out_start = first
+        *out_end = last
+    }
     return true
 }
 
@@ -144,7 +147,11 @@ export function ini_value_is_quoted(line: []u8, entry: *IniEntry): bool {
 }
 
 export function ini_value_content_span(line: []u8, entry: *IniEntry): IniSpan {
-    let result: IniSpan = entry.value
+    let result: IniSpan
+    result.start = 0 as usize
+    result.length = 0 as usize
+    if entry == null || entry.kind != ini_entry_property() { return result }
+    result = entry.value
     if ini_value_is_quoted(line, entry) {
         result.start = result.start + 1 as usize
         result.length = result.length - 2 as usize

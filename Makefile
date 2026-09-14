@@ -1,22 +1,22 @@
 BUILD_DIR ?= build
-BUILD_TYPE ?= Release
 
-.PHONY: all build test doctor clean install
+.PHONY: all build test doctor install clean stage2-proof
 all: build
 
 build:
-	cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
-	cmake --build $(BUILD_DIR) --config $(BUILD_TYPE)
+	BUILD_DIR=$(BUILD_DIR) ./scripts/build.sh
 
 test: build
-	ctest --test-dir $(BUILD_DIR) -C $(BUILD_TYPE) --output-on-failure
-	./scripts/test_core.sh
+	NQ=./$(BUILD_DIR)/noqeri ./scripts/test_core.sh
 
 doctor: build
-	./$(BUILD_DIR)/noqeri doctor .
+	./$(BUILD_DIR)/noqeri doctor
 
 install: build
-	cmake --install $(BUILD_DIR) --config $(BUILD_TYPE)
+	BUILD_DIR=$(BUILD_DIR) ./scripts/install.sh
+
+stage2-proof:
+	node scripts/bootstrap-stage2.mjs
 
 clean:
-	cmake -E remove_directory $(BUILD_DIR)
+	rm -rf $(BUILD_DIR)

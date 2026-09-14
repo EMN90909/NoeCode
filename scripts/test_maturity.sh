@@ -24,6 +24,8 @@ reject() {
 "$NQ" run tests/storage_structures.nqr >/dev/null
 "$NQ" check tests/stdlib_foundations2.nqr >/dev/null
 "$NQ" run tests/stdlib_foundations2.nqr >/dev/null
+"$NQ" check tests/stdlib_maturity3.nqr >/dev/null
+"$NQ" run tests/stdlib_maturity3.nqr >/dev/null
 "$NQ" check tests/time_modules.nqr >/dev/null
 "$NQ" run tests/time_modules.nqr >/dev/null
 "$NQ" check tests/data_integrity.nqr >/dev/null
@@ -32,6 +34,11 @@ reject() {
 "$NQ" run tests/encoding_foundations.nqr >/dev/null
 "$NQ" check tests/repeat_loop.nqr >/dev/null
 "$NQ" run tests/repeat_loop.nqr >/dev/null
+
+if command -v node >/dev/null 2>&1; then
+  node Tools/test/fuzz-engine.test.mjs >/dev/null
+  node Tools/test/source-bootstrap.test.mjs >/dev/null
+fi
 
 cat > build/invalid_pointer_escape.nqr <<'EOF'
 function bad_pointer(): *u32 {
@@ -165,4 +172,4 @@ export function next_u64(link: *Link<u64>): *Link<u64> {
 EOF
 "$NQ" check build/valid_generic_record_recursive.nqr >/dev/null
 
-echo "maturity checks passed (ownership, borrow safety, comptime, generics, bounds and null safety)"
+echo "maturity checks passed (ownership, borrow safety, comptime, expanded stdlib, fuzz tooling, generics, bounds and null safety)"

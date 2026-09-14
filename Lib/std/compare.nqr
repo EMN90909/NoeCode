@@ -1,13 +1,184 @@
 module noqeri.std.compare
 
-export function nqCompareI64(left: i64, right: i64): i64 {
-    if left < right { return -1 as i64 }
-    if left > right { return 1 as i64 }
-    return 0 as i64
-}
+export function compare_less():int{return-1}
+export function compare_equal():int{return 0}
+export function compare_greater():int{return 1}
+export function compare_reverse(order:int):int{if order<0{return 1} if order>0{return-1} return 0}
+export function compare_normalize(order:int):int{if order<0{return-1} if order>0{return 1} return 0}
+export function compare_is_less(order:int):bool{return order<0}
+export function compare_is_equal(order:int):bool{return order==0}
+export function compare_is_greater(order:int):bool{return order>0}
+export function compare_is_less_or_equal(order:int):bool{return order<=0}
+export function compare_is_greater_or_equal(order:int):bool{return order>=0}
 
-export function nqCompareU64(left: u64, right: u64): i64 {
-    if left < right { return -1 as i64 }
-    if left > right { return 1 as i64 }
-    return 0 as i64
-}
+export function compare_i8(a:i8,b:i8):int{if a<b{return-1} if a>b{return 1} return 0}
+export function compare_u8(a:u8,b:u8):int{if a<b{return-1} if a>b{return 1} return 0}
+export function compare_i16(a:i16,b:i16):int{if a<b{return-1} if a>b{return 1} return 0}
+export function compare_u16(a:u16,b:u16):int{if a<b{return-1} if a>b{return 1} return 0}
+export function compare_i32(a:i32,b:i32):int{if a<b{return-1} if a>b{return 1} return 0}
+export function compare_u32(a:u32,b:u32):int{if a<b{return-1} if a>b{return 1} return 0}
+export function compare_i64(a:i64,b:i64):int{if a<b{return-1} if a>b{return 1} return 0}
+export function compare_u64(a:u64,b:u64):int{if a<b{return-1} if a>b{return 1} return 0}
+export function compare_isize(a:isize,b:isize):int{if a<b{return-1} if a>b{return 1} return 0}
+export function compare_usize(a:usize,b:usize):int{if a<b{return-1} if a>b{return 1} return 0}
+export function compare_int(a:int,b:int):int{if a<b{return-1} if a>b{return 1} return 0}
+export function compare_float(a:float,b:float):int{if a<b{return-1} if a>b{return 1} return 0}
+export function compare_bool(a:bool,b:bool):int{if a==b{return 0} if !a&&b{return-1} return 1}
+
+export function compare_min_i8(a:i8,b:i8):i8{if a<=b{return a} return b}
+export function compare_max_i8(a:i8,b:i8):i8{if a>=b{return a} return b}
+export function compare_clamp_i8(v:i8,lo:i8,hi:i8):i8{if hi<lo{return lo} if v<lo{return lo} if v>hi{return hi} return v}
+export function compare_between_i8(v:i8,lo:i8,hi:i8):bool{return hi>=lo&&v>=lo&&v<=hi}
+export function compare_outside_i8(v:i8,lo:i8,hi:i8):bool{return !compare_between_i8(v,lo,hi)}
+export function compare_ordered_i8(a:i8,b:i8,c:i8):bool{return a<=b&&b<=c}
+export function compare_strict_i8(a:i8,b:i8,c:i8):bool{return a<b&&b<c}
+export function compare_min_u8(a:u8,b:u8):u8{if a<=b{return a} return b}
+export function compare_max_u8(a:u8,b:u8):u8{if a>=b{return a} return b}
+export function compare_clamp_u8(v:u8,lo:u8,hi:u8):u8{if hi<lo{return lo} if v<lo{return lo} if v>hi{return hi} return v}
+export function compare_between_u8(v:u8,lo:u8,hi:u8):bool{return hi>=lo&&v>=lo&&v<=hi}
+export function compare_outside_u8(v:u8,lo:u8,hi:u8):bool{return !compare_between_u8(v,lo,hi)}
+export function compare_ordered_u8(a:u8,b:u8,c:u8):bool{return a<=b&&b<=c}
+export function compare_strict_u8(a:u8,b:u8,c:u8):bool{return a<b&&b<c}
+export function compare_min_i16(a:i16,b:i16):i16{if a<=b{return a} return b}
+export function compare_max_i16(a:i16,b:i16):i16{if a>=b{return a} return b}
+export function compare_clamp_i16(v:i16,lo:i16,hi:i16):i16{if hi<lo{return lo} if v<lo{return lo} if v>hi{return hi} return v}
+export function compare_between_i16(v:i16,lo:i16,hi:i16):bool{return hi>=lo&&v>=lo&&v<=hi}
+export function compare_outside_i16(v:i16,lo:i16,hi:i16):bool{return !compare_between_i16(v,lo,hi)}
+export function compare_ordered_i16(a:i16,b:i16,c:i16):bool{return a<=b&&b<=c}
+export function compare_strict_i16(a:i16,b:i16,c:i16):bool{return a<b&&b<c}
+export function compare_min_u16(a:u16,b:u16):u16{if a<=b{return a} return b}
+export function compare_max_u16(a:u16,b:u16):u16{if a>=b{return a} return b}
+export function compare_clamp_u16(v:u16,lo:u16,hi:u16):u16{if hi<lo{return lo} if v<lo{return lo} if v>hi{return hi} return v}
+export function compare_between_u16(v:u16,lo:u16,hi:u16):bool{return hi>=lo&&v>=lo&&v<=hi}
+export function compare_outside_u16(v:u16,lo:u16,hi:u16):bool{return !compare_between_u16(v,lo,hi)}
+export function compare_ordered_u16(a:u16,b:u16,c:u16):bool{return a<=b&&b<=c}
+export function compare_strict_u16(a:u16,b:u16,c:u16):bool{return a<b&&b<c}
+export function compare_min_i32(a:i32,b:i32):i32{if a<=b{return a} return b}
+export function compare_max_i32(a:i32,b:i32):i32{if a>=b{return a} return b}
+export function compare_clamp_i32(v:i32,lo:i32,hi:i32):i32{if hi<lo{return lo} if v<lo{return lo} if v>hi{return hi} return v}
+export function compare_between_i32(v:i32,lo:i32,hi:i32):bool{return hi>=lo&&v>=lo&&v<=hi}
+export function compare_outside_i32(v:i32,lo:i32,hi:i32):bool{return !compare_between_i32(v,lo,hi)}
+export function compare_ordered_i32(a:i32,b:i32,c:i32):bool{return a<=b&&b<=c}
+export function compare_strict_i32(a:i32,b:i32,c:i32):bool{return a<b&&b<c}
+export function compare_min_u32(a:u32,b:u32):u32{if a<=b{return a} return b}
+export function compare_max_u32(a:u32,b:u32):u32{if a>=b{return a} return b}
+export function compare_clamp_u32(v:u32,lo:u32,hi:u32):u32{if hi<lo{return lo} if v<lo{return lo} if v>hi{return hi} return v}
+export function compare_between_u32(v:u32,lo:u32,hi:u32):bool{return hi>=lo&&v>=lo&&v<=hi}
+export function compare_outside_u32(v:u32,lo:u32,hi:u32):bool{return !compare_between_u32(v,lo,hi)}
+export function compare_ordered_u32(a:u32,b:u32,c:u32):bool{return a<=b&&b<=c}
+export function compare_strict_u32(a:u32,b:u32,c:u32):bool{return a<b&&b<c}
+export function compare_min_i64(a:i64,b:i64):i64{if a<=b{return a} return b}
+export function compare_max_i64(a:i64,b:i64):i64{if a>=b{return a} return b}
+export function compare_clamp_i64(v:i64,lo:i64,hi:i64):i64{if hi<lo{return lo} if v<lo{return lo} if v>hi{return hi} return v}
+export function compare_between_i64(v:i64,lo:i64,hi:i64):bool{return hi>=lo&&v>=lo&&v<=hi}
+export function compare_outside_i64(v:i64,lo:i64,hi:i64):bool{return !compare_between_i64(v,lo,hi)}
+export function compare_ordered_i64(a:i64,b:i64,c:i64):bool{return a<=b&&b<=c}
+export function compare_strict_i64(a:i64,b:i64,c:i64):bool{return a<b&&b<c}
+export function compare_min_u64(a:u64,b:u64):u64{if a<=b{return a} return b}
+export function compare_max_u64(a:u64,b:u64):u64{if a>=b{return a} return b}
+export function compare_clamp_u64(v:u64,lo:u64,hi:u64):u64{if hi<lo{return lo} if v<lo{return lo} if v>hi{return hi} return v}
+export function compare_between_u64(v:u64,lo:u64,hi:u64):bool{return hi>=lo&&v>=lo&&v<=hi}
+export function compare_outside_u64(v:u64,lo:u64,hi:u64):bool{return !compare_between_u64(v,lo,hi)}
+export function compare_ordered_u64(a:u64,b:u64,c:u64):bool{return a<=b&&b<=c}
+export function compare_strict_u64(a:u64,b:u64,c:u64):bool{return a<b&&b<c}
+export function compare_min_isize(a:isize,b:isize):isize{if a<=b{return a} return b}
+export function compare_max_isize(a:isize,b:isize):isize{if a>=b{return a} return b}
+export function compare_clamp_isize(v:isize,lo:isize,hi:isize):isize{if hi<lo{return lo} if v<lo{return lo} if v>hi{return hi} return v}
+export function compare_between_isize(v:isize,lo:isize,hi:isize):bool{return hi>=lo&&v>=lo&&v<=hi}
+export function compare_outside_isize(v:isize,lo:isize,hi:isize):bool{return !compare_between_isize(v,lo,hi)}
+export function compare_ordered_isize(a:isize,b:isize,c:isize):bool{return a<=b&&b<=c}
+export function compare_strict_isize(a:isize,b:isize,c:isize):bool{return a<b&&b<c}
+export function compare_min_usize(a:usize,b:usize):usize{if a<=b{return a} return b}
+export function compare_max_usize(a:usize,b:usize):usize{if a>=b{return a} return b}
+export function compare_clamp_usize(v:usize,lo:usize,hi:usize):usize{if hi<lo{return lo} if v<lo{return lo} if v>hi{return hi} return v}
+export function compare_between_usize(v:usize,lo:usize,hi:usize):bool{return hi>=lo&&v>=lo&&v<=hi}
+export function compare_outside_usize(v:usize,lo:usize,hi:usize):bool{return !compare_between_usize(v,lo,hi)}
+export function compare_ordered_usize(a:usize,b:usize,c:usize):bool{return a<=b&&b<=c}
+export function compare_strict_usize(a:usize,b:usize,c:usize):bool{return a<b&&b<c}
+export function compare_min_int(a:int,b:int):int{if a<=b{return a} return b}
+export function compare_max_int(a:int,b:int):int{if a>=b{return a} return b}
+export function compare_clamp_int(v:int,lo:int,hi:int):int{if hi<lo{return lo} if v<lo{return lo} if v>hi{return hi} return v}
+export function compare_between_int(v:int,lo:int,hi:int):bool{return hi>=lo&&v>=lo&&v<=hi}
+export function compare_outside_int(v:int,lo:int,hi:int):bool{return !compare_between_int(v,lo,hi)}
+export function compare_ordered_int(a:int,b:int,c:int):bool{return a<=b&&b<=c}
+export function compare_strict_int(a:int,b:int,c:int):bool{return a<b&&b<c}
+export function compare_min_float(a:float,b:float):float{if a<=b{return a} return b}
+export function compare_max_float(a:float,b:float):float{if a>=b{return a} return b}
+export function compare_clamp_float(v:float,lo:float,hi:float):float{if hi<lo{return lo} if v<lo{return lo} if v>hi{return hi} return v}
+export function compare_between_float(v:float,lo:float,hi:float):bool{return hi>=lo&&v>=lo&&v<=hi}
+export function compare_outside_float(v:float,lo:float,hi:float):bool{return !compare_between_float(v,lo,hi)}
+export function compare_ordered_float(a:float,b:float,c:float):bool{return a<=b&&b<=c}
+export function compare_strict_float(a:float,b:float,c:float):bool{return a<b&&b<c}
+
+export function compare_bytes(a:[]u8,b:[]u8):int{let count:usize=len(a) if len(b)<count{count=len(b)} let index:usize=0 as usize while index<count{if a[index]<b[index]{return-1} if a[index]>b[index]{return 1} index=index+1 as usize} return compare_usize(len(a),len(b))}
+export function compare_bytes_equal(a:[]u8,b:[]u8):bool{return compare_bytes(a,b)==0}
+export function compare_bytes_less(a:[]u8,b:[]u8):bool{return compare_bytes(a,b)<0}
+export function compare_bytes_greater(a:[]u8,b:[]u8):bool{return compare_bytes(a,b)>0}
+export function compare_bytes_starts_with(value:[]u8,prefix:[]u8):bool{if len(prefix)>len(value){return false} let i:usize=0 as usize while i<len(prefix){if value[i]!=prefix[i]{return false} i=i+1 as usize} return true}
+export function compare_bytes_ends_with(value:[]u8,suffix:[]u8):bool{if len(suffix)>len(value){return false} let offset:usize=len(value)-len(suffix) let i:usize=0 as usize while i<len(suffix){if value[offset+i]!=suffix[i]{return false} i=i+1 as usize} return true}
+export function compare_bytes_prefix_length(a:[]u8,b:[]u8):usize{let count:usize=len(a) if len(b)<count{count=len(b)} let i:usize=0 as usize while i<count&&a[i]==b[i]{i=i+1 as usize} return i}
+export function compare_bytes_first_difference(a:[]u8,b:[]u8):isize{let count:usize=len(a) if len(b)<count{count=len(b)} let i:usize=0 as usize while i<count{if a[i]!=b[i]{return i as isize} i=i+1 as usize} if len(a)!=len(b){return count as isize} return-1 as isize}
+
+export function compare_i64_slice(a:[]i64,b:[]i64):int{let count:usize=len(a) if len(b)<count{count=len(b)} let i:usize=0 as usize while i<count{let order:int=compare_i64(a[i],b[i]) if order!=0{return order} i=i+1 as usize} return compare_usize(len(a),len(b))}
+export function compare_u64_slice(a:[]u64,b:[]u64):int{let count:usize=len(a) if len(b)<count{count=len(b)} let i:usize=0 as usize while i<count{let order:int=compare_u64(a[i],b[i]) if order!=0{return order} i=i+1 as usize} return compare_usize(len(a),len(b))}
+export function compare_u8_slice(a:[]u8,b:[]u8):int{return compare_bytes(a,b)}
+
+export function compare_i64_slice_equal(a:[]i64,b:[]i64):bool{if len(a)!=len(b){return false} let i:usize=0 as usize while i<len(a){if a[i]!=b[i]{return false} i=i+1 as usize} return true}
+export function compare_u64_slice_equal(a:[]u64,b:[]u64):bool{if len(a)!=len(b){return false} let i:usize=0 as usize while i<len(a){if a[i]!=b[i]{return false} i=i+1 as usize} return true}
+export function compare_u8_slice_equal(a:[]u8,b:[]u8):bool{return compare_bytes_equal(a,b)}
+export function compare_usize_slice_equal(a:[]usize,b:[]usize):bool{if len(a)!=len(b){return false} let i:usize=0 as usize while i<len(a){if a[i]!=b[i]{return false} i=i+1 as usize} return true}
+
+export function compare_i64_slice_sorted_ascending(values:[]i64):bool{let i:usize=1 as usize while i<len(values){if values[i]<values[i-1 as usize]{return false} i=i+1 as usize} return true}
+export function compare_i64_slice_sorted_descending(values:[]i64):bool{let i:usize=1 as usize while i<len(values){if values[i]>values[i-1 as usize]{return false} i=i+1 as usize} return true}
+export function compare_u64_slice_sorted_ascending(values:[]u64):bool{let i:usize=1 as usize while i<len(values){if values[i]<values[i-1 as usize]{return false} i=i+1 as usize} return true}
+export function compare_u64_slice_sorted_descending(values:[]u64):bool{let i:usize=1 as usize while i<len(values){if values[i]>values[i-1 as usize]{return false} i=i+1 as usize} return true}
+export function compare_u8_slice_sorted_ascending(values:[]u8):bool{let i:usize=1 as usize while i<len(values){if values[i]<values[i-1 as usize]{return false} i=i+1 as usize} return true}
+export function compare_u8_slice_sorted_descending(values:[]u8):bool{let i:usize=1 as usize while i<len(values){if values[i]>values[i-1 as usize]{return false} i=i+1 as usize} return true}
+export function compare_usize_slice_sorted_ascending(values:[]usize):bool{let i:usize=1 as usize while i<len(values){if values[i]<values[i-1 as usize]{return false} i=i+1 as usize} return true}
+export function compare_usize_slice_sorted_descending(values:[]usize):bool{let i:usize=1 as usize while i<len(values){if values[i]>values[i-1 as usize]{return false} i=i+1 as usize} return true}
+
+export function compare_i64_slice_all_between(values:[]i64,lo:i64,hi:i64):bool{if hi<lo{return false} let i:usize=0 as usize while i<len(values){if values[i]<lo||values[i]>hi{return false} i=i+1 as usize} return true}
+export function compare_u64_slice_all_between(values:[]u64,lo:u64,hi:u64):bool{if hi<lo{return false} let i:usize=0 as usize while i<len(values){if values[i]<lo||values[i]>hi{return false} i=i+1 as usize} return true}
+export function compare_u8_slice_all_between(values:[]u8,lo:u8,hi:u8):bool{if hi<lo{return false} let i:usize=0 as usize while i<len(values){if values[i]<lo||values[i]>hi{return false} i=i+1 as usize} return true}
+export function compare_usize_slice_all_between(values:[]usize,lo:usize,hi:usize):bool{if hi<lo{return false} let i:usize=0 as usize while i<len(values){if values[i]<lo||values[i]>hi{return false} i=i+1 as usize} return true}
+
+export function compare_i64_slice_count_equal(values:[]i64,target:i64):usize{let count:usize=0 as usize let i:usize=0 as usize while i<len(values){if values[i]==target{count=count+1 as usize} i=i+1 as usize} return count}
+export function compare_u64_slice_count_equal(values:[]u64,target:u64):usize{let count:usize=0 as usize let i:usize=0 as usize while i<len(values){if values[i]==target{count=count+1 as usize} i=i+1 as usize} return count}
+export function compare_u8_slice_count_equal(values:[]u8,target:u8):usize{let count:usize=0 as usize let i:usize=0 as usize while i<len(values){if values[i]==target{count=count+1 as usize} i=i+1 as usize} return count}
+export function compare_usize_slice_count_equal(values:[]usize,target:usize):usize{let count:usize=0 as usize let i:usize=0 as usize while i<len(values){if values[i]==target{count=count+1 as usize} i=i+1 as usize} return count}
+
+export function compare_i64_lower_bound(values:[]i64,target:i64):usize{let low:usize=0 as usize let high:usize=len(values) while low<high{let mid:usize=low+(high-low)/2 as usize if values[mid]<target{low=mid+1 as usize}else{high=mid}} return low}
+export function compare_i64_upper_bound(values:[]i64,target:i64):usize{let low:usize=0 as usize let high:usize=len(values) while low<high{let mid:usize=low+(high-low)/2 as usize if values[mid]<=target{low=mid+1 as usize}else{high=mid}} return low}
+export function compare_i64_binary_search(values:[]i64,target:i64):isize{let at:usize=compare_i64_lower_bound(values,target) if at<len(values)&&values[at]==target{return at as isize} return-1 as isize}
+export function compare_u64_lower_bound(values:[]u64,target:u64):usize{let low:usize=0 as usize let high:usize=len(values) while low<high{let mid:usize=low+(high-low)/2 as usize if values[mid]<target{low=mid+1 as usize}else{high=mid}} return low}
+export function compare_u64_upper_bound(values:[]u64,target:u64):usize{let low:usize=0 as usize let high:usize=len(values) while low<high{let mid:usize=low+(high-low)/2 as usize if values[mid]<=target{low=mid+1 as usize}else{high=mid}} return low}
+export function compare_u64_binary_search(values:[]u64,target:u64):isize{let at:usize=compare_u64_lower_bound(values,target) if at<len(values)&&values[at]==target{return at as isize} return-1 as isize}
+export function compare_u8_lower_bound(values:[]u8,target:u8):usize{let low:usize=0 as usize let high:usize=len(values) while low<high{let mid:usize=low+(high-low)/2 as usize if values[mid]<target{low=mid+1 as usize}else{high=mid}} return low}
+export function compare_u8_upper_bound(values:[]u8,target:u8):usize{let low:usize=0 as usize let high:usize=len(values) while low<high{let mid:usize=low+(high-low)/2 as usize if values[mid]<=target{low=mid+1 as usize}else{high=mid}} return low}
+export function compare_u8_binary_search(values:[]u8,target:u8):isize{let at:usize=compare_u8_lower_bound(values,target) if at<len(values)&&values[at]==target{return at as isize} return-1 as isize}
+export function compare_usize_lower_bound(values:[]usize,target:usize):usize{let low:usize=0 as usize let high:usize=len(values) while low<high{let mid:usize=low+(high-low)/2 as usize if values[mid]<target{low=mid+1 as usize}else{high=mid}} return low}
+export function compare_usize_upper_bound(values:[]usize,target:usize):usize{let low:usize=0 as usize let high:usize=len(values) while low<high{let mid:usize=low+(high-low)/2 as usize if values[mid]<=target{low=mid+1 as usize}else{high=mid}} return low}
+export function compare_usize_binary_search(values:[]usize,target:usize):isize{let at:usize=compare_usize_lower_bound(values,target) if at<len(values)&&values[at]==target{return at as isize} return-1 as isize}
+
+export function compare_i64_distance(a:i64,b:i64):u64{if a>=b{return(a-b)as u64} return(b-a)as u64}
+export function compare_u64_distance(a:u64,b:u64):u64{if a>=b{return a-b} return b-a}
+export function compare_usize_distance(a:usize,b:usize):usize{if a>=b{return a-b} return b-a}
+export function compare_float_abs(value:float):float{if value<0.0{return-value} return value}
+export function compare_float_almost_equal(a:float,b:float,epsilon:float):bool{return compare_float_abs(a-b)<=compare_float_abs(epsilon)}
+export function compare_float_relative_equal(a:float,b:float,epsilon:float):bool{let scale:float=compare_max_float(compare_float_abs(a),compare_float_abs(b)) if scale<1.0{scale=1.0} return compare_float_abs(a-b)<=compare_float_abs(epsilon)*scale}
+
+export function compare_select_min_i64(a:i64,b:i64):i64{return compare_min_i64(a,b)}
+export function compare_select_max_i64(a:i64,b:i64):i64{return compare_max_i64(a,b)}
+export function compare_select_min_u64(a:u64,b:u64):u64{return compare_min_u64(a,b)}
+export function compare_select_max_u64(a:u64,b:u64):u64{return compare_max_u64(a,b)}
+export function compare_select_min_usize(a:usize,b:usize):usize{return compare_min_usize(a,b)}
+export function compare_select_max_usize(a:usize,b:usize):usize{return compare_max_usize(a,b)}
+
+export function compare_pair_i64(a0:i64,a1:i64,b0:i64,b1:i64):int{let first:int=compare_i64(a0,b0) if first!=0{return first} return compare_i64(a1,b1)}
+export function compare_pair_u64(a0:u64,a1:u64,b0:u64,b1:u64):int{let first:int=compare_u64(a0,b0) if first!=0{return first} return compare_u64(a1,b1)}
+export function compare_pair_usize(a0:usize,a1:usize,b0:usize,b1:usize):int{let first:int=compare_usize(a0,b0) if first!=0{return first} return compare_usize(a1,b1)}
+export function compare_triplet_i64(a0:i64,a1:i64,a2:i64,b0:i64,b1:i64,b2:i64):int{let first:int=compare_i64(a0,b0) if first!=0{return first} let second:int=compare_i64(a1,b1) if second!=0{return second} return compare_i64(a2,b2)}
+export function compare_triplet_u64(a0:u64,a1:u64,a2:u64,b0:u64,b1:u64,b2:u64):int{let first:int=compare_u64(a0,b0) if first!=0{return first} let second:int=compare_u64(a1,b1) if second!=0{return second} return compare_u64(a2,b2)}
+
+export function nqCompareI64(a:i64,b:i64):int{return compare_i64(a,b)}
+export function nqCompareU64(a:u64,b:u64):int{return compare_u64(a,b)}

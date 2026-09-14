@@ -53,13 +53,12 @@ export function retry_delay_for_attempt(policy: *RetryPolicy, attempt: usize): u
     return delay
 }
 
-// SplitMix-like deterministic mixer for repeatable retry jitter in tests and
-// distributed systems. Security-sensitive randomness must use std/crypto.
+// Small deterministic LCG confined below 2^32 so the intermediate multiply
+// cannot overflow u64. Security-sensitive randomness must use std/crypto.
 export function retry_mix_seed(seed: u64): u64 {
-    let x: u64 = seed + 11400714819323198485 as u64
-    x = (x ^ (x >> 30 as u64)) * 13787848793156543929 as u64
-    x = (x ^ (x >> 27 as u64)) * 10723151780598845931 as u64
-    return x ^ (x >> 31 as u64)
+    let modulus: u64 = 4294967291 as u64
+    let value: u64 = seed % modulus
+    return (value * 1664525 as u64 + 1013904223 as u64) % modulus
 }
 
 export function retry_delay_with_jitter(policy: *RetryPolicy, attempt: usize, seed: u64): u64 {
@@ -67,7 +66,9 @@ export function retry_delay_with_jitter(policy: *RetryPolicy, attempt: usize, se
     if base == 0 as u64 || policy.jitterPermille == 0 as u64 { return base }
     let span: u64 = retry_saturating_mul_div(base, policy.jitterPermille, 1000 as u64, policy.maxDelayMillis)
     if span == 0 as u64 { return base }
-    let random: u64 = retry_mix_seed(seed ^ attempt as u64)
+    let modulus: u64 = 4294967291 as u64
+    let combined: u64 = (seed % modulus + attempt as u64 % modulus) % modulus
+    let random: u64 = retry_mix_seed(combined)
     let width: u64 = span * 2 as u64 + 1 as u64
     let offset: u64 = random % width
     if offset <= span {
@@ -76,6 +77,7 @@ export function retry_delay_with_jitter(policy: *RetryPolicy, attempt: usize, se
         return base - decrease
     }
     let increase: u64 = offset - span
+    if increase > policy.maxDelayMillis { return policy.maxDelayMillis }
     if base > policy.maxDelayMillis - increase { return policy.maxDelayMillis }
     return base + increase
 }

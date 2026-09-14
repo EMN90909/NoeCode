@@ -36,6 +36,16 @@ struct FunctionType {
 struct RecordType { std::vector<RecordField> fields; std::size_t size=0,alignment=1; };
 class TypeChecker { public: explicit TypeChecker(Diagnostics& diagnostics); bool check(const Program& program); private: void checkStmt(const StmtPtr& stmt); Type checkExpr(const ExprPtr& expr); void pushScope(); void popScope(); void define(const std::string& name,Type type,bool isConst,Span span); std::optional<Type> resolve(const std::string& name) const; bool isConstSymbol(const std::string& name) const; Type resolveType(const std::string& name,Span span); std::optional<RecordField> resolveField(const Type& base,const std::string& member) const; Type substituteGeneric(const Type& type,const std::unordered_map<std::string,Type>& bindings) const; bool bindGeneric(const Type& pattern,const Type& actual,std::unordered_map<std::string,Type>& bindings) const; Diagnostics& diagnostics_; std::vector<std::unordered_map<std::string,Type>> scopes_; std::vector<std::unordered_map<std::string,bool>> constScopes_; std::unordered_map<std::string,FunctionType> functions_; std::unordered_map<std::string,RecordType> records_; std::unordered_set<std::string> activeGenericParams_; Type currentReturn_{}; bool insideFunction_=false; };
 
+// ComptimeEvaluator runs before type checking. It recognizes compiler-owned
+// comptime(expr) and comptime_assert(expr), executes deterministic pure Noqeri
+// code with a bounded interpreter, and replaces successful calls with literals.
+class ComptimeEvaluator { public: bool evaluate(Program& program,Diagnostics& diagnostics) const; };
+
+// OwnershipChecker runs after type/lifetime validation. Non-Copy records and
+// fixed arrays move on value transfer; '&' creates a tracked shared borrow.
+// The checker rejects use-after-move, mutation/move while borrowed, and local
+// borrows crossing recognized spawned-task boundaries.
+class OwnershipChecker { public: bool check(const Program& program,Diagnostics& diagnostics) const; };
 class BorrowChecker { public: bool check(const Program& program,Diagnostics& diagnostics) const; };
 class SafetyAnnotator { public: bool check(const Program& program,Diagnostics& diagnostics) const; };
 class Lowerer { public: NirProgram lower(const Program& program); private: void lowerStmt(NirFunction& fn,const StmtPtr& stmt); Reg lowerExpr(NirFunction& fn,const ExprPtr& expr); Reg lowerAddress(NirFunction& fn,const ExprPtr& expr); Reg emit(NirFunction& fn,NirInstruction instruction); };

@@ -4,6 +4,7 @@ ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 BUILD_DIR="${BUILD_DIR:-$ROOT/build}"
 STAGE0="${NOQERI_STAGE0:-}"
 BOOTSTRAP="$ROOT/Compiler/selfhost/bootstrap.nqr"
+PROVENANCE=""
 
 if ! command -v node >/dev/null 2>&1; then
   echo "Noqeri's portable bootstrap tooling requires Node.js 20+" >&2
@@ -11,8 +12,11 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 mkdir -p "$BUILD_DIR"
 
-if [ -z "$STAGE0" ]; then
-  if command -v noqeri >/dev/null 2>&1; then STAGE0=$(command -v noqeri); fi
+if [ -n "$STAGE0" ]; then
+  PROVENANCE="external seed $STAGE0"
+elif command -v noqeri >/dev/null 2>&1; then
+  STAGE0=$(command -v noqeri)
+  PROVENANCE="installed seed $STAGE0"
 fi
 
 # A preinstalled Noqeri binary is no longer required. When no trusted binary is
@@ -29,8 +33,10 @@ if [ -z "$STAGE0" ]; then
     exit 2
   fi
   PATH_FILE="$BUILD_DIR/stage0-seed.path"
-  node "$ROOT/scripts/source-bootstrap.mjs" --root="$ROOT" --build-dir="$BUILD_DIR/stage0-seed" --path-file="$PATH_FILE" --proof="$BUILD_DIR/stage0-seed.json"
+  PROOF_FILE="$BUILD_DIR/stage0-seed.json"
+  node "$ROOT/scripts/source-bootstrap.mjs" --root="$ROOT" --build-dir="$BUILD_DIR/stage0-seed" --path-file="$PATH_FILE" --proof="$PROOF_FILE"
   STAGE0=$(sed -n '1p' "$PATH_FILE")
+  PROVENANCE="source bootstrap proof $PROOF_FILE"
 fi
 
 if [ ! -x "$STAGE0" ] && [ ! -f "$STAGE0" ]; then
@@ -48,4 +54,4 @@ chmod +x "$BUILD_DIR/noqeri"
 "$BUILD_DIR/noqeri" selftest
 "$BUILD_DIR/noqeri" --version
 printf 'Noqeri stage-1 built from Noqeri bootstrap source at %s\n' "$BUILD_DIR/noqeri"
-printf 'Stage-0 provenance: %s\n' "${NOQERI_STAGE0:+external seed}${NOQERI_STAGE0:-$BUILD_DIR/stage0-seed.json}"
+printf 'Stage-0 provenance: %s\n' "$PROVENANCE"

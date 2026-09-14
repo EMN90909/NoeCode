@@ -1,6 +1,136 @@
 module noqeri.std.toml
 
+record TomlLine {
+    kind: int
+    keyStart: usize
+    keyLength: usize
+    valueStart: usize
+    valueLength: usize
+}
+
+export function toml_blank(): int { return 0 }
+export function toml_comment(): int { return 1 }
+export function toml_key_value(): int { return 2 }
+export function toml_table(): int { return 3 }
+export function toml_array_table(): int { return 4 }
+export function toml_invalid(): int { return -1 }
+
 export function toml_is_ascii_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
 export function toml_is_ascii_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
 export function toml_is_ascii_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
-export function toml_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && toml_is_ascii_space(value[i]) { i = i + 1 } return i }
+export function toml_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && (value[i] == 32 as u8 || value[i] == 9 as u8) { i = i + 1 as usize } return i }
+export function toml_trim_right_index(value: []u8): usize { let i: usize = len(value) while i > 0 as usize && toml_is_ascii_space(value[i - 1 as usize]) { i = i - 1 as usize } return i }
+
+export function toml_bare_key_char(c: u8): bool { return toml_is_ascii_alpha(c) || toml_is_ascii_digit(c) || c == 45 as u8 || c == 95 as u8 }
+export function toml_bare_key_valid(value: []u8): bool {
+    if len(value) == 0 as usize { return false }
+    let i: usize = 0 as usize
+    while i < len(value) { if !toml_bare_key_char(value[i]) { return false } i = i + 1 as usize }
+    return true
+}
+
+export function toml_value_has_balanced_quotes(value: []u8): bool {
+    let quote: u8 = 0 as u8
+    let escaped: bool = false
+    let i: usize = 0 as usize
+    while i < len(value) {
+        let c: u8 = value[i]
+        if quote == 34 as u8 {
+            if escaped { escaped = false }
+            else if c == 92 as u8 { escaped = true }
+            else if c == 34 as u8 { quote = 0 as u8 }
+        } else if quote == 39 as u8 {
+            if c == 39 as u8 { quote = 0 as u8 }
+        } else if c == 34 as u8 || c == 39 as u8 { quote = c }
+        i = i + 1 as usize
+    }
+    return quote == 0 as u8 && !escaped
+}
+
+export function toml_find_assignment(line: []u8, start: usize, end: usize): isize {
+    let quote: u8 = 0 as u8
+    let escaped: bool = false
+    let i: usize = start
+    while i < end {
+        let c: u8 = line[i]
+        if quote == 34 as u8 {
+            if escaped { escaped = false }
+            else if c == 92 as u8 { escaped = true }
+            else if c == 34 as u8 { quote = 0 as u8 }
+        } else if quote == 39 as u8 {
+            if c == 39 as u8 { quote = 0 as u8 }
+        } else if c == 34 as u8 || c == 39 as u8 { quote = c }
+        else if c == 61 as u8 { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function toml_scan_line(line: []u8, out: *TomlLine): bool {
+    if out == null { return false }
+    out.kind = toml_invalid()
+    out.keyStart = 0 as usize
+    out.keyLength = 0 as usize
+    out.valueStart = 0 as usize
+    out.valueLength = 0 as usize
+    let start: usize = toml_trim_left_count(line)
+    let end: usize = toml_trim_right_index(line)
+    if start >= end { out.kind = toml_blank() return true }
+    if line[start] == 35 as u8 { out.kind = toml_comment() return true }
+
+    if line[start] == 91 as u8 {
+        let arrayTable: bool = start + 1 as usize < end && line[start + 1 as usize] == 91 as u8
+        let closeCount: usize = 1 as usize
+        let nameStart: usize = start + 1 as usize
+        if arrayTable { closeCount = 2 as usize nameStart = start + 2 as usize }
+        if end < closeCount || line[end - 1 as usize] != 93 as u8 { return false }
+        if arrayTable && (end < 2 as usize || line[end - 2 as usize] != 93 as u8) { return false }
+        let nameEnd: usize = end - closeCount
+        while nameStart < nameEnd && (line[nameStart] == 32 as u8 || line[nameStart] == 9 as u8) { nameStart = nameStart + 1 as usize }
+        while nameEnd > nameStart && (line[nameEnd - 1 as usize] == 32 as u8 || line[nameEnd - 1 as usize] == 9 as u8) { nameEnd = nameEnd - 1 as usize }
+        if nameStart >= nameEnd { return false }
+        out.kind = toml_table()
+        if arrayTable { out.kind = toml_array_table() }
+        out.keyStart = nameStart
+        out.keyLength = nameEnd - nameStart
+        return true
+    }
+
+    let assignment: isize = toml_find_assignment(line, start, end)
+    if assignment < 0 as isize { return false }
+    let keyStart: usize = start
+    let keyEnd: usize = assignment as usize
+    while keyEnd > keyStart && (line[keyEnd - 1 as usize] == 32 as u8 || line[keyEnd - 1 as usize] == 9 as u8) { keyEnd = keyEnd - 1 as usize }
+    let valueStart: usize = assignment as usize + 1 as usize
+    while valueStart < end && (line[valueStart] == 32 as u8 || line[valueStart] == 9 as u8) { valueStart = valueStart + 1 as usize }
+    if keyStart >= keyEnd || valueStart >= end { return false }
+    out.kind = toml_key_value()
+    out.keyStart = keyStart
+    out.keyLength = keyEnd - keyStart
+    out.valueStart = valueStart
+    out.valueLength = end - valueStart
+    return true
+}
+
+export function toml_value_is_bool(value: []u8): bool {
+    if len(value) == 4 as usize { return value[0 as usize] == 116 as u8 && value[1 as usize] == 114 as u8 && value[2 as usize] == 117 as u8 && value[3 as usize] == 101 as u8 }
+    if len(value) == 5 as usize { return value[0 as usize] == 102 as u8 && value[1 as usize] == 97 as u8 && value[2 as usize] == 108 as u8 && value[3 as usize] == 115 as u8 && value[4 as usize] == 101 as u8 }
+    return false
+}
+
+export function toml_value_is_integer(value: []u8): bool {
+    if len(value) == 0 as usize { return false }
+    let i: usize = 0 as usize
+    if value[0 as usize] == 43 as u8 || value[0 as usize] == 45 as u8 { i = 1 as usize }
+    if i >= len(value) { return false }
+    let digitSeen: bool = false
+    while i < len(value) {
+        let c: u8 = value[i]
+        if toml_is_ascii_digit(c) { digitSeen = true }
+        else if c != 95 as u8 { return false }
+        i = i + 1 as usize
+    }
+    return digitSeen
+}
+
+export function toml_line_valid(line: []u8): bool { let info: TomlLine return toml_scan_line(line, &info) }

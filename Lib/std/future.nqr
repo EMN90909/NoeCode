@@ -1,6 +1,135 @@
 module noqeri.std.future
 
-export function future_state_valid(state: int): bool { return state >= 0 && state <= 4 }
-export function future_can_transition(current: int, next: int): bool { if current < 0 || next < 0 { return false } return next >= current || next == 0 }
+// Future<T> is an allocation-free completion state. It deliberately does not
+// start threads or hide a scheduler. Producers complete/fail/cancel it; callers
+// can poll the state or integrate it with their own event loop.
+record Future<T> {
+    value: *T
+    state: int
+    error_code: int
+    generation: u64
+}
+
+export function future_pending_state(): int { return 0 }
+export function future_ready_state(): int { return 1 }
+export function future_failed_state(): int { return 2 }
+export function future_cancelled_state(): int { return 3 }
+
+export function future_init<T>(future: *Future<T>, value_slot: *T): bool {
+    if future == null { return false }
+    future.value = value_slot
+    future.state = future_pending_state()
+    future.error_code = 0
+    future.generation = 1 as u64
+    return true
+}
+
+export function future_state<T>(future: *Future<T>): int {
+    if future == null { return future_failed_state() }
+    return future.state
+}
+
+export function future_generation<T>(future: *Future<T>): u64 {
+    if future == null { return 0 as u64 }
+    return future.generation
+}
+
+export function future_pending<T>(future: *Future<T>): bool {
+    return future != null && future.state == future_pending_state()
+}
+
+export function future_ready<T>(future: *Future<T>): bool {
+    return future != null && future.state == future_ready_state()
+}
+
+export function future_failed<T>(future: *Future<T>): bool {
+    return future != null && future.state == future_failed_state()
+}
+
+export function future_cancelled<T>(future: *Future<T>): bool {
+    return future != null && future.state == future_cancelled_state()
+}
+
+export function future_done<T>(future: *Future<T>): bool {
+    return future != null && future.state != future_pending_state()
+}
+
+export function future_error<T>(future: *Future<T>): int {
+    if future == null { return -1 }
+    return future.error_code
+}
+
+export function future_value_ref<T>(future: *Future<T>): *T {
+    if !future_ready(future) { return null as *T }
+    return future.value
+}
+
+export function future_get_or<T: Copy>(future: *Future<T>, fallback: T): T {
+    let value: *T = future_value_ref(future)
+    if value == null { return fallback }
+    return *value
+}
+
+export function future_complete<T: Copy>(future: *Future<T>, value: T): bool {
+    if future == null || future.state != future_pending_state() || future.value == null { return false }
+    *future.value = value
+    future.error_code = 0
+    future.state = future_ready_state()
+    future.generation = future.generation + 1 as u64
+    return true
+}
+
+export function future_fail<T>(future: *Future<T>, error_code: int): bool {
+    if future == null || future.state != future_pending_state() { return false }
+    future.error_code = error_code
+    future.state = future_failed_state()
+    future.generation = future.generation + 1 as u64
+    return true
+}
+
+export function future_cancel<T>(future: *Future<T>): bool {
+    if future == null || future.state != future_pending_state() { return false }
+    future.error_code = 0
+    future.state = future_cancelled_state()
+    future.generation = future.generation + 1 as u64
+    return true
+}
+
+// reset deliberately requires the same caller-owned result slot. Resetting a
+// completed Future does not retain the prior result as a new completion.
+export function future_reset<T>(future: *Future<T>): bool {
+    if future == null { return false }
+    future.state = future_pending_state()
+    future.error_code = 0
+    future.generation = future.generation + 1 as u64
+    return true
+}
+
+export function future_changed_since<T>(future: *Future<T>, generation: u64): bool {
+    return future != null && future.generation != generation
+}
+
+export function future_copy_ready<T: Copy>(future: *Future<T>, out: *T): bool {
+    if out == null { return false }
+    let value: *T = future_value_ref(future)
+    if value == null { return false }
+    *out = *value
+    return true
+}
+
+export function future_complete_from<T: Copy>(target: *Future<T>, source: *Future<T>): bool {
+    if !future_ready(source) { return false }
+    let value: *T = future_value_ref(source)
+    if value == null { return false }
+    return future_complete(target, *value)
+}
+
+// Compatibility helpers for the former state-only placeholder surface.
+export function future_state_valid(state: int): bool { return state >= future_pending_state() && state <= future_cancelled_state() }
+export function future_can_transition(current: int, next: int): bool {
+    if !future_state_valid(current) || !future_state_valid(next) { return false }
+    if current == future_pending_state() { return true }
+    return next == future_pending_state()
+}
 export function future_default_spin_limit(): usize { return 64 as usize }
 export function future_bounded_count(count: usize, limit: usize): usize { if count > limit { return limit } return count }

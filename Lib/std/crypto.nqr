@@ -1,5 +1,439 @@
 module noqeri.std.crypto
 
-export function crypto_constant_time_equal(a:[]u8,b:[]u8):bool{if len(a)!=len(b){return false}let diff:u8=0 as u8 let i:usize=0 as usize while i<len(a){if a[i]!=b[i]{diff=1 as u8}i=i+1}return diff==0 as u8}
-export function crypto_valid_key_bits(bits:usize):bool{return bits==128 as usize||bits==192 as usize||bits==256 as usize}
-export function crypto_zero_byte():u8{return 0 as u8}
+extern function cryptoSecureEqual(a: []u8, b: []u8): bool
+extern function cryptoRandomFill(output: []u8): isize
+extern function cryptoSha256(input: []u8, output: []u8): isize
+extern function cryptoSha512(input: []u8, output: []u8): isize
+extern function cryptoHmacSha256(key: []u8, input: []u8, output: []u8): isize
+extern function cryptoHmacSha512(key: []u8, input: []u8, output: []u8): isize
+
+record CryptoPolicy {
+    minimumRsaBits: usize
+    minimumPbkdfRounds: u64
+    allowLegacyHashes: bool
+    allowDeterministicNonces: bool
+    requireAuthenticatedEncryption: bool
+    maximumKeyBytes: usize
+}
+
+record CryptoNonceCounter {
+    prefix: u32
+    counter: u64
+    exhausted: bool
+}
+
+record CryptoKeyMetadata {
+    algorithm: int
+    bits: usize
+    usage: u64
+    createdAt: u64
+    expiresAt: u64
+    revoked: bool
+}
+
+record CryptoFrameLayout {
+    nonceOffset: usize
+    nonceLength: usize
+    payloadOffset: usize
+    payloadLength: usize
+    tagOffset: usize
+    tagLength: usize
+    totalLength: usize
+}
+
+export function crypto_ok(): isize { return 0 as isize }
+export function crypto_error_invalid_argument(): isize { return -1 as isize }
+export function crypto_error_bad_key(): isize { return -2 as isize }
+export function crypto_error_bad_nonce(): isize { return -3 as isize }
+export function crypto_error_small_output(): isize { return -4 as isize }
+export function crypto_error_bad_tag(): isize { return -5 as isize }
+export function crypto_error_provider(): isize { return -6 as isize }
+export function crypto_error_policy(): isize { return -7 as isize }
+export function crypto_error_exhausted(): isize { return -8 as isize }
+export function crypto_error_expired(): isize { return -9 as isize }
+export function crypto_error_revoked(): isize { return -10 as isize }
+export function crypto_error_usage(): isize { return -11 as isize }
+
+export function crypto_algorithm_unknown(): int { return 0 }
+export function crypto_algorithm_aes_gcm(): int { return 1 }
+export function crypto_algorithm_chacha20_poly1305(): int { return 2 }
+export function crypto_algorithm_ed25519(): int { return 3 }
+export function crypto_algorithm_rsa_pss(): int { return 4 }
+export function crypto_algorithm_rsa_oaep(): int { return 5 }
+export function crypto_algorithm_hmac_sha256(): int { return 6 }
+export function crypto_algorithm_hmac_sha512(): int { return 7 }
+export function crypto_algorithm_sha256(): int { return 8 }
+export function crypto_algorithm_sha512(): int { return 9 }
+export function crypto_algorithm_valid(value: int): bool { return value >= crypto_algorithm_aes_gcm() && value <= crypto_algorithm_sha512() }
+
+export function crypto_usage_encrypt(): u64 { return 1 as u64 }
+export function crypto_usage_decrypt(): u64 { return 2 as u64 }
+export function crypto_usage_sign(): u64 { return 4 as u64 }
+export function crypto_usage_verify(): u64 { return 8 as u64 }
+export function crypto_usage_derive(): u64 { return 16 as u64 }
+export function crypto_usage_wrap(): u64 { return 32 as u64 }
+export function crypto_usage_unwrap(): u64 { return 64 as u64 }
+
+function crypto_usage_has(mask: u64, required: u64): bool {
+    if required == 0 as u64 { return true }
+    let bit: u64 = 1 as u64
+    while bit <= 64 as u64 {
+        if required / bit % 2 as u64 == 1 as u64 && mask / bit % 2 as u64 == 0 as u64 { return false }
+        bit = bit * 2 as u64
+    }
+    return true
+}
+
+export function crypto_policy_default(): CryptoPolicy {
+    let out: CryptoPolicy
+    out.minimumRsaBits = 2048 as usize
+    out.minimumPbkdfRounds = 100000 as u64
+    out.allowLegacyHashes = false
+    out.allowDeterministicNonces = false
+    out.requireAuthenticatedEncryption = true
+    out.maximumKeyBytes = 8192 as usize
+    return out
+}
+
+export function crypto_policy_strict(): CryptoPolicy {
+    let out: CryptoPolicy = crypto_policy_default()
+    out.minimumRsaBits = 3072 as usize
+    out.minimumPbkdfRounds = 210000 as u64
+    out.maximumKeyBytes = 4096 as usize
+    return out
+}
+
+export function crypto_policy_valid(policy: CryptoPolicy): bool {
+    if policy.minimumRsaBits < 2048 as usize { return false }
+    if policy.minimumPbkdfRounds < 10000 as u64 { return false }
+    if policy.maximumKeyBytes < 32 as usize { return false }
+    return true
+}
+
+export function crypto_aes_key_length_valid(length: usize): bool { return length == 16 as usize || length == 24 as usize || length == 32 as usize }
+export function crypto_aes_key_bits_valid(bits: usize): bool { return bits == 128 as usize || bits == 192 as usize || bits == 256 as usize }
+export function crypto_aes_gcm_nonce_length(): usize { return 12 as usize }
+export function crypto_aes_gcm_tag_length(): usize { return 16 as usize }
+export function crypto_chacha_key_length(): usize { return 32 as usize }
+export function crypto_chacha_nonce_length(): usize { return 12 as usize }
+export function crypto_poly1305_tag_length(): usize { return 16 as usize }
+export function crypto_ed25519_public_key_length(): usize { return 32 as usize }
+export function crypto_ed25519_private_seed_length(): usize { return 32 as usize }
+export function crypto_ed25519_signature_length(): usize { return 64 as usize }
+export function crypto_sha256_length(): usize { return 32 as usize }
+export function crypto_sha512_length(): usize { return 64 as usize }
+export function crypto_hmac_sha256_recommended_key_length(): usize { return 32 as usize }
+export function crypto_hmac_sha512_recommended_key_length(): usize { return 64 as usize }
+
+export function crypto_secure_equal(a: []u8, b: []u8): bool {
+    if len(a) != len(b) { return false }
+    return cryptoSecureEqual(a, b)
+}
+
+export function crypto_zero(data: []u8): void {
+    let index: usize = 0 as usize
+    while index < len(data) { data[index] = 0 as u8 index = index + 1 as usize }
+}
+
+export function crypto_copy(source: []u8, output: []u8): isize {
+    if len(output) < len(source) { return crypto_error_small_output() }
+    let index: usize = 0 as usize
+    while index < len(source) { output[index] = source[index] index = index + 1 as usize }
+    return len(source) as isize
+}
+
+export function crypto_random_fill(output: []u8): isize {
+    if len(output) == 0 as usize { return crypto_ok() }
+    let status: isize = cryptoRandomFill(output)
+    if status < 0 as isize { return crypto_error_provider() }
+    return status
+}
+
+export function crypto_random_nonzero(output: []u8): isize {
+    let status: isize = crypto_random_fill(output)
+    if status < 0 as isize { return status }
+    let index: usize = 0 as usize
+    while index < len(output) {
+        if output[index] == 0 as u8 {
+            let one: [u8; 1]
+            if crypto_random_fill(slice(one)) < 0 as isize { crypto_zero(output) return crypto_error_provider() }
+            if one[0] == 0 as u8 { one[0] = 1 as u8 }
+            output[index] = one[0]
+        }
+        index = index + 1 as usize
+    }
+    return len(output) as isize
+}
+
+export function crypto_sha256(input: []u8, output: []u8): isize {
+    if len(output) < crypto_sha256_length() { return crypto_error_small_output() }
+    let status: isize = cryptoSha256(input, output)
+    if status < 0 as isize { return crypto_error_provider() }
+    return crypto_sha256_length() as isize
+}
+
+export function crypto_sha512(input: []u8, output: []u8): isize {
+    if len(output) < crypto_sha512_length() { return crypto_error_small_output() }
+    let status: isize = cryptoSha512(input, output)
+    if status < 0 as isize { return crypto_error_provider() }
+    return crypto_sha512_length() as isize
+}
+
+export function crypto_hmac_sha256(key: []u8, input: []u8, output: []u8): isize {
+    if len(key) == 0 as usize { return crypto_error_bad_key() }
+    if len(output) < crypto_sha256_length() { return crypto_error_small_output() }
+    let status: isize = cryptoHmacSha256(key, input, output)
+    if status < 0 as isize { return crypto_error_provider() }
+    return crypto_sha256_length() as isize
+}
+
+export function crypto_hmac_sha512(key: []u8, input: []u8, output: []u8): isize {
+    if len(key) == 0 as usize { return crypto_error_bad_key() }
+    if len(output) < crypto_sha512_length() { return crypto_error_small_output() }
+    let status: isize = cryptoHmacSha512(key, input, output)
+    if status < 0 as isize { return crypto_error_provider() }
+    return crypto_sha512_length() as isize
+}
+
+export function crypto_aes_gcm_parameters_valid(key: []u8, nonce: []u8, tagLength: usize): bool {
+    return crypto_aes_key_length_valid(len(key)) && len(nonce) == crypto_aes_gcm_nonce_length() && tagLength == crypto_aes_gcm_tag_length()
+}
+
+export function crypto_chacha_parameters_valid(key: []u8, nonce: []u8, tagLength: usize): bool {
+    return len(key) == crypto_chacha_key_length() && len(nonce) == crypto_chacha_nonce_length() && tagLength == crypto_poly1305_tag_length()
+}
+
+export function crypto_ed25519_public_key_valid(key: []u8): bool { return len(key) == crypto_ed25519_public_key_length() }
+export function crypto_ed25519_private_seed_valid(key: []u8): bool { return len(key) == crypto_ed25519_private_seed_length() }
+export function crypto_ed25519_signature_valid(signature: []u8): bool { return len(signature) == crypto_ed25519_signature_length() }
+export function crypto_rsa_bits_valid(bits: usize, policy: CryptoPolicy): bool { return crypto_policy_valid(policy) && bits >= policy.minimumRsaBits && bits % 256 as usize == 0 as usize }
+export function crypto_pbkdf_rounds_valid(rounds: u64, policy: CryptoPolicy): bool { return crypto_policy_valid(policy) && rounds >= policy.minimumPbkdfRounds }
+
+export function crypto_algorithm_key_length_valid(algorithm: int, length: usize): bool {
+    if algorithm == crypto_algorithm_aes_gcm() { return crypto_aes_key_length_valid(length) }
+    if algorithm == crypto_algorithm_chacha20_poly1305() { return length == crypto_chacha_key_length() }
+    if algorithm == crypto_algorithm_ed25519() { return length == crypto_ed25519_private_seed_length() || length == crypto_ed25519_public_key_length() }
+    if algorithm == crypto_algorithm_hmac_sha256() { return length >= 16 as usize }
+    if algorithm == crypto_algorithm_hmac_sha512() { return length >= 32 as usize }
+    if algorithm == crypto_algorithm_sha256() || algorithm == crypto_algorithm_sha512() { return length == 0 as usize }
+    return false
+}
+
+export function crypto_algorithm_nonce_length(algorithm: int): usize {
+    if algorithm == crypto_algorithm_aes_gcm() { return crypto_aes_gcm_nonce_length() }
+    if algorithm == crypto_algorithm_chacha20_poly1305() { return crypto_chacha_nonce_length() }
+    return 0 as usize
+}
+
+export function crypto_algorithm_tag_length(algorithm: int): usize {
+    if algorithm == crypto_algorithm_aes_gcm() || algorithm == crypto_algorithm_chacha20_poly1305() { return 16 as usize }
+    if algorithm == crypto_algorithm_hmac_sha256() { return crypto_sha256_length() }
+    if algorithm == crypto_algorithm_hmac_sha512() { return crypto_sha512_length() }
+    return 0 as usize
+}
+
+export function crypto_algorithm_authenticated(algorithm: int): bool {
+    return algorithm == crypto_algorithm_aes_gcm() || algorithm == crypto_algorithm_chacha20_poly1305() || algorithm == crypto_algorithm_ed25519() || algorithm == crypto_algorithm_rsa_pss() || algorithm == crypto_algorithm_hmac_sha256() || algorithm == crypto_algorithm_hmac_sha512()
+}
+
+export function crypto_algorithm_encryption(algorithm: int): bool { return algorithm == crypto_algorithm_aes_gcm() || algorithm == crypto_algorithm_chacha20_poly1305() || algorithm == crypto_algorithm_rsa_oaep() }
+export function crypto_algorithm_signature(algorithm: int): bool { return algorithm == crypto_algorithm_ed25519() || algorithm == crypto_algorithm_rsa_pss() }
+export function crypto_algorithm_hash(algorithm: int): bool { return algorithm == crypto_algorithm_sha256() || algorithm == crypto_algorithm_sha512() }
+export function crypto_algorithm_mac(algorithm: int): bool { return algorithm == crypto_algorithm_hmac_sha256() || algorithm == crypto_algorithm_hmac_sha512() }
+
+export function crypto_algorithm_allowed(algorithm: int, policy: CryptoPolicy): bool {
+    if !crypto_policy_valid(policy) || !crypto_algorithm_valid(algorithm) { return false }
+    if policy.requireAuthenticatedEncryption && crypto_algorithm_encryption(algorithm) && algorithm == crypto_algorithm_rsa_oaep() { return false }
+    return true
+}
+
+export function crypto_key_metadata_init(out: *CryptoKeyMetadata, algorithm: int, bits: usize, usage: u64, createdAt: u64, expiresAt: u64): bool {
+    if out == null || !crypto_algorithm_valid(algorithm) || (expiresAt != 0 as u64 && expiresAt < createdAt) { return false }
+    out.algorithm = algorithm
+    out.bits = bits
+    out.usage = usage
+    out.createdAt = createdAt
+    out.expiresAt = expiresAt
+    out.revoked = false
+    return true
+}
+
+export function crypto_key_revoke(key: *CryptoKeyMetadata): bool { if key == null { return false } key.revoked = true return true }
+export function crypto_key_is_expired(key: *CryptoKeyMetadata, now: u64): bool { return key != null && key.expiresAt != 0 as u64 && now >= key.expiresAt }
+export function crypto_key_is_active(key: *CryptoKeyMetadata, now: u64): bool { return key != null && !key.revoked && !crypto_key_is_expired(key, now) && now >= key.createdAt }
+export function crypto_key_has_usage(key: *CryptoKeyMetadata, usage: u64): bool { return key != null && crypto_usage_has(key.usage, usage) }
+
+export function crypto_key_check(key: *CryptoKeyMetadata, now: u64, usage: u64, policy: CryptoPolicy): isize {
+    if key == null || !crypto_algorithm_valid(key.algorithm) { return crypto_error_bad_key() }
+    if key.revoked { return crypto_error_revoked() }
+    if crypto_key_is_expired(key, now) { return crypto_error_expired() }
+    if now < key.createdAt { return crypto_error_bad_key() }
+    if !crypto_key_has_usage(key, usage) { return crypto_error_usage() }
+    if !crypto_algorithm_allowed(key.algorithm, policy) { return crypto_error_policy() }
+    if (key.algorithm == crypto_algorithm_rsa_pss() || key.algorithm == crypto_algorithm_rsa_oaep()) && !crypto_rsa_bits_valid(key.bits, policy) { return crypto_error_policy() }
+    return crypto_ok()
+}
+
+export function crypto_nonce_counter_init(out: *CryptoNonceCounter, prefix: u32, initial: u64): bool {
+    if out == null { return false }
+    out.prefix = prefix
+    out.counter = initial
+    out.exhausted = false
+    return true
+}
+
+export function crypto_nonce_counter_remaining(counter: *CryptoNonceCounter): u64 {
+    if counter == null || counter.exhausted { return 0 as u64 }
+    return 18446744073709551615 as u64 - counter.counter
+}
+
+export function crypto_nonce_counter_next(counter: *CryptoNonceCounter, nonce: []u8): isize {
+    if counter == null || len(nonce) < 12 as usize { return crypto_error_bad_nonce() }
+    if counter.exhausted { return crypto_error_exhausted() }
+    let p: u64 = counter.prefix as u64
+    nonce[0] = (p / 16777216 as u64 % 256 as u64) as u8
+    nonce[1] = (p / 65536 as u64 % 256 as u64) as u8
+    nonce[2] = (p / 256 as u64 % 256 as u64) as u8
+    nonce[3] = (p % 256 as u64) as u8
+    let value: u64 = counter.counter
+    let index: usize = 0 as usize
+    while index < 8 as usize {
+        let divisor: u64 = 1 as u64
+        let step: usize = 0 as usize
+        while step < 7 as usize - index { divisor = divisor * 256 as u64 step = step + 1 as usize }
+        nonce[4 as usize + index] = (value / divisor % 256 as u64) as u8
+        index = index + 1 as usize
+    }
+    if counter.counter == 18446744073709551615 as u64 { counter.exhausted = true }
+    else { counter.counter = counter.counter + 1 as u64 }
+    return 12 as isize
+}
+
+export function crypto_frame_layout(nonceLength: usize, payloadLength: usize, tagLength: usize): CryptoFrameLayout {
+    let out: CryptoFrameLayout
+    out.nonceOffset = 0 as usize
+    out.nonceLength = nonceLength
+    out.payloadOffset = nonceLength
+    out.payloadLength = payloadLength
+    out.tagOffset = nonceLength + payloadLength
+    out.tagLength = tagLength
+    out.totalLength = nonceLength + payloadLength + tagLength
+    return out
+}
+
+export function crypto_aead_frame_layout(algorithm: int, payloadLength: usize): CryptoFrameLayout {
+    return crypto_frame_layout(crypto_algorithm_nonce_length(algorithm), payloadLength, crypto_algorithm_tag_length(algorithm))
+}
+
+export function crypto_frame_layout_valid(layout: CryptoFrameLayout): bool {
+    if layout.payloadOffset != layout.nonceOffset + layout.nonceLength { return false }
+    if layout.tagOffset != layout.payloadOffset + layout.payloadLength { return false }
+    return layout.totalLength == layout.tagOffset + layout.tagLength
+}
+
+export function crypto_frame_fits(layout: CryptoFrameLayout, buffer: []u8): bool { return crypto_frame_layout_valid(layout) && layout.totalLength <= len(buffer) }
+export function crypto_sealed_length(algorithm: int, payloadLength: usize): usize { let layout: CryptoFrameLayout = crypto_aead_frame_layout(algorithm, payloadLength) return layout.totalLength }
+export function crypto_plaintext_length_from_sealed(algorithm: int, totalLength: usize): usize { let overhead: usize = crypto_algorithm_nonce_length(algorithm) + crypto_algorithm_tag_length(algorithm) if totalLength < overhead { return 0 as usize } return totalLength - overhead }
+
+export function crypto_security_bits(algorithm: int, keyBits: usize): usize {
+    if algorithm == crypto_algorithm_aes_gcm() { if keyBits > 256 as usize { return 256 as usize } return keyBits }
+    if algorithm == crypto_algorithm_chacha20_poly1305() { return 256 as usize }
+    if algorithm == crypto_algorithm_ed25519() { return 128 as usize }
+    if algorithm == crypto_algorithm_sha256() || algorithm == crypto_algorithm_hmac_sha256() { return 128 as usize }
+    if algorithm == crypto_algorithm_sha512() || algorithm == crypto_algorithm_hmac_sha512() { return 256 as usize }
+    if algorithm == crypto_algorithm_rsa_pss() || algorithm == crypto_algorithm_rsa_oaep() {
+        if keyBits >= 15360 as usize { return 256 as usize }
+        if keyBits >= 7680 as usize { return 192 as usize }
+        if keyBits >= 3072 as usize { return 128 as usize }
+        if keyBits >= 2048 as usize { return 112 as usize }
+        return 0 as usize
+    }
+    return 0 as usize
+}
+
+export function crypto_strength_at_least(algorithm: int, keyBits: usize, required: usize): bool { return crypto_security_bits(algorithm, keyBits) >= required }
+export function crypto_modern_strength(algorithm: int, keyBits: usize): bool { return crypto_strength_at_least(algorithm, keyBits, 128 as usize) }
+
+export function crypto_key_bytes_for_bits(bits: usize): usize { if bits % 8 as usize != 0 as usize { return 0 as usize } return bits / 8 as usize }
+export function crypto_bits_for_key_bytes(bytes: usize): usize { if bytes > 18446744073709551615 as usize / 8 as usize { return 0 as usize } return bytes * 8 as usize }
+export function crypto_nonce_length_valid(algorithm: int, length: usize): bool { return length == crypto_algorithm_nonce_length(algorithm) && length != 0 as usize }
+export function crypto_tag_length_valid(algorithm: int, length: usize): bool { return length == crypto_algorithm_tag_length(algorithm) && length != 0 as usize }
+
+export function crypto_validate_aead(algorithm: int, key: []u8, nonce: []u8, tagLength: usize, policy: CryptoPolicy): isize {
+    if !crypto_algorithm_allowed(algorithm, policy) || !crypto_algorithm_encryption(algorithm) { return crypto_error_policy() }
+    if !crypto_algorithm_key_length_valid(algorithm, len(key)) { return crypto_error_bad_key() }
+    if !crypto_nonce_length_valid(algorithm, len(nonce)) { return crypto_error_bad_nonce() }
+    if !crypto_tag_length_valid(algorithm, tagLength) { return crypto_error_bad_tag() }
+    return crypto_ok()
+}
+
+export function crypto_validate_ed25519(publicKey: []u8, signature: []u8): isize {
+    if !crypto_ed25519_public_key_valid(publicKey) { return crypto_error_bad_key() }
+    if !crypto_ed25519_signature_valid(signature) { return crypto_error_bad_tag() }
+    return crypto_ok()
+}
+
+export function crypto_validate_rsa(bits: usize, policy: CryptoPolicy): isize { if !crypto_rsa_bits_valid(bits, policy) { return crypto_error_policy() } return crypto_ok() }
+
+export function crypto_buffer_all_zero(data: []u8): bool { let index: usize = 0 as usize while index < len(data) { if data[index] != 0 as u8 { return false } index = index + 1 as usize } return true }
+export function crypto_key_material_suspicious(data: []u8): bool { return len(data) == 0 as usize || crypto_buffer_all_zero(data) }
+export function crypto_random_key(output: []u8): isize { if len(output) < 16 as usize { return crypto_error_bad_key() } return crypto_random_fill(output) }
+export function crypto_random_nonce(algorithm: int, output: []u8): isize { let needed: usize = crypto_algorithm_nonce_length(algorithm) if needed == 0 as usize || len(output) < needed { return crypto_error_bad_nonce() } let status: isize = crypto_random_fill(output) if status < 0 as isize { return status } return needed as isize }
+
+export function crypto_usage_allows_encrypt(mask:u64):bool{return crypto_usage_has(mask,crypto_usage_encrypt())}
+export function crypto_usage_allows_decrypt(mask:u64):bool{return crypto_usage_has(mask,crypto_usage_decrypt())}
+export function crypto_usage_allows_sign(mask:u64):bool{return crypto_usage_has(mask,crypto_usage_sign())}
+export function crypto_usage_allows_verify(mask:u64):bool{return crypto_usage_has(mask,crypto_usage_verify())}
+export function crypto_usage_allows_derive(mask:u64):bool{return crypto_usage_has(mask,crypto_usage_derive())}
+export function crypto_usage_allows_wrap(mask:u64):bool{return crypto_usage_has(mask,crypto_usage_wrap())}
+export function crypto_usage_allows_unwrap(mask:u64):bool{return crypto_usage_has(mask,crypto_usage_unwrap())}
+
+export function crypto_usage_encryption_pair():u64{return crypto_usage_encrypt()+crypto_usage_decrypt()}
+export function crypto_usage_signature_pair():u64{return crypto_usage_sign()+crypto_usage_verify()}
+export function crypto_usage_wrap_pair():u64{return crypto_usage_wrap()+crypto_usage_unwrap()}
+export function crypto_usage_none():u64{return 0 as u64}
+export function crypto_usage_valid(mask:u64):bool{return mask<=127 as u64}
+
+export function crypto_algorithm_requires_nonce(algorithm:int):bool{return algorithm==crypto_algorithm_aes_gcm()||algorithm==crypto_algorithm_chacha20_poly1305()}
+export function crypto_algorithm_requires_tag(algorithm:int):bool{return crypto_algorithm_authenticated(algorithm)&&algorithm!=crypto_algorithm_ed25519()&&algorithm!=crypto_algorithm_rsa_pss()}
+export function crypto_algorithm_public_key(algorithm:int):bool{return algorithm==crypto_algorithm_ed25519()||algorithm==crypto_algorithm_rsa_pss()||algorithm==crypto_algorithm_rsa_oaep()}
+export function crypto_algorithm_symmetric_key(algorithm:int):bool{return algorithm==crypto_algorithm_aes_gcm()||algorithm==crypto_algorithm_chacha20_poly1305()||algorithm==crypto_algorithm_hmac_sha256()||algorithm==crypto_algorithm_hmac_sha512()}
+export function crypto_algorithm_digest_length(algorithm:int):usize{if algorithm==crypto_algorithm_sha256()||algorithm==crypto_algorithm_hmac_sha256(){return 32 as usize} if algorithm==crypto_algorithm_sha512()||algorithm==crypto_algorithm_hmac_sha512(){return 64 as usize} return 0 as usize}
+
+export function crypto_policy_allows_key_bytes(policy:CryptoPolicy,length:usize):bool{return crypto_policy_valid(policy)&&length>0 as usize&&length<=policy.maximumKeyBytes}
+export function crypto_policy_allows_rsa(policy:CryptoPolicy,bits:usize):bool{return crypto_rsa_bits_valid(bits,policy)}
+export function crypto_policy_allows_pbkdf(policy:CryptoPolicy,rounds:u64):bool{return crypto_pbkdf_rounds_valid(rounds,policy)}
+export function crypto_policy_requires_aead(policy:CryptoPolicy):bool{return policy.requireAuthenticatedEncryption}
+export function crypto_policy_legacy_hashes(policy:CryptoPolicy):bool{return policy.allowLegacyHashes}
+export function crypto_policy_deterministic_nonces(policy:CryptoPolicy):bool{return policy.allowDeterministicNonces}
+
+export function crypto_key_age(key:*CryptoKeyMetadata,now:u64):u64{if key==null||now<key.createdAt{return 0 as u64} return now-key.createdAt}
+export function crypto_key_lifetime(key:*CryptoKeyMetadata):u64{if key==null||key.expiresAt==0 as u64||key.expiresAt<key.createdAt{return 0 as u64} return key.expiresAt-key.createdAt}
+export function crypto_key_remaining_lifetime(key:*CryptoKeyMetadata,now:u64):u64{if key==null||key.expiresAt==0 as u64||now>=key.expiresAt{return 0 as u64} return key.expiresAt-now}
+export function crypto_key_permanent(key:*CryptoKeyMetadata):bool{return key!=null&&key.expiresAt==0 as u64}
+export function crypto_key_usable_for(key:*CryptoKeyMetadata,now:u64,usage:u64):bool{return crypto_key_is_active(key,now)&&crypto_key_has_usage(key,usage)}
+
+export function crypto_frame_overhead(algorithm:int):usize{return crypto_algorithm_nonce_length(algorithm)+crypto_algorithm_tag_length(algorithm)}
+export function crypto_frame_payload_fits(algorithm:int,payloadLength:usize,capacity:usize):bool{let overhead:usize=crypto_frame_overhead(algorithm) if overhead>capacity{return false} return payloadLength<=capacity-overhead}
+export function crypto_frame_payload_capacity(algorithm:int,capacity:usize):usize{let overhead:usize=crypto_frame_overhead(algorithm) if overhead>capacity{return 0 as usize} return capacity-overhead}
+export function crypto_frame_nonce_end(layout:CryptoFrameLayout):usize{return layout.nonceOffset+layout.nonceLength}
+export function crypto_frame_payload_end(layout:CryptoFrameLayout):usize{return layout.payloadOffset+layout.payloadLength}
+export function crypto_frame_tag_end(layout:CryptoFrameLayout):usize{return layout.tagOffset+layout.tagLength}
+
+export function crypto_status_ok(status:isize):bool{return status>=0 as isize}
+export function crypto_status_error(status:isize):bool{return status<0 as isize}
+export function crypto_status_is_policy(status:isize):bool{return status==crypto_error_policy()}
+export function crypto_status_is_provider(status:isize):bool{return status==crypto_error_provider()}
+export function crypto_status_is_key(status:isize):bool{return status==crypto_error_bad_key()||status==crypto_error_expired()||status==crypto_error_revoked()||status==crypto_error_usage()}
+export function crypto_status_is_input(status:isize):bool{return status==crypto_error_invalid_argument()||status==crypto_error_bad_nonce()||status==crypto_error_bad_tag()||status==crypto_error_small_output()}
+
+export function crypto_default_encrypt_usage():u64{return crypto_usage_encryption_pair()}
+export function crypto_default_sign_usage():u64{return crypto_usage_signature_pair()}
+export function crypto_aead_algorithm_valid(algorithm:int):bool{return algorithm==crypto_algorithm_aes_gcm()||algorithm==crypto_algorithm_chacha20_poly1305()}
+export function crypto_signature_algorithm_valid(algorithm:int):bool{return algorithm==crypto_algorithm_ed25519()||algorithm==crypto_algorithm_rsa_pss()}
+export function crypto_hash_algorithm_valid(algorithm:int):bool{return algorithm==crypto_algorithm_sha256()||algorithm==crypto_algorithm_sha512()}
+export function crypto_mac_algorithm_valid(algorithm:int):bool{return algorithm==crypto_algorithm_hmac_sha256()||algorithm==crypto_algorithm_hmac_sha512()}
+
+export function nqCryptoTagLength():usize{return crypto_aes_gcm_tag_length()}
+export function nqCryptoNonceLength():usize{return crypto_aes_gcm_nonce_length()}
+export function nqCryptoKeyBitsValid(bits:usize):bool{return crypto_aes_key_bits_valid(bits)}

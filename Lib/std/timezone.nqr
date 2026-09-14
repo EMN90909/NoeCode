@@ -9,10 +9,16 @@ export function timezone_is_digit(c: u8): bool { return c >= 48 as u8 && c <= 57
 export function timezone_digit(c: u8): i64 { return (c - 48 as u8) as i64 }
 export function timezone_offset_valid(seconds: i64): bool { return seconds >= -50400 as i64 && seconds <= 50400 as i64 }
 
+function timezone_store_i64(out: *i64, value: i64): bool {
+    if out == null { return false }
+    unsafe { out[0 as usize] = value }
+    return true
+}
+
 // Parses ISO-8601 numeric offsets: Z, +HH:MM, -HH:MM, +HHMM and -HHMM.
 export function timezone_parse_offset(value: []u8, out: *i64): bool {
     if out == null { return false }
-    if len(value) == 1 as usize && (value[0 as usize] == 90 as u8 || value[0 as usize] == 122 as u8) { out.* = 0 as i64 return true }
+    if len(value) == 1 as usize && (value[0 as usize] == 90 as u8 || value[0 as usize] == 122 as u8) { return timezone_store_i64(out, 0 as i64) }
     if len(value) != 5 as usize && len(value) != 6 as usize { return false }
     let sign: i64 = 1 as i64
     if value[0 as usize] == 45 as u8 { sign = -1 as i64 }
@@ -30,8 +36,7 @@ export function timezone_parse_offset(value: []u8, out: *i64): bool {
     if hours == 14 as i64 && minutes != 0 as i64 { return false }
     let seconds: i64 = sign * (hours * 3600 as i64 + minutes * 60 as i64)
     if !timezone_offset_valid(seconds) { return false }
-    out.* = seconds
-    return true
+    return timezone_store_i64(out, seconds)
 }
 
 export function timezone_format_offset(offsetSeconds: i64, out: []u8): isize {
@@ -59,16 +64,14 @@ export function timezone_utc_to_local(epochSeconds: i64, offsetSeconds: i64, out
     if out == null || !timezone_offset_valid(offsetSeconds) { return false }
     if offsetSeconds > 0 as i64 && epochSeconds > 9223372036854775807 as i64 - offsetSeconds { return false }
     if offsetSeconds < 0 as i64 && epochSeconds < -9223372036854775807 as i64 - 1 as i64 - offsetSeconds { return false }
-    out.* = epochSeconds + offsetSeconds
-    return true
+    return timezone_store_i64(out, epochSeconds + offsetSeconds)
 }
 
 export function timezone_local_to_utc(localSeconds: i64, offsetSeconds: i64, out: *i64): bool {
     if out == null || !timezone_offset_valid(offsetSeconds) { return false }
     if offsetSeconds < 0 as i64 && localSeconds > 9223372036854775807 as i64 + offsetSeconds { return false }
     if offsetSeconds > 0 as i64 && localSeconds < -9223372036854775807 as i64 - 1 as i64 + offsetSeconds { return false }
-    out.* = localSeconds - offsetSeconds
-    return true
+    return timezone_store_i64(out, localSeconds - offsetSeconds)
 }
 
 export function timezone_same_offset(a: []u8, b: []u8): bool {

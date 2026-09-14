@@ -1,5 +1,242 @@
 module noqeri.std.metrics
 
+record Counter {
+    value: u64
+}
+
+record Gauge {
+    value: i64
+}
+
+record RunningStats {
+    count: u64
+    sum: i64
+    min: i64
+    max: i64
+    initialized: bool
+}
+
+// Histogram uses sorted inclusive upper bounds. counts has bucket_count + 1
+// entries; the last entry collects values above the final bound.
+record Histogram {
+    bounds: *i64
+    counts: *u64
+    bucket_count: usize
+    total: u64
+    sum: i64
+}
+
+export function counter_init(counter: *Counter, value: u64): bool {
+    if counter == null { return false }
+    counter.value = value
+    return true
+}
+
+export function counter_get(counter: *Counter): u64 {
+    if counter == null { return 0 as u64 }
+    return counter.value
+}
+
+export function counter_add(counter: *Counter, amount: u64): bool {
+    if counter == null { return false }
+    counter.value = counter.value + amount
+    return true
+}
+
+export function counter_inc(counter: *Counter): bool { return counter_add(counter, 1 as u64) }
+
+export function counter_reset(counter: *Counter): bool {
+    if counter == null { return false }
+    counter.value = 0 as u64
+    return true
+}
+
+export function gauge_init(gauge: *Gauge, value: i64): bool {
+    if gauge == null { return false }
+    gauge.value = value
+    return true
+}
+
+export function gauge_get(gauge: *Gauge): i64 {
+    if gauge == null { return 0 as i64 }
+    return gauge.value
+}
+
+export function gauge_set(gauge: *Gauge, value: i64): bool {
+    if gauge == null { return false }
+    gauge.value = value
+    return true
+}
+
+export function gauge_add(gauge: *Gauge, amount: i64): bool {
+    if gauge == null { return false }
+    gauge.value = gauge.value + amount
+    return true
+}
+
+export function gauge_sub(gauge: *Gauge, amount: i64): bool {
+    if gauge == null { return false }
+    gauge.value = gauge.value - amount
+    return true
+}
+
+export function stats_init(stats: *RunningStats): bool {
+    if stats == null { return false }
+    stats.count = 0 as u64
+    stats.sum = 0 as i64
+    stats.min = 0 as i64
+    stats.max = 0 as i64
+    stats.initialized = false
+    return true
+}
+
+export function stats_observe(stats: *RunningStats, value: i64): bool {
+    if stats == null { return false }
+    if !stats.initialized {
+        stats.min = value
+        stats.max = value
+        stats.initialized = true
+    } else {
+        if value < stats.min { stats.min = value }
+        if value > stats.max { stats.max = value }
+    }
+    stats.sum = stats.sum + value
+    stats.count = stats.count + 1 as u64
+    return true
+}
+
+export function stats_count(stats: *RunningStats): u64 {
+    if stats == null { return 0 as u64 }
+    return stats.count
+}
+
+export function stats_sum(stats: *RunningStats): i64 {
+    if stats == null { return 0 as i64 }
+    return stats.sum
+}
+
+export function stats_min_or(stats: *RunningStats, fallback: i64): i64 {
+    if stats == null || !stats.initialized { return fallback }
+    return stats.min
+}
+
+export function stats_max_or(stats: *RunningStats, fallback: i64): i64 {
+    if stats == null || !stats.initialized { return fallback }
+    return stats.max
+}
+
+export function stats_mean(stats: *RunningStats): i64 {
+    if stats == null || stats.count == 0 as u64 { return 0 as i64 }
+    return stats.sum / (stats.count as i64)
+}
+
+export function stats_range(stats: *RunningStats): i64 {
+    if stats == null || !stats.initialized { return 0 as i64 }
+    return stats.max - stats.min
+}
+
+export function histogram_init(histogram: *Histogram, bounds: *i64, counts: *u64, bucket_count: usize): bool {
+    if histogram == null { return false }
+    if bucket_count > 0 as usize && (bounds == null || counts == null) { return false }
+    histogram.bounds = bounds
+    histogram.counts = counts
+    histogram.bucket_count = bucket_count
+    histogram.total = 0 as u64
+    histogram.sum = 0 as i64
+    let i: usize = 0 as usize
+    while i < bucket_count + 1 as usize {
+        unsafe { counts[i] = 0 as u64 }
+        i = i + 1 as usize
+    }
+    return histogram_bounds_sorted(histogram)
+}
+
+export function histogram_bounds_sorted(histogram: *Histogram): bool {
+    if histogram == null { return false }
+    if histogram.bucket_count < 2 as usize { return true }
+    let i: usize = 1 as usize
+    while i < histogram.bucket_count {
+        unsafe { if histogram.bounds[i] < histogram.bounds[i - 1 as usize] { return false } }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function histogram_observe(histogram: *Histogram, value: i64): bool {
+    if histogram == null || histogram.counts == null { return false }
+    let bucket: usize = histogram.bucket_count
+    let i: usize = 0 as usize
+    while i < histogram.bucket_count {
+        unsafe {
+            if value <= histogram.bounds[i] {
+                bucket = i
+                i = histogram.bucket_count
+            } else {
+                i = i + 1 as usize
+            }
+        }
+    }
+    unsafe { histogram.counts[bucket] = histogram.counts[bucket] + 1 as u64 }
+    histogram.total = histogram.total + 1 as u64
+    histogram.sum = histogram.sum + value
+    return true
+}
+
+export function histogram_total(histogram: *Histogram): u64 {
+    if histogram == null { return 0 as u64 }
+    return histogram.total
+}
+
+export function histogram_bucket_count(histogram: *Histogram, bucket: usize): u64 {
+    if histogram == null || histogram.counts == null || bucket > histogram.bucket_count { return 0 as u64 }
+    unsafe { return histogram.counts[bucket] }
+}
+
+export function histogram_cumulative_count(histogram: *Histogram, bucket: usize): u64 {
+    if histogram == null || histogram.counts == null { return 0 as u64 }
+    let last: usize = bucket
+    if last > histogram.bucket_count { last = histogram.bucket_count }
+    let total: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i <= last {
+        unsafe { total = total + histogram.counts[i] }
+        i = i + 1 as usize
+    }
+    return total
+}
+
+// Returns the inclusive upper bound of the first bucket reaching the requested
+// per-mille percentile. Overflow bucket returns the final configured bound.
+export function histogram_percentile_bound(histogram: *Histogram, per_mille: usize, fallback: i64): i64 {
+    if histogram == null || histogram.total == 0 as u64 || histogram.bucket_count == 0 as usize { return fallback }
+    let p: usize = per_mille
+    if p > 1000 as usize { p = 1000 as usize }
+    let target: u64 = ((histogram.total * p as u64) + 999 as u64) / 1000 as u64
+    let cumulative: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < histogram.bucket_count {
+        unsafe {
+            cumulative = cumulative + histogram.counts[i]
+            if cumulative >= target { return histogram.bounds[i] }
+        }
+        i = i + 1 as usize
+    }
+    unsafe { return histogram.bounds[histogram.bucket_count - 1 as usize] }
+}
+
+export function histogram_reset(histogram: *Histogram): bool {
+    if histogram == null || histogram.counts == null { return false }
+    let i: usize = 0 as usize
+    while i < histogram.bucket_count + 1 as usize {
+        unsafe { histogram.counts[i] = 0 as u64 }
+        i = i + 1 as usize
+    }
+    histogram.total = 0 as u64
+    histogram.sum = 0 as i64
+    return true
+}
+
+// Small compatibility/stateless helpers retained from the original module.
 export function metrics_ratio_per_mille(part: usize, total: usize): usize { if total == 0 as usize { return 0 as usize } return (part * 1000 as usize) / total }
 export function metrics_passed(passed: usize, failed: usize): bool { return failed == 0 as usize && passed > 0 as usize }
 export function metrics_delta(start: i64, end: i64): i64 { return end - start }

@@ -1,6 +1,144 @@
 module noqeri.std.querystring
 
+// application/x-www-form-urlencoded and URL query component helpers.
+// Functions are allocation-free and write into caller-provided buffers.
+
+record QueryDecodeResult { written: usize ok: bool malformed: bool }
+record QueryPair { keyStart: usize keyLength: usize valueStart: usize valueLength: usize hasValue: bool ok: bool }
+
 export function querystring_is_ascii_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
 export function querystring_is_ascii_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
 export function querystring_is_ascii_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
-export function querystring_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && querystring_is_ascii_space(value[i]) { i = i + 1 } return i }
+export function querystring_is_hex(c: u8): bool { return querystring_is_ascii_digit(c) || (c >= 65 as u8 && c <= 70 as u8) || (c >= 97 as u8 && c <= 102 as u8) }
+export function querystring_is_unreserved(c: u8): bool { return querystring_is_ascii_alpha(c) || querystring_is_ascii_digit(c) || c == 45 as u8 || c == 46 as u8 || c == 95 as u8 || c == 126 as u8 }
+export function querystring_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && querystring_is_ascii_space(value[i]) { i = i + 1 as usize } return i }
+
+export function querystring_hex_value(c: u8): int {
+    if c >= 48 as u8 && c <= 57 as u8 { return (c - 48 as u8) as int }
+    if c >= 65 as u8 && c <= 70 as u8 { return (c - 65 as u8 + 10 as u8) as int }
+    if c >= 97 as u8 && c <= 102 as u8 { return (c - 97 as u8 + 10 as u8) as int }
+    return -1
+}
+export function querystring_hex_digit(value: u8): u8 { let nibble: u8 = value % 16 as u8 if nibble < 10 as u8 { return 48 as u8 + nibble } return 65 as u8 + nibble - 10 as u8 }
+
+export function querystring_encoded_size(value: []u8, spaceAsPlus: bool): usize {
+    let total: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(value) {
+        let c: u8 = value[i]
+        if querystring_is_unreserved(c) || (spaceAsPlus && c == 32 as u8) { total = total + 1 as usize } else { total = total + 3 as usize }
+        i = i + 1 as usize
+    }
+    return total
+}
+
+export function querystring_encode_component(value: []u8, output: []u8, spaceAsPlus: bool): usize {
+    let needed: usize = querystring_encoded_size(value, spaceAsPlus)
+    if needed > len(output) { return 0 as usize }
+    let source: usize = 0 as usize
+    let target: usize = 0 as usize
+    while source < len(value) {
+        let c: u8 = value[source]
+        if querystring_is_unreserved(c) { output[target] = c target = target + 1 as usize }
+        else if spaceAsPlus && c == 32 as u8 { output[target] = 43 as u8 target = target + 1 as usize }
+        else {
+            output[target] = 37 as u8
+            output[target + 1 as usize] = querystring_hex_digit(c / 16 as u8)
+            output[target + 2 as usize] = querystring_hex_digit(c % 16 as u8)
+            target = target + 3 as usize
+        }
+        source = source + 1 as usize
+    }
+    return target
+}
+
+export function querystring_decode_component(value: []u8, output: []u8, plusAsSpace: bool, strict: bool, result: *QueryDecodeResult): bool {
+    if result == null { return false }
+    result.written = 0 as usize result.ok = false result.malformed = false
+    let source: usize = 0 as usize
+    let target: usize = 0 as usize
+    while source < len(value) {
+        if target >= len(output) { return false }
+        let c: u8 = value[source]
+        if plusAsSpace && c == 43 as u8 { output[target] = 32 as u8 target = target + 1 as usize source = source + 1 as usize }
+        else if c == 37 as u8 {
+            if source + 2 as usize >= len(value) || !querystring_is_hex(value[source + 1 as usize]) || !querystring_is_hex(value[source + 2 as usize]) {
+                result.malformed = true
+                if strict { result.written = target return false }
+                output[target] = c target = target + 1 as usize source = source + 1 as usize
+            } else {
+                let high: int = querystring_hex_value(value[source + 1 as usize])
+                let low: int = querystring_hex_value(value[source + 2 as usize])
+                output[target] = (high * 16 + low) as u8 target = target + 1 as usize source = source + 3 as usize
+            }
+        } else { output[target] = c target = target + 1 as usize source = source + 1 as usize }
+    }
+    result.written = target result.ok = true return true
+}
+
+export function querystring_decode_strict(value: []u8, output: []u8, plusAsSpace: bool): usize { let result: QueryDecodeResult if !querystring_decode_component(value, output, plusAsSpace, true, &result) { return 0 as usize } return result.written }
+
+export function querystring_pair_count(value: []u8): usize {
+    let start: usize = 0 as usize
+    if len(value) > 0 as usize && value[0 as usize] == 63 as u8 { start = 1 as usize }
+    if start >= len(value) { return 0 as usize }
+    let count: usize = 1 as usize
+    let i: usize = start
+    while i < len(value) { if value[i] == 38 as u8 { count = count + 1 as usize } i = i + 1 as usize }
+    return count
+}
+
+export function querystring_pair_at(value: []u8, pairIndex: usize, out: *QueryPair): bool {
+    if out == null { return false }
+    out.keyStart = 0 as usize out.keyLength = 0 as usize out.valueStart = 0 as usize out.valueLength = 0 as usize out.hasValue = false out.ok = false
+    let start: usize = 0 as usize
+    if len(value) > 0 as usize && value[0 as usize] == 63 as u8 { start = 1 as usize }
+    let current: usize = 0 as usize
+    let pairStart: usize = start
+    let i: usize = start
+    while i <= len(value) {
+        if i == len(value) || value[i] == 38 as u8 {
+            if current == pairIndex {
+                let equals: usize = pairStart
+                while equals < i && value[equals] != 61 as u8 { equals = equals + 1 as usize }
+                out.keyStart = pairStart out.keyLength = equals - pairStart
+                if equals < i { out.hasValue = true out.valueStart = equals + 1 as usize out.valueLength = i - out.valueStart }
+                else { out.valueStart = i out.valueLength = 0 as usize }
+                out.ok = true return true
+            }
+            current = current + 1 as usize pairStart = i + 1 as usize
+        }
+        i = i + 1 as usize
+    }
+    return false
+}
+
+function querystring_range_equals(data: []u8, start: usize, width: usize, expected: []u8): bool {
+    if width != len(expected) || start > len(data) || width > len(data) - start { return false }
+    let i: usize = 0 as usize
+    while i < width { if data[start + i] != expected[i] { return false } i = i + 1 as usize }
+    return true
+}
+
+export function querystring_find_raw(value: []u8, key: []u8, out: *QueryPair): bool {
+    if out == null { return false }
+    let count: usize = querystring_pair_count(value)
+    let i: usize = 0 as usize
+    while i < count {
+        let pair: QueryPair
+        if querystring_pair_at(value, i, &pair) && querystring_range_equals(value, pair.keyStart, pair.keyLength, key) {
+            out.keyStart = pair.keyStart out.keyLength = pair.keyLength out.valueStart = pair.valueStart out.valueLength = pair.valueLength out.hasValue = pair.hasValue out.ok = true return true
+        }
+        i = i + 1 as usize
+    }
+    out.ok = false return false
+}
+export function querystring_has_raw(value: []u8, key: []u8): bool { let pair: QueryPair return querystring_find_raw(value, key, &pair) }
+export function querystring_well_formed_percent_encoding(value: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(value) {
+        if value[i] == 37 as u8 { if i + 2 as usize >= len(value) || !querystring_is_hex(value[i + 1 as usize]) || !querystring_is_hex(value[i + 2 as usize]) { return false } i = i + 3 as usize }
+        else { i = i + 1 as usize }
+    }
+    return true
+}

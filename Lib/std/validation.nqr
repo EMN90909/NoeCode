@@ -1,21 +1,107 @@
 module noqeri.std.validation
 
-export function nqValidIndex(index: usize, count: usize): bool {
-    return index < count
+export function nqValidIndex(index: usize, count: usize): bool { return index < count }
+export function nqValidCapacity(count: usize, capacity: usize): bool { return count <= capacity }
+export function nqNonEmpty(count: usize): bool { return count > 0 as usize }
+export function nqPositiveI64(value: i64): bool { return value > 0 as i64 }
+export function nqNonNegativeI64(value: i64): bool { return value >= 0 as i64 }
+
+export function validation_is_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
+export function validation_is_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
+export function validation_is_alnum(c: u8): bool { return validation_is_alpha(c) || validation_is_digit(c) }
+export function validation_is_hex(c: u8): bool { return validation_is_digit(c) || (c >= 65 as u8 && c <= 70 as u8) || (c >= 97 as u8 && c <= 102 as u8) }
+export function validation_is_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
+
+export function validation_length_between(value: []u8, minimum: usize, maximum: usize): bool {
+    return minimum <= maximum && len(value) >= minimum && len(value) <= maximum
 }
 
-export function nqValidCapacity(count: usize, capacity: usize): bool {
-    return count <= capacity
+export function validation_ascii_identifier(value: []u8): bool {
+    if len(value) == 0 as usize { return false }
+    if !validation_is_alpha(value[0 as usize]) && value[0 as usize] != 95 as u8 { return false }
+    let i: usize = 1 as usize
+    while i < len(value) {
+        let c: u8 = value[i]
+        if !validation_is_alnum(c) && c != 95 as u8 { return false }
+        i = i + 1 as usize
+    }
+    return true
 }
 
-export function nqNonEmpty(count: usize): bool {
-    return count > 0 as usize
+export function validation_decimal(value: []u8, allowSign: bool): bool {
+    if len(value) == 0 as usize { return false }
+    let i: usize = 0 as usize
+    if allowSign && (value[0 as usize] == 43 as u8 || value[0 as usize] == 45 as u8) { i = 1 as usize }
+    if i >= len(value) { return false }
+    while i < len(value) { if !validation_is_digit(value[i]) { return false } i = i + 1 as usize }
+    return true
 }
 
-export function nqPositiveI64(value: i64): bool {
-    return value > 0 as i64
+export function validation_hex_text(value: []u8, requireEven: bool): bool {
+    if len(value) == 0 as usize || (requireEven && len(value) % 2 as usize != 0 as usize) { return false }
+    let i: usize = 0 as usize
+    while i < len(value) { if !validation_is_hex(value[i]) { return false } i = i + 1 as usize }
+    return true
 }
 
-export function nqNonNegativeI64(value: i64): bool {
-    return value >= 0 as i64
+export function validation_port(port: i64): bool { return port >= 1 as i64 && port <= 65535 as i64 }
+export function validation_percentage(value: i64): bool { return value >= 0 as i64 && value <= 100 as i64 }
+
+export function validation_hostname_label(value: []u8): bool {
+    if len(value) == 0 as usize || len(value) > 63 as usize { return false }
+    if !validation_is_alnum(value[0 as usize]) || !validation_is_alnum(value[len(value) - 1 as usize]) { return false }
+    let i: usize = 1 as usize
+    while i + 1 as usize < len(value) {
+        let c: u8 = value[i]
+        if !validation_is_alnum(c) && c != 45 as u8 { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function validation_hostname(value: []u8): bool {
+    if len(value) == 0 as usize || len(value) > 253 as usize { return false }
+    let start: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i <= len(value) {
+        if i == len(value) || value[i] == 46 as u8 {
+            if i == start || i - start > 63 as usize { return false }
+            if !validation_is_alnum(value[start]) || !validation_is_alnum(value[i - 1 as usize]) { return false }
+            let j: usize = start + 1 as usize
+            while j + 1 as usize < i { let c: u8 = value[j] if !validation_is_alnum(c) && c != 45 as u8 { return false } j = j + 1 as usize }
+            start = i + 1 as usize
+        }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function validation_email_shape(value: []u8): bool {
+    if len(value) < 3 as usize || len(value) > 254 as usize { return false }
+    let at: isize = -1 as isize
+    let i: usize = 0 as usize
+    while i < len(value) {
+        let c: u8 = value[i]
+        if c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 { return false }
+        if c == 64 as u8 { if at >= 0 as isize { return false } at = i as isize }
+        i = i + 1 as usize
+    }
+    if at <= 0 as isize || at as usize + 1 as usize >= len(value) { return false }
+    let domainStart: usize = at as usize + 1 as usize
+    let hasDot: bool = false
+    let d: usize = domainStart
+    while d < len(value) { if value[d] == 46 as u8 { hasDot = true } d = d + 1 as usize }
+    return hasDot
+}
+
+export function validation_no_control_bytes(value: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(value) { if value[i] < 32 as u8 || value[i] == 127 as u8 { return false } i = i + 1 as usize }
+    return true
+}
+
+export function validation_ascii_printable(value: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(value) { if value[i] < 32 as u8 || value[i] > 126 as u8 { return false } i = i + 1 as usize }
+    return true
 }

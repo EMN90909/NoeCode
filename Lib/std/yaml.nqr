@@ -1,6 +1,131 @@
 module noqeri.std.yaml
 
+record YamlLine {
+    kind: int
+    indent: usize
+    keyStart: usize
+    keyLength: usize
+    valueStart: usize
+    valueLength: usize
+}
+
+export function yaml_blank(): int { return 0 }
+export function yaml_comment(): int { return 1 }
+export function yaml_mapping(): int { return 2 }
+export function yaml_sequence(): int { return 3 }
+export function yaml_scalar(): int { return 4 }
+export function yaml_document_start(): int { return 5 }
+export function yaml_document_end(): int { return 6 }
+export function yaml_invalid(): int { return -1 }
+
 export function yaml_is_ascii_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
 export function yaml_is_ascii_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
 export function yaml_is_ascii_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
-export function yaml_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && yaml_is_ascii_space(value[i]) { i = i + 1 } return i }
+export function yaml_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && value[i] == 32 as u8 { i = i + 1 as usize } return i }
+export function yaml_trim_right_index(value: []u8): usize { let i: usize = len(value) while i > 0 as usize && yaml_is_ascii_space(value[i - 1 as usize]) { i = i - 1 as usize } return i }
+
+export function yaml_has_tab_indent(line: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(line) {
+        if line[i] == 9 as u8 { return true }
+        if line[i] != 32 as u8 { return false }
+        i = i + 1 as usize
+    }
+    return false
+}
+
+export function yaml_marker(line: []u8, start: usize, a: u8, b: u8, c: u8): bool {
+    return start + 2 as usize < len(line) && line[start] == a && line[start + 1 as usize] == b && line[start + 2 as usize] == c
+}
+
+export function yaml_find_mapping_colon(line: []u8, start: usize, end: usize): isize {
+    let quote: u8 = 0 as u8
+    let escaped: bool = false
+    let i: usize = start
+    while i < end {
+        let c: u8 = line[i]
+        if quote == 34 as u8 {
+            if escaped { escaped = false }
+            else if c == 92 as u8 { escaped = true }
+            else if c == 34 as u8 { quote = 0 as u8 }
+        } else if quote == 39 as u8 {
+            if c == 39 as u8 { quote = 0 as u8 }
+        } else if c == 34 as u8 || c == 39 as u8 { quote = c }
+        else if c == 58 as u8 && (i + 1 as usize == end || line[i + 1 as usize] == 32 as u8 || line[i + 1 as usize] == 9 as u8) { return i as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function yaml_scan_line(line: []u8, out: *YamlLine): bool {
+    if out == null { return false }
+    out.kind = yaml_invalid()
+    out.indent = 0 as usize
+    out.keyStart = 0 as usize
+    out.keyLength = 0 as usize
+    out.valueStart = 0 as usize
+    out.valueLength = 0 as usize
+    if yaml_has_tab_indent(line) { return false }
+    let start: usize = yaml_trim_left_count(line)
+    let end: usize = yaml_trim_right_index(line)
+    out.indent = start
+    if start >= end { out.kind = yaml_blank() return true }
+    if line[start] == 35 as u8 { out.kind = yaml_comment() return true }
+    if yaml_marker(line, start, 45 as u8, 45 as u8, 45 as u8) && start + 3 as usize == end { out.kind = yaml_document_start() return true }
+    if yaml_marker(line, start, 46 as u8, 46 as u8, 46 as u8) && start + 3 as usize == end { out.kind = yaml_document_end() return true }
+
+    if line[start] == 45 as u8 && (start + 1 as usize == end || line[start + 1 as usize] == 32 as u8) {
+        out.kind = yaml_sequence()
+        out.valueStart = start + 1 as usize
+        while out.valueStart < end && line[out.valueStart] == 32 as u8 { out.valueStart = out.valueStart + 1 as usize }
+        out.valueLength = end - out.valueStart
+        return true
+    }
+
+    let colon: isize = yaml_find_mapping_colon(line, start, end)
+    if colon >= 0 as isize {
+        let keyEnd: usize = colon as usize
+        while keyEnd > start && line[keyEnd - 1 as usize] == 32 as u8 { keyEnd = keyEnd - 1 as usize }
+        if keyEnd <= start { return false }
+        out.kind = yaml_mapping()
+        out.keyStart = start
+        out.keyLength = keyEnd - start
+        out.valueStart = colon as usize + 1 as usize
+        while out.valueStart < end && line[out.valueStart] == 32 as u8 { out.valueStart = out.valueStart + 1 as usize }
+        out.valueLength = end - out.valueStart
+        return true
+    }
+
+    out.kind = yaml_scalar()
+    out.valueStart = start
+    out.valueLength = end - start
+    return true
+}
+
+export function yaml_scalar_is_null(value: []u8): bool {
+    if len(value) == 1 as usize && value[0 as usize] == 126 as u8 { return true }
+    if len(value) == 4 as usize {
+        return (value[0 as usize] == 110 as u8 || value[0 as usize] == 78 as u8) &&
+               (value[1 as usize] == 117 as u8 || value[1 as usize] == 85 as u8) &&
+               (value[2 as usize] == 108 as u8 || value[2 as usize] == 76 as u8) &&
+               (value[3 as usize] == 108 as u8 || value[3 as usize] == 76 as u8)
+    }
+    return false
+}
+
+export function yaml_scalar_is_bool(value: []u8): bool {
+    if len(value) == 4 as usize { return (value[0 as usize] == 116 as u8 || value[0 as usize] == 84 as u8) && (value[1 as usize] == 114 as u8 || value[1 as usize] == 82 as u8) && (value[2 as usize] == 117 as u8 || value[2 as usize] == 85 as u8) && (value[3 as usize] == 101 as u8 || value[3 as usize] == 69 as u8) }
+    if len(value) == 5 as usize { return (value[0 as usize] == 102 as u8 || value[0 as usize] == 70 as u8) && (value[1 as usize] == 97 as u8 || value[1 as usize] == 65 as u8) && (value[2 as usize] == 108 as u8 || value[2 as usize] == 76 as u8) && (value[3 as usize] == 115 as u8 || value[3 as usize] == 83 as u8) && (value[4 as usize] == 101 as u8 || value[4 as usize] == 69 as u8) }
+    return false
+}
+
+export function yaml_scalar_is_integer(value: []u8): bool {
+    if len(value) == 0 as usize { return false }
+    let i: usize = 0 as usize
+    if value[0 as usize] == 43 as u8 || value[0 as usize] == 45 as u8 { i = 1 as usize }
+    if i >= len(value) { return false }
+    while i < len(value) { if !yaml_is_ascii_digit(value[i]) { return false } i = i + 1 as usize }
+    return true
+}
+
+export function yaml_line_valid(line: []u8): bool { let info: YamlLine return yaml_scan_line(line, &info) }

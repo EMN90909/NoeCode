@@ -1,10 +1,7 @@
 import "../../Lib/std/scheduler.nqr"
 
 function require(ok: bool): void {
-    if !ok {
-        let invalid: *u8 = 0 as *u8
-        print(invalid[0])
-    }
+    if !ok { print("ASSERT-FAIL") }
 }
 
 require(scheduler_state_valid(scheduler_created()))

@@ -1,6 +1,245 @@
 module noqeri.std.semver
 
-export function semver_byte_sum(data: []u8): u64 { let sum: u64 = 0 as u64 let i: usize = 0 as usize while i < len(data) { sum = sum + data[i] as u64 i = i + 1 } return sum }
-export function semver_all_zero(data: []u8): bool { let i: usize = 0 as usize while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 } return true }
+// Semantic Versioning 2.0.0 utilities.
+// Parsing is allocation-free: offsets point into the caller-owned byte slice.
+// semver_compare returns -2 when either input is invalid, otherwise -1/0/1.
+
+record SemverInfo {
+    major: u64
+    minor: u64
+    patch: u64
+    prereleaseStart: usize
+    prereleaseLength: usize
+    buildStart: usize
+    buildLength: usize
+    valid: bool
+}
+
+export function semver_is_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
+export function semver_is_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
+export function semver_is_identifier_char(c: u8): bool { return semver_is_digit(c) || semver_is_alpha(c) || c == 45 as u8 }
+
+export function semver_byte_sum(data: []u8): u64 {
+    let sum: u64 = 0 as u64
+    let i: usize = 0 as usize
+    while i < len(data) { sum = sum + data[i] as u64 i = i + 1 as usize }
+    return sum
+}
+export function semver_all_zero(data: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 as usize }
+    return true
+}
 export function semver_bounded_length(data: []u8, max: usize): bool { return len(data) <= max }
 export function semver_nonempty(data: []u8): bool { return len(data) > 0 as usize }
+
+function semver_parse_number(data: []u8, start: usize, end: *usize, valueOut: *u64): bool {
+    if end == null || valueOut == null || start >= len(data) || !semver_is_digit(data[start]) { return false }
+    let i: usize = start
+    let value: u64 = 0 as u64
+    while i < len(data) && semver_is_digit(data[i]) {
+        let digit: u64 = (data[i] - 48 as u8) as u64
+        if value > 1844674407370955161 as u64 { return false }
+        if value == 1844674407370955161 as u64 && digit > 5 as u64 { return false }
+        value = value * 10 as u64 + digit
+        i = i + 1 as usize
+    }
+    if i - start > 1 as usize && data[start] == 48 as u8 { return false }
+    *end = i
+    *valueOut = value
+    return true
+}
+
+function semver_validate_identifiers(data: []u8, start: usize, end: usize, rejectLeadingZeroNumeric: bool): bool {
+    if start >= end || end > len(data) { return false }
+    let i: usize = start
+    let identifierStart: usize = start
+    let numeric: bool = true
+    while i <= end {
+        if i == end || data[i] == 46 as u8 {
+            let width: usize = i - identifierStart
+            if width == 0 as usize { return false }
+            if rejectLeadingZeroNumeric && numeric && width > 1 as usize && data[identifierStart] == 48 as u8 { return false }
+            if i == end { return true }
+            identifierStart = i + 1 as usize
+            numeric = true
+        } else {
+            if !semver_is_identifier_char(data[i]) { return false }
+            if !semver_is_digit(data[i]) { numeric = false }
+        }
+        i = i + 1 as usize
+    }
+    return false
+}
+
+export function semver_parse(data: []u8, out: *SemverInfo): bool {
+    if out == null { return false }
+    out.major = 0 as u64
+    out.minor = 0 as u64
+    out.patch = 0 as u64
+    out.prereleaseStart = 0 as usize
+    out.prereleaseLength = 0 as usize
+    out.buildStart = 0 as usize
+    out.buildLength = 0 as usize
+    out.valid = false
+    if len(data) < 5 as usize { return false }
+
+    let i: usize = 0 as usize
+    let next: usize = 0 as usize
+    let value: u64 = 0 as u64
+
+    if !semver_parse_number(data, i, &next, &value) { return false }
+    out.major = value
+    i = next
+    if i >= len(data) || data[i] != 46 as u8 { return false }
+    i = i + 1 as usize
+
+    if !semver_parse_number(data, i, &next, &value) { return false }
+    out.minor = value
+    i = next
+    if i >= len(data) || data[i] != 46 as u8 { return false }
+    i = i + 1 as usize
+
+    if !semver_parse_number(data, i, &next, &value) { return false }
+    out.patch = value
+    i = next
+
+    if i < len(data) && data[i] == 45 as u8 {
+        let start: usize = i + 1 as usize
+        i = start
+        while i < len(data) && data[i] != 43 as u8 { i = i + 1 as usize }
+        if !semver_validate_identifiers(data, start, i, true) { return false }
+        out.prereleaseStart = start
+        out.prereleaseLength = i - start
+    }
+
+    if i < len(data) && data[i] == 43 as u8 {
+        let start: usize = i + 1 as usize
+        i = start
+        while i < len(data) { i = i + 1 as usize }
+        if !semver_validate_identifiers(data, start, i, false) { return false }
+        out.buildStart = start
+        out.buildLength = i - start
+    }
+
+    if i != len(data) { return false }
+    out.valid = true
+    return true
+}
+
+export function semver_valid(data: []u8): bool {
+    let info: SemverInfo
+    return semver_parse(data, &info)
+}
+
+export function semver_is_stable(data: []u8): bool {
+    let info: SemverInfo
+    if !semver_parse(data, &info) { return false }
+    return info.prereleaseLength == 0 as usize
+}
+
+export function semver_major(data: []u8, fallback: u64): u64 {
+    let info: SemverInfo
+    if !semver_parse(data, &info) { return fallback }
+    return info.major
+}
+export function semver_minor(data: []u8, fallback: u64): u64 {
+    let info: SemverInfo
+    if !semver_parse(data, &info) { return fallback }
+    return info.minor
+}
+export function semver_patch(data: []u8, fallback: u64): u64 {
+    let info: SemverInfo
+    if !semver_parse(data, &info) { return fallback }
+    return info.patch
+}
+
+function semver_identifier_numeric(data: []u8, start: usize, width: usize): bool {
+    if width == 0 as usize || start + width > len(data) { return false }
+    let i: usize = 0 as usize
+    while i < width {
+        if !semver_is_digit(data[start + i]) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+function semver_compare_identifier(a: []u8, aStart: usize, aWidth: usize, b: []u8, bStart: usize, bWidth: usize): int {
+    let aNumeric: bool = semver_identifier_numeric(a, aStart, aWidth)
+    let bNumeric: bool = semver_identifier_numeric(b, bStart, bWidth)
+    if aNumeric && !bNumeric { return -1 }
+    if !aNumeric && bNumeric { return 1 }
+
+    if aNumeric && bNumeric {
+        if aWidth < bWidth { return -1 }
+        if aWidth > bWidth { return 1 }
+    }
+
+    let width: usize = aWidth
+    if bWidth < width { width = bWidth }
+    let i: usize = 0 as usize
+    while i < width {
+        let av: u8 = a[aStart + i]
+        let bv: u8 = b[bStart + i]
+        if av < bv { return -1 }
+        if av > bv { return 1 }
+        i = i + 1 as usize
+    }
+    if aWidth < bWidth { return -1 }
+    if aWidth > bWidth { return 1 }
+    return 0
+}
+
+function semver_compare_prerelease(a: []u8, aInfo: *SemverInfo, b: []u8, bInfo: *SemverInfo): int {
+    if aInfo == null || bInfo == null { return 0 }
+    if aInfo.prereleaseLength == 0 as usize && bInfo.prereleaseLength == 0 as usize { return 0 }
+    if aInfo.prereleaseLength == 0 as usize { return 1 }
+    if bInfo.prereleaseLength == 0 as usize { return -1 }
+
+    let ai: usize = aInfo.prereleaseStart
+    let bi: usize = bInfo.prereleaseStart
+    let aEnd: usize = ai + aInfo.prereleaseLength
+    let bEnd: usize = bi + bInfo.prereleaseLength
+
+    while ai < aEnd || bi < bEnd {
+        if ai >= aEnd { return -1 }
+        if bi >= bEnd { return 1 }
+
+        let aStart: usize = ai
+        let bStart: usize = bi
+        while ai < aEnd && a[ai] != 46 as u8 { ai = ai + 1 as usize }
+        while bi < bEnd && b[bi] != 46 as u8 { bi = bi + 1 as usize }
+
+        let order: int = semver_compare_identifier(a, aStart, ai - aStart, b, bStart, bi - bStart)
+        if order != 0 { return order }
+        if ai < aEnd { ai = ai + 1 as usize }
+        if bi < bEnd { bi = bi + 1 as usize }
+    }
+    return 0
+}
+
+export function semver_compare(left: []u8, right: []u8): int {
+    let a: SemverInfo
+    let b: SemverInfo
+    if !semver_parse(left, &a) || !semver_parse(right, &b) { return -2 }
+    if a.major < b.major { return -1 }
+    if a.major > b.major { return 1 }
+    if a.minor < b.minor { return -1 }
+    if a.minor > b.minor { return 1 }
+    if a.patch < b.patch { return -1 }
+    if a.patch > b.patch { return 1 }
+    return semver_compare_prerelease(left, &a, right, &b)
+}
+
+export function semver_equal_precedence(left: []u8, right: []u8): bool { return semver_compare(left, right) == 0 }
+export function semver_less(left: []u8, right: []u8): bool { return semver_compare(left, right) == -1 }
+export function semver_greater(left: []u8, right: []u8): bool { return semver_compare(left, right) == 1 }
+
+export function semver_has_prerelease(data: []u8): bool {
+    let info: SemverInfo
+    return semver_parse(data, &info) && info.prereleaseLength > 0 as usize
+}
+export function semver_has_build(data: []u8): bool {
+    let info: SemverInfo
+    return semver_parse(data, &info) && info.buildLength > 0 as usize
+}

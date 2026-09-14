@@ -1,6 +1,154 @@
 module noqeri.std.uuid
 
-export function uuid_byte_sum(data: []u8): u64 { let sum: u64 = 0 as u64 let i: usize = 0 as usize while i < len(data) { sum = sum + data[i] as u64 i = i + 1 } return sum }
-export function uuid_all_zero(data: []u8): bool { let i: usize = 0 as usize while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 } return true }
+// Allocation-free UUID text validation, parsing and formatting.
+// Canonical text is xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.
+// Compact 32-hex text is accepted by uuid_parse but uuid_text_valid is strict canonical.
+
+export function uuid_is_hex(c: u8): bool {
+    return (c >= 48 as u8 && c <= 57 as u8) || (c >= 65 as u8 && c <= 70 as u8) || (c >= 97 as u8 && c <= 102 as u8)
+}
+
+export function uuid_hex_value(c: u8): int {
+    if c >= 48 as u8 && c <= 57 as u8 { return (c - 48 as u8) as int }
+    if c >= 65 as u8 && c <= 70 as u8 { return (c - 65 as u8 + 10 as u8) as int }
+    if c >= 97 as u8 && c <= 102 as u8 { return (c - 97 as u8 + 10 as u8) as int }
+    return -1
+}
+
+export function uuid_hex_digit(value: u8, uppercase: bool): u8 {
+    let nibble: u8 = value % 16 as u8
+    if nibble < 10 as u8 { return 48 as u8 + nibble }
+    if uppercase { return 65 as u8 + nibble - 10 as u8 }
+    return 97 as u8 + nibble - 10 as u8
+}
+
+export function uuid_text_valid(value: []u8): bool {
+    if len(value) != 36 as usize { return false }
+    let i: usize = 0 as usize
+    while i < 36 as usize {
+        let hyphen: bool = i == 8 as usize || i == 13 as usize || i == 18 as usize || i == 23 as usize
+        if hyphen {
+            if value[i] != 45 as u8 { return false }
+        } else if !uuid_is_hex(value[i]) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function uuid_compact_valid(value: []u8): bool {
+    if len(value) != 32 as usize { return false }
+    let i: usize = 0 as usize
+    while i < len(value) {
+        if !uuid_is_hex(value[i]) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function uuid_any_text_valid(value: []u8): bool { return uuid_text_valid(value) || uuid_compact_valid(value) }
+
+export function uuid_parse(value: []u8, output: []u8): bool {
+    if len(output) < 16 as usize || !uuid_any_text_valid(value) { return false }
+    let source: usize = 0 as usize
+    let target: usize = 0 as usize
+    while target < 16 as usize {
+        while source < len(value) && value[source] == 45 as u8 { source = source + 1 as usize }
+        if source + 1 as usize >= len(value) { return false }
+        let high: int = uuid_hex_value(value[source])
+        let low: int = uuid_hex_value(value[source + 1 as usize])
+        if high < 0 || low < 0 { return false }
+        output[target] = (high * 16 + low) as u8
+        source = source + 2 as usize
+        target = target + 1 as usize
+    }
+    return source == len(value)
+}
+
+export function uuid_format(bytes: []u8, output: []u8, uppercase: bool): bool {
+    if len(bytes) < 16 as usize || len(output) < 36 as usize { return false }
+    let source: usize = 0 as usize
+    let target: usize = 0 as usize
+    while source < 16 as usize {
+        if source == 4 as usize || source == 6 as usize || source == 8 as usize || source == 10 as usize {
+            output[target] = 45 as u8
+            target = target + 1 as usize
+        }
+        let byte: u8 = bytes[source]
+        output[target] = uuid_hex_digit(byte / 16 as u8, uppercase)
+        output[target + 1 as usize] = uuid_hex_digit(byte % 16 as u8, uppercase)
+        target = target + 2 as usize
+        source = source + 1 as usize
+    }
+    return target == 36 as usize
+}
+
+export function uuid_format_compact(bytes: []u8, output: []u8, uppercase: bool): bool {
+    if len(bytes) < 16 as usize || len(output) < 32 as usize { return false }
+    let i: usize = 0 as usize
+    while i < 16 as usize {
+        let byte: u8 = bytes[i]
+        output[i * 2 as usize] = uuid_hex_digit(byte / 16 as u8, uppercase)
+        output[i * 2 as usize + 1 as usize] = uuid_hex_digit(byte % 16 as u8, uppercase)
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function uuid_version(value: []u8): int {
+    if uuid_text_valid(value) { return uuid_hex_value(value[14 as usize]) }
+    if uuid_compact_valid(value) { return uuid_hex_value(value[12 as usize]) }
+    return -1
+}
+
+// Variant classes: 0=NCS, 1=RFC 4122/9562, 2=Microsoft, 3=future, -1=invalid.
+export function uuid_variant(value: []u8): int {
+    let nibble: int = -1
+    if uuid_text_valid(value) { nibble = uuid_hex_value(value[19 as usize]) }
+    else if uuid_compact_valid(value) { nibble = uuid_hex_value(value[16 as usize]) }
+    else { return -1 }
+    if nibble < 8 { return 0 }
+    if nibble < 12 { return 1 }
+    if nibble < 14 { return 2 }
+    return 3
+}
+
+export function uuid_rfc_variant(value: []u8): bool { return uuid_variant(value) == 1 }
+export function uuid_version_is(value: []u8, version: int): bool { return uuid_version(value) == version }
+
+export function uuid_is_nil(value: []u8): bool {
+    if !uuid_any_text_valid(value) { return false }
+    let i: usize = 0 as usize
+    while i < len(value) {
+        let c: u8 = value[i]
+        if c != 45 as u8 && c != 48 as u8 { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function uuid_bytes_nil(bytes: []u8): bool {
+    if len(bytes) < 16 as usize { return false }
+    let i: usize = 0 as usize
+    while i < 16 as usize {
+        if bytes[i] != 0 as u8 { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function uuid_equal_text(left: []u8, right: []u8): bool {
+    let a: [u8; 16] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let b: [u8; 16] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    if !uuid_parse(left, slice(a)) || !uuid_parse(right, slice(b)) { return false }
+    let i: usize = 0 as usize
+    while i < 16 as usize {
+        if a[i] != b[i] { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function uuid_byte_sum(data: []u8): u64 { let sum: u64 = 0 as u64 let i: usize = 0 as usize while i < len(data) { sum = sum + data[i] as u64 i = i + 1 as usize } return sum }
+export function uuid_all_zero(data: []u8): bool { let i: usize = 0 as usize while i < len(data) { if data[i] != 0 as u8 { return false } i = i + 1 as usize } return true }
 export function uuid_bounded_length(data: []u8, max: usize): bool { return len(data) <= max }
 export function uuid_nonempty(data: []u8): bool { return len(data) > 0 as usize }

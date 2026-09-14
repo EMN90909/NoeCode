@@ -1,0 +1,54 @@
+module noqeri.std.glob
+
+// Small allocation-free glob matcher.
+// Supports '*' (zero or more bytes), '?' (one byte), and backslash escaping.
+// glob_match_path keeps '*' and '?' inside a single path segment.
+
+export function glob_has_magic(pattern: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(pattern) {
+        if pattern[i] == 92 as u8 {
+            if i + 1 as usize < len(pattern) { i = i + 2 as usize } else { return false }
+        } else {
+            if pattern[i] == 42 as u8 || pattern[i] == 63 as u8 { return true }
+            i = i + 1 as usize
+        }
+    }
+    return false
+}
+
+export function glob_literal_prefix_length(pattern: []u8): usize {
+    let i: usize = 0 as usize
+    let count: usize = 0 as usize
+    while i < len(pattern) {
+        let c: u8 = pattern[i]
+        if c == 42 as u8 || c == 63 as u8 { return count }
+        if c == 92 as u8 && i + 1 as usize < len(pattern) { i = i + 2 as usize count = count + 1 as usize }
+        else { i = i + 1 as usize count = count + 1 as usize }
+    }
+    return count
+}
+
+function glob_match_mode(pattern: []u8, value: []u8, pathMode: bool): bool {
+    let p: usize = 0 as usize
+    let v: usize = 0 as usize
+    let starPattern: usize = len(pattern)
+    let starValue: usize = 0 as usize
+    while v < len(value) {
+        if p < len(pattern) && pattern[p] == 92 as u8 {
+            if p + 1 as usize < len(pattern) && pattern[p + 1 as usize] == value[v] { p = p + 2 as usize v = v + 1 as usize }
+            else if starPattern < len(pattern) && (!pathMode || value[starValue] != 47 as u8) { starValue = starValue + 1 as usize v = starValue p = starPattern + 1 as usize }
+            else { return false }
+        } else if p < len(pattern) && pattern[p] == 63 as u8 && (!pathMode || value[v] != 47 as u8) { p = p + 1 as usize v = v + 1 as usize }
+        else if p < len(pattern) && pattern[p] == value[v] { p = p + 1 as usize v = v + 1 as usize }
+        else if p < len(pattern) && pattern[p] == 42 as u8 { starPattern = p starValue = v p = p + 1 as usize }
+        else if starPattern < len(pattern) && starValue < len(value) && (!pathMode || value[starValue] != 47 as u8) { starValue = starValue + 1 as usize v = starValue p = starPattern + 1 as usize }
+        else { return false }
+    }
+    while p < len(pattern) && pattern[p] == 42 as u8 { p = p + 1 as usize }
+    return p == len(pattern)
+}
+
+export function glob_match(pattern: []u8, value: []u8): bool { return glob_match_mode(pattern, value, false) }
+export function glob_match_path(pattern: []u8, value: []u8): bool { return glob_match_mode(pattern, value, true) }
+export function glob_match_literal(pattern: []u8, value: []u8): bool { if glob_has_magic(pattern) { return false } return glob_match(pattern, value) }

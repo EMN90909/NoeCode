@@ -1,12 +1,23 @@
 #!/usr/bin/env sh
 set -eu
-./scripts/build.sh
-NQ=./build/noqeri
-if [ ! -x "$NQ" ] && [ -x ./build/Release/noqeri ]; then NQ=./build/Release/noqeri; fi
+
+NQ=${NQ:-./build/noqeri}
+if [ ! -x "$NQ" ]; then
+  ./scripts/build.sh
+  NQ=./build/noqeri
+fi
+
 "$NQ" --version
+"$NQ" stage2-status
+"$NQ" selftest
 "$NQ" check examples/hello.nqr
-"$NQ" run examples/hello.nqr
-"$NQ" test tests
-NQ="$NQ" sh ./scripts/test_safety.sh
-NQ="$NQ" sh ./scripts/test_maturity.sh
-"$NQ" doctor .
+"$NQ" check tests/compiler_stage2_core.nqr
+"$NQ" check tests/generic_records.nqr
+"$NQ" check tests/generic_collections.nqr
+"$NQ" check tests/stdlib_deep_foundations.nqr
+node --test tests/tooling/*.test.mjs
+node scripts/stdlib-audit.mjs --json >/dev/null
+node scripts/deep-foundations-gate.mjs
+NQ="$NQ" NOQERI_RUNTIME_TESTS=${NOQERI_RUNTIME_TESTS:-0} sh ./scripts/test_maturity.sh
+
+echo "Stage-2 core checks passed"

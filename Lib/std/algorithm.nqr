@@ -1,42 +1,104 @@
 module noqeri.std.algorithm
 
-export function nqGcdI64(a: i64, b: i64): i64 {
-    let left: i64 = a
-    let right: i64 = b
-    if left < 0 { left = -left }
-    if right < 0 { right = -right }
-    while right != 0 as i64 {
-        let remainder: i64 = left % right
-        left = right
-        right = remainder
-    }
-    return left
-}
+export function algorithm_gcd_i64(a:i64,b:i64):i64{let x:i64=a let y:i64=b if x<0 as i64{x=-x} if y<0 as i64{y=-y} while y!=0 as i64{let next:i64=x%y x=y y=next} return x}
+export function algorithm_lcm_i64(a:i64,b:i64):i64{if a==0 as i64||b==0 as i64{return 0 as i64} let value:i64=(a/algorithm_gcd_i64(a,b))*b if value<0 as i64{return-value} return value}
+export function algorithm_pow_i64(base:i64,exponent:u32):i64{let result:i64=1 as i64 let factor:i64=base let power:u32=exponent while power>0 as u32{if power%2 as u32==1 as u32{result=result*factor} power=power/2 as u32 if power>0 as u32{factor=factor*factor}} return result}
+export function algorithm_factorial_u64(value:u32):u64{if value>20 as u32{return 0 as u64} let result:u64=1 as u64 let i:u32=2 as u32 while i<=value{result=result*i as u64 i=i+1 as u32} return result}
 
-export function nqLcmI64(a: i64, b: i64): i64 {
-    if a == 0 as i64 || b == 0 as i64 { return 0 as i64 }
-    let gcd: i64 = nqGcdI64(a, b)
-    let value: i64 = (a / gcd) * b
-    if value < 0 { return -value }
-    return value
-}
+export function algorithm_reverse_i64(values:[]i64):void{if len(values)<2 as usize{return} let left:usize=0 as usize let right:usize=len(values)-1 as usize while left<right{let tmp:i64=values[left] values[left]=values[right] values[right]=tmp left=left+1 as usize right=right-1 as usize}}
+export function algorithm_fill_i64(values:[]i64,value:i64):void{let i:usize=0 as usize while i<len(values){values[i]=value i=i+1 as usize}}
+export function algorithm_copy_i64(source:[]i64,destination:[]i64):usize{let count:usize=len(source) if len(destination)<count{count=len(destination)} let i:usize=0 as usize while i<count{destination[i]=source[i] i=i+1 as usize} return count}
+export function algorithm_equal_i64(a:[]i64,b:[]i64):bool{if len(a)!=len(b){return false} let i:usize=0 as usize while i<len(a){if a[i]!=b[i]{return false} i=i+1 as usize} return true}
+export function algorithm_find_i64(values:[]i64,target:i64):isize{let i:usize=0 as usize while i<len(values){if values[i]==target{return i as isize} i=i+1 as usize} return-1 as isize}
+export function algorithm_find_last_i64(values:[]i64,target:i64):isize{let i:usize=len(values) while i>0 as usize{i=i-1 as usize if values[i]==target{return i as isize}} return-1 as isize}
+export function algorithm_count_i64(values:[]i64,target:i64):usize{let count:usize=0 as usize let i:usize=0 as usize while i<len(values){if values[i]==target{count=count+1 as usize} i=i+1 as usize} return count}
+export function algorithm_contains_i64(values:[]i64,target:i64):bool{return algorithm_find_i64(values,target)>=0 as isize}
+export function algorithm_min_i64(values:[]i64,out:*i64):bool{if out==null||len(values)==0 as usize{return false} let value:i64=values[0] let i:usize=1 as usize while i<len(values){if values[i]<value{value=values[i]} i=i+1 as usize} out[0]=value return true}
+export function algorithm_max_i64(values:[]i64,out:*i64):bool{if out==null||len(values)==0 as usize{return false} let value:i64=values[0] let i:usize=1 as usize while i<len(values){if values[i]>value{value=values[i]} i=i+1 as usize} out[0]=value return true}
+export function algorithm_sorted_ascending_i64(values:[]i64):bool{let i:usize=1 as usize while i<len(values){if values[i]<values[i-1 as usize]{return false} i=i+1 as usize} return true}
+export function algorithm_sorted_descending_i64(values:[]i64):bool{let i:usize=1 as usize while i<len(values){if values[i]>values[i-1 as usize]{return false} i=i+1 as usize} return true}
+export function algorithm_insertion_sort_i64(values:[]i64):void{let i:usize=1 as usize while i<len(values){let key:i64=values[i] let j:usize=i while j>0 as usize&&values[j-1 as usize]>key{values[j]=values[j-1 as usize] j=j-1 as usize} values[j]=key i=i+1 as usize}}
+export function algorithm_selection_sort_i64(values:[]i64):void{let i:usize=0 as usize while i<len(values){let smallest:usize=i let j:usize=i+1 as usize while j<len(values){if values[j]<values[smallest]{smallest=j} j=j+1 as usize} if smallest!=i{let tmp:i64=values[i] values[i]=values[smallest] values[smallest]=tmp} i=i+1 as usize}}
+export function algorithm_lower_bound_i64(values:[]i64,target:i64):usize{let low:usize=0 as usize let high:usize=len(values) while low<high{let mid:usize=low+(high-low)/2 as usize if values[mid]<target{low=mid+1 as usize}else{high=mid}} return low}
+export function algorithm_upper_bound_i64(values:[]i64,target:i64):usize{let low:usize=0 as usize let high:usize=len(values) while low<high{let mid:usize=low+(high-low)/2 as usize if values[mid]<=target{low=mid+1 as usize}else{high=mid}} return low}
+export function algorithm_binary_search_i64(values:[]i64,target:i64):isize{let at:usize=algorithm_lower_bound_i64(values,target) if at<len(values)&&values[at]==target{return at as isize} return-1 as isize}
+export function algorithm_rotate_left_i64(values:[]i64,amount:usize):void{if len(values)<2 as usize{return} let shift:usize=amount%len(values) if shift==0 as usize{return} let step:usize=0 as usize while step<shift{let first:i64=values[0] let i:usize=1 as usize while i<len(values){values[i-1 as usize]=values[i] i=i+1 as usize} values[len(values)-1 as usize]=first step=step+1 as usize}}
+export function algorithm_rotate_right_i64(values:[]i64,amount:usize):void{if len(values)<2 as usize{return} let shift:usize=amount%len(values) if shift==0 as usize{return} algorithm_rotate_left_i64(values,len(values)-shift)}
+export function algorithm_unique_sorted_i64(values:[]i64):usize{if len(values)==0 as usize{return 0 as usize} let write:usize=1 as usize let read:usize=1 as usize while read<len(values){if values[read]!=values[write-1 as usize]{values[write]=values[read] write=write+1 as usize} read=read+1 as usize} return write}
+export function algorithm_partition_less_i64(values:[]i64,pivot:i64):usize{let write:usize=0 as usize let read:usize=0 as usize while read<len(values){if values[read]<pivot{let tmp:i64=values[write] values[write]=values[read] values[read]=tmp write=write+1 as usize} read=read+1 as usize} return write}
+export function algorithm_clamp_i64(values:[]i64,low:i64,high:i64):usize{if high<low{return 0 as usize} let changed:usize=0 as usize let i:usize=0 as usize while i<len(values){if values[i]<low{values[i]=low changed=changed+1 as usize}else if values[i]>high{values[i]=high changed=changed+1 as usize} i=i+1 as usize} return changed}
+export function algorithm_lexicographic_i64(a:[]i64,b:[]i64):int{let count:usize=len(a) if len(b)<count{count=len(b)} let i:usize=0 as usize while i<count{if a[i]<b[i]{return-1} if a[i]>b[i]{return 1} i=i+1 as usize} if len(a)<len(b){return-1} if len(a)>len(b){return 1} return 0}
+export function algorithm_sum_i64(values:[]i64):i64{let total:i64=0 as i64 let i:usize=0 as usize while i<len(values){total=total+values[i] i=i+1 as usize} return total}
+export function algorithm_prefix_sum_i64(values:[]i64,output:[]i64):usize{let count:usize=len(values) if len(output)<count{count=len(output)} let total:i64=0 as i64 let i:usize=0 as usize while i<count{total=total+values[i] output[i]=total i=i+1 as usize} return count}
+export function algorithm_adjacent_difference_i64(values:[]i64,output:[]i64):usize{let count:usize=len(values) if len(output)<count{count=len(output)} if count==0 as usize{return 0 as usize} output[0]=values[0] let i:usize=1 as usize while i<count{output[i]=values[i]-values[i-1 as usize] i=i+1 as usize} return count}
 
-export function nqPowI64(base: i64, exponent: u32): i64 {
-    let result: i64 = 1 as i64
-    let index: u32 = 0 as u32
-    while index < exponent {
-        result = result * base
-        index = index + 1 as u32
-    }
-    return result
-}
+export function algorithm_reverse_u64(values:[]u64):void{if len(values)<2 as usize{return} let left:usize=0 as usize let right:usize=len(values)-1 as usize while left<right{let tmp:u64=values[left] values[left]=values[right] values[right]=tmp left=left+1 as usize right=right-1 as usize}}
+export function algorithm_fill_u64(values:[]u64,value:u64):void{let i:usize=0 as usize while i<len(values){values[i]=value i=i+1 as usize}}
+export function algorithm_copy_u64(source:[]u64,destination:[]u64):usize{let count:usize=len(source) if len(destination)<count{count=len(destination)} let i:usize=0 as usize while i<count{destination[i]=source[i] i=i+1 as usize} return count}
+export function algorithm_equal_u64(a:[]u64,b:[]u64):bool{if len(a)!=len(b){return false} let i:usize=0 as usize while i<len(a){if a[i]!=b[i]{return false} i=i+1 as usize} return true}
+export function algorithm_find_u64(values:[]u64,target:u64):isize{let i:usize=0 as usize while i<len(values){if values[i]==target{return i as isize} i=i+1 as usize} return-1 as isize}
+export function algorithm_find_last_u64(values:[]u64,target:u64):isize{let i:usize=len(values) while i>0 as usize{i=i-1 as usize if values[i]==target{return i as isize}} return-1 as isize}
+export function algorithm_count_u64(values:[]u64,target:u64):usize{let count:usize=0 as usize let i:usize=0 as usize while i<len(values){if values[i]==target{count=count+1 as usize} i=i+1 as usize} return count}
+export function algorithm_contains_u64(values:[]u64,target:u64):bool{return algorithm_find_u64(values,target)>=0 as isize}
+export function algorithm_min_u64(values:[]u64,out:*u64):bool{if out==null||len(values)==0 as usize{return false} let value:u64=values[0] let i:usize=1 as usize while i<len(values){if values[i]<value{value=values[i]} i=i+1 as usize} out[0]=value return true}
+export function algorithm_max_u64(values:[]u64,out:*u64):bool{if out==null||len(values)==0 as usize{return false} let value:u64=values[0] let i:usize=1 as usize while i<len(values){if values[i]>value{value=values[i]} i=i+1 as usize} out[0]=value return true}
+export function algorithm_sorted_ascending_u64(values:[]u64):bool{let i:usize=1 as usize while i<len(values){if values[i]<values[i-1 as usize]{return false} i=i+1 as usize} return true}
+export function algorithm_sorted_descending_u64(values:[]u64):bool{let i:usize=1 as usize while i<len(values){if values[i]>values[i-1 as usize]{return false} i=i+1 as usize} return true}
+export function algorithm_insertion_sort_u64(values:[]u64):void{let i:usize=1 as usize while i<len(values){let key:u64=values[i] let j:usize=i while j>0 as usize&&values[j-1 as usize]>key{values[j]=values[j-1 as usize] j=j-1 as usize} values[j]=key i=i+1 as usize}}
+export function algorithm_selection_sort_u64(values:[]u64):void{let i:usize=0 as usize while i<len(values){let smallest:usize=i let j:usize=i+1 as usize while j<len(values){if values[j]<values[smallest]{smallest=j} j=j+1 as usize} if smallest!=i{let tmp:u64=values[i] values[i]=values[smallest] values[smallest]=tmp} i=i+1 as usize}}
+export function algorithm_lower_bound_u64(values:[]u64,target:u64):usize{let low:usize=0 as usize let high:usize=len(values) while low<high{let mid:usize=low+(high-low)/2 as usize if values[mid]<target{low=mid+1 as usize}else{high=mid}} return low}
+export function algorithm_upper_bound_u64(values:[]u64,target:u64):usize{let low:usize=0 as usize let high:usize=len(values) while low<high{let mid:usize=low+(high-low)/2 as usize if values[mid]<=target{low=mid+1 as usize}else{high=mid}} return low}
+export function algorithm_binary_search_u64(values:[]u64,target:u64):isize{let at:usize=algorithm_lower_bound_u64(values,target) if at<len(values)&&values[at]==target{return at as isize} return-1 as isize}
+export function algorithm_rotate_left_u64(values:[]u64,amount:usize):void{if len(values)<2 as usize{return} let shift:usize=amount%len(values) if shift==0 as usize{return} let step:usize=0 as usize while step<shift{let first:u64=values[0] let i:usize=1 as usize while i<len(values){values[i-1 as usize]=values[i] i=i+1 as usize} values[len(values)-1 as usize]=first step=step+1 as usize}}
+export function algorithm_rotate_right_u64(values:[]u64,amount:usize):void{if len(values)<2 as usize{return} let shift:usize=amount%len(values) if shift==0 as usize{return} algorithm_rotate_left_u64(values,len(values)-shift)}
+export function algorithm_unique_sorted_u64(values:[]u64):usize{if len(values)==0 as usize{return 0 as usize} let write:usize=1 as usize let read:usize=1 as usize while read<len(values){if values[read]!=values[write-1 as usize]{values[write]=values[read] write=write+1 as usize} read=read+1 as usize} return write}
+export function algorithm_partition_less_u64(values:[]u64,pivot:u64):usize{let write:usize=0 as usize let read:usize=0 as usize while read<len(values){if values[read]<pivot{let tmp:u64=values[write] values[write]=values[read] values[read]=tmp write=write+1 as usize} read=read+1 as usize} return write}
+export function algorithm_clamp_u64(values:[]u64,low:u64,high:u64):usize{if high<low{return 0 as usize} let changed:usize=0 as usize let i:usize=0 as usize while i<len(values){if values[i]<low{values[i]=low changed=changed+1 as usize}else if values[i]>high{values[i]=high changed=changed+1 as usize} i=i+1 as usize} return changed}
+export function algorithm_lexicographic_u64(a:[]u64,b:[]u64):int{let count:usize=len(a) if len(b)<count{count=len(b)} let i:usize=0 as usize while i<count{if a[i]<b[i]{return-1} if a[i]>b[i]{return 1} i=i+1 as usize} if len(a)<len(b){return-1} if len(a)>len(b){return 1} return 0}
+export function algorithm_sum_u64(values:[]u64):u64{let total:u64=0 as u64 let i:usize=0 as usize while i<len(values){total=total+values[i] i=i+1 as usize} return total}
+export function algorithm_prefix_sum_u64(values:[]u64,output:[]u64):usize{let count:usize=len(values) if len(output)<count{count=len(output)} let total:u64=0 as u64 let i:usize=0 as usize while i<count{total=total+values[i] output[i]=total i=i+1 as usize} return count}
+export function algorithm_adjacent_difference_u64(values:[]u64,output:[]u64):usize{let count:usize=len(values) if len(output)<count{count=len(output)} if count==0 as usize{return 0 as usize} output[0]=values[0] let i:usize=1 as usize while i<count{if values[i]>=values[i-1 as usize]{output[i]=values[i]-values[i-1 as usize]}else{output[i]=0 as u64} i=i+1 as usize} return count}
 
-export function nqFactorialU64(value: u32): u64 {
-    let result: u64 = 1 as u64
-    let index: u32 = 2 as u32
-    while index <= value {
-        result = result * index as u64
-        index = index + 1 as u32
-    }
-    return result
-}
+export function algorithm_reverse_u8(values:[]u8):void{if len(values)<2 as usize{return} let left:usize=0 as usize let right:usize=len(values)-1 as usize while left<right{let tmp:u8=values[left] values[left]=values[right] values[right]=tmp left=left+1 as usize right=right-1 as usize}}
+export function algorithm_fill_u8(values:[]u8,value:u8):void{let i:usize=0 as usize while i<len(values){values[i]=value i=i+1 as usize}}
+export function algorithm_copy_u8(source:[]u8,destination:[]u8):usize{let count:usize=len(source) if len(destination)<count{count=len(destination)} let i:usize=0 as usize while i<count{destination[i]=source[i] i=i+1 as usize} return count}
+export function algorithm_equal_u8(a:[]u8,b:[]u8):bool{if len(a)!=len(b){return false} let i:usize=0 as usize while i<len(a){if a[i]!=b[i]{return false} i=i+1 as usize} return true}
+export function algorithm_find_u8(values:[]u8,target:u8):isize{let i:usize=0 as usize while i<len(values){if values[i]==target{return i as isize} i=i+1 as usize} return-1 as isize}
+export function algorithm_find_last_u8(values:[]u8,target:u8):isize{let i:usize=len(values) while i>0 as usize{i=i-1 as usize if values[i]==target{return i as isize}} return-1 as isize}
+export function algorithm_count_u8(values:[]u8,target:u8):usize{let count:usize=0 as usize let i:usize=0 as usize while i<len(values){if values[i]==target{count=count+1 as usize} i=i+1 as usize} return count}
+export function algorithm_contains_u8(values:[]u8,target:u8):bool{return algorithm_find_u8(values,target)>=0 as isize}
+export function algorithm_min_u8(values:[]u8,out:*u8):bool{if out==null||len(values)==0 as usize{return false} let value:u8=values[0] let i:usize=1 as usize while i<len(values){if values[i]<value{value=values[i]} i=i+1 as usize} out[0]=value return true}
+export function algorithm_max_u8(values:[]u8,out:*u8):bool{if out==null||len(values)==0 as usize{return false} let value:u8=values[0] let i:usize=1 as usize while i<len(values){if values[i]>value{value=values[i]} i=i+1 as usize} out[0]=value return true}
+export function algorithm_sorted_ascending_u8(values:[]u8):bool{let i:usize=1 as usize while i<len(values){if values[i]<values[i-1 as usize]{return false} i=i+1 as usize} return true}
+export function algorithm_sorted_descending_u8(values:[]u8):bool{let i:usize=1 as usize while i<len(values){if values[i]>values[i-1 as usize]{return false} i=i+1 as usize} return true}
+export function algorithm_insertion_sort_u8(values:[]u8):void{let i:usize=1 as usize while i<len(values){let key:u8=values[i] let j:usize=i while j>0 as usize&&values[j-1 as usize]>key{values[j]=values[j-1 as usize] j=j-1 as usize} values[j]=key i=i+1 as usize}}
+export function algorithm_selection_sort_u8(values:[]u8):void{let i:usize=0 as usize while i<len(values){let smallest:usize=i let j:usize=i+1 as usize while j<len(values){if values[j]<values[smallest]{smallest=j} j=j+1 as usize} if smallest!=i{let tmp:u8=values[i] values[i]=values[smallest] values[smallest]=tmp} i=i+1 as usize}}
+export function algorithm_lower_bound_u8(values:[]u8,target:u8):usize{let low:usize=0 as usize let high:usize=len(values) while low<high{let mid:usize=low+(high-low)/2 as usize if values[mid]<target{low=mid+1 as usize}else{high=mid}} return low}
+export function algorithm_upper_bound_u8(values:[]u8,target:u8):usize{let low:usize=0 as usize let high:usize=len(values) while low<high{let mid:usize=low+(high-low)/2 as usize if values[mid]<=target{low=mid+1 as usize}else{high=mid}} return low}
+export function algorithm_binary_search_u8(values:[]u8,target:u8):isize{let at:usize=algorithm_lower_bound_u8(values,target) if at<len(values)&&values[at]==target{return at as isize} return-1 as isize}
+export function algorithm_rotate_left_u8(values:[]u8,amount:usize):void{if len(values)<2 as usize{return} let shift:usize=amount%len(values) if shift==0 as usize{return} let step:usize=0 as usize while step<shift{let first:u8=values[0] let i:usize=1 as usize while i<len(values){values[i-1 as usize]=values[i] i=i+1 as usize} values[len(values)-1 as usize]=first step=step+1 as usize}}
+export function algorithm_rotate_right_u8(values:[]u8,amount:usize):void{if len(values)<2 as usize{return} let shift:usize=amount%len(values) if shift==0 as usize{return} algorithm_rotate_left_u8(values,len(values)-shift)}
+export function algorithm_unique_sorted_u8(values:[]u8):usize{if len(values)==0 as usize{return 0 as usize} let write:usize=1 as usize let read:usize=1 as usize while read<len(values){if values[read]!=values[write-1 as usize]{values[write]=values[read] write=write+1 as usize} read=read+1 as usize} return write}
+export function algorithm_partition_less_u8(values:[]u8,pivot:u8):usize{let write:usize=0 as usize let read:usize=0 as usize while read<len(values){if values[read]<pivot{let tmp:u8=values[write] values[write]=values[read] values[read]=tmp write=write+1 as usize} read=read+1 as usize} return write}
+export function algorithm_clamp_u8(values:[]u8,low:u8,high:u8):usize{if high<low{return 0 as usize} let changed:usize=0 as usize let i:usize=0 as usize while i<len(values){if values[i]<low{values[i]=low changed=changed+1 as usize}else if values[i]>high{values[i]=high changed=changed+1 as usize} i=i+1 as usize} return changed}
+export function algorithm_lexicographic_u8(a:[]u8,b:[]u8):int{let count:usize=len(a) if len(b)<count{count=len(b)} let i:usize=0 as usize while i<count{if a[i]<b[i]{return-1} if a[i]>b[i]{return 1} i=i+1 as usize} if len(a)<len(b){return-1} if len(a)>len(b){return 1} return 0}
+
+export function algorithm_copy_range_u8(source:[]u8,start:usize,count:usize,destination:[]u8):usize{if start>len(source)||count>len(source)-start{return 0 as usize} let take:usize=count if len(destination)<take{take=len(destination)} let i:usize=0 as usize while i<take{destination[i]=source[start+i] i=i+1 as usize} return take}
+export function algorithm_move_u8(values:[]u8,from:usize,to:usize,count:usize):bool{if from>len(values)||to>len(values)||count>len(values)-from||count>len(values)-to{return false} if count==0 as usize||from==to{return true} if to<from{let i:usize=0 as usize while i<count{values[to+i]=values[from+i] i=i+1 as usize}}else{let i:usize=count while i>0 as usize{i=i-1 as usize values[to+i]=values[from+i]}} return true}
+export function algorithm_replace_u8(values:[]u8,old:u8,replacement:u8):usize{let changed:usize=0 as usize let i:usize=0 as usize while i<len(values){if values[i]==old{values[i]=replacement changed=changed+1 as usize} i=i+1 as usize} return changed}
+export function algorithm_mismatch_u8(a:[]u8,b:[]u8):isize{let count:usize=len(a) if len(b)<count{count=len(b)} let i:usize=0 as usize while i<count{if a[i]!=b[i]{return i as isize} i=i+1 as usize} if len(a)!=len(b){return count as isize} return-1 as isize}
+export function algorithm_prefix_match_u8(a:[]u8,b:[]u8):usize{let count:usize=len(a) if len(b)<count{count=len(b)} let i:usize=0 as usize while i<count&&a[i]==b[i]{i=i+1 as usize} return i}
+export function algorithm_find_subsequence_u8(haystack:[]u8,needle:[]u8):isize{if len(needle)==0 as usize{return 0 as isize} if len(needle)>len(haystack){return-1 as isize} let start:usize=0 as usize while start<=len(haystack)-len(needle){let matched:bool=true let i:usize=0 as usize while i<len(needle){if haystack[start+i]!=needle[i]{matched=false i=len(needle)}else{i=i+1 as usize}} if matched{return start as isize} start=start+1 as usize} return-1 as isize}
+export function algorithm_starts_with_u8(value:[]u8,prefix:[]u8):bool{if len(prefix)>len(value){return false} let i:usize=0 as usize while i<len(prefix){if value[i]!=prefix[i]{return false} i=i+1 as usize} return true}
+export function algorithm_ends_with_u8(value:[]u8,suffix:[]u8):bool{if len(suffix)>len(value){return false} let offset:usize=len(value)-len(suffix) let i:usize=0 as usize while i<len(suffix){if value[offset+i]!=suffix[i]{return false} i=i+1 as usize} return true}
+export function algorithm_all_zero_u8(values:[]u8):bool{let i:usize=0 as usize while i<len(values){if values[i]!=0 as u8{return false} i=i+1 as usize} return true}
+export function algorithm_count_nonzero_u8(values:[]u8):usize{let count:usize=0 as usize let i:usize=0 as usize while i<len(values){if values[i]!=0 as u8{count=count+1 as usize} i=i+1 as usize} return count}
+export function algorithm_clear_u8(values:[]u8):void{algorithm_fill_u8(values,0 as u8)}
+export function algorithm_swap_u8(values:[]u8,a:usize,b:usize):bool{if a>=len(values)||b>=len(values){return false} let tmp:u8=values[a] values[a]=values[b] values[b]=tmp return true}
+export function algorithm_swap_i64(values:[]i64,a:usize,b:usize):bool{if a>=len(values)||b>=len(values){return false} let tmp:i64=values[a] values[a]=values[b] values[b]=tmp return true}
+export function algorithm_swap_u64(values:[]u64,a:usize,b:usize):bool{if a>=len(values)||b>=len(values){return false} let tmp:u64=values[a] values[a]=values[b] values[b]=tmp return true}
+
+export function nqGcd(a:i64,b:i64):i64{return algorithm_gcd_i64(a,b)}
+export function nqLcm(a:i64,b:i64):i64{return algorithm_lcm_i64(a,b)}
+export function nqPowInt(base:i64,exponent:u32):i64{return algorithm_pow_i64(base,exponent)}
+export function nqFactorial(value:u32):u64{return algorithm_factorial_u64(value)}

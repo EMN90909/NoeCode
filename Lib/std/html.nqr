@@ -1,6 +1,240 @@
 module noqeri.std.html
 
+record HtmlToken {
+    kind: int
+    start: usize
+    length: usize
+    name_start: usize
+    name_length: usize
+    closing: bool
+    self_closing: bool
+}
+
+export function html_token_eof(): int { return 0 }
+export function html_token_text(): int { return 1 }
+export function html_token_tag(): int { return 2 }
+export function html_token_comment(): int { return 3 }
+export function html_token_doctype(): int { return 4 }
+export function html_token_error(): int { return 5 }
+
 export function html_is_ascii_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
 export function html_is_ascii_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
 export function html_is_ascii_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
-export function html_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && html_is_ascii_space(value[i]) { i = i + 1 } return i }
+export function html_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && html_is_ascii_space(value[i]) { i = i + 1 as usize } return i }
+
+function html_ascii_lower(c: u8): u8 { if c >= 65 as u8 && c <= 90 as u8 { return c + 32 as u8 } return c }
+function html_is_name_char(c: u8): bool { return html_is_ascii_alpha(c) || html_is_ascii_digit(c) || c == 45 as u8 || c == 58 as u8 || c == 95 as u8 }
+
+export function html_escape_length(value: []u8): usize {
+    let size: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(value) {
+        let c: u8 = value[i]
+        if c == 38 as u8 { size = size + 5 as usize }
+        else if c == 60 as u8 || c == 62 as u8 { size = size + 4 as usize }
+        else if c == 34 as u8 || c == 39 as u8 { size = size + 6 as usize }
+        else { size = size + 1 as usize }
+        i = i + 1 as usize
+    }
+    return size
+}
+
+function html_write_bytes(destination: []u8, offset: usize, bytes: []u8): bool {
+    if offset > len(destination) || len(bytes) > len(destination) - offset { return false }
+    let i: usize = 0 as usize
+    while i < len(bytes) { destination[offset + i] = bytes[i] i = i + 1 as usize }
+    return true
+}
+
+export function html_escape_into(value: []u8, destination: []u8): isize {
+    let required: usize = html_escape_length(value)
+    if len(destination) < required { return -1 as isize }
+    let amp: [u8; 5] = [38 as u8,97 as u8,109 as u8,112 as u8,59 as u8]
+    let lt: [u8; 4] = [38 as u8,108 as u8,116 as u8,59 as u8]
+    let gt: [u8; 4] = [38 as u8,103 as u8,116 as u8,59 as u8]
+    let quot: [u8; 6] = [38 as u8,113 as u8,117 as u8,111 as u8,116 as u8,59 as u8]
+    let apos: [u8; 6] = [38 as u8,35 as u8,51 as u8,57 as u8,59 as u8,0 as u8]
+    let output: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(value) {
+        let c: u8 = value[i]
+        if c == 38 as u8 { html_write_bytes(destination, output, slice(amp)) output = output + 5 as usize }
+        else if c == 60 as u8 { html_write_bytes(destination, output, slice(lt)) output = output + 4 as usize }
+        else if c == 62 as u8 { html_write_bytes(destination, output, slice(gt)) output = output + 4 as usize }
+        else if c == 34 as u8 { html_write_bytes(destination, output, slice(quot)) output = output + 6 as usize }
+        else if c == 39 as u8 {
+            destination[output] = 38 as u8
+            destination[output + 1 as usize] = 35 as u8
+            destination[output + 2 as usize] = 51 as u8
+            destination[output + 3 as usize] = 57 as u8
+            destination[output + 4 as usize] = 59 as u8
+            output = output + 5 as usize
+        }
+        else { destination[output] = c output = output + 1 as usize }
+        i = i + 1 as usize
+    }
+    return output as isize
+}
+
+function html_matches_at(value: []u8, offset: usize, expected: []u8): bool {
+    if offset > len(value) || len(expected) > len(value) - offset { return false }
+    let i: usize = 0 as usize
+    while i < len(expected) { if value[offset + i] != expected[i] { return false } i = i + 1 as usize }
+    return true
+}
+
+export function html_unescape_length(value: []u8): isize {
+    let size: usize = 0 as usize
+    let i: usize = 0 as usize
+    let amp: [u8; 5] = [38 as u8,97 as u8,109 as u8,112 as u8,59 as u8]
+    let lt: [u8; 4] = [38 as u8,108 as u8,116 as u8,59 as u8]
+    let gt: [u8; 4] = [38 as u8,103 as u8,116 as u8,59 as u8]
+    let quot: [u8; 6] = [38 as u8,113 as u8,117 as u8,111 as u8,116 as u8,59 as u8]
+    let apos: [u8; 5] = [38 as u8,35 as u8,51 as u8,57 as u8,59 as u8]
+    while i < len(value) {
+        if value[i] != 38 as u8 { size = size + 1 as usize i = i + 1 as usize }
+        else if html_matches_at(value, i, slice(amp)) { size = size + 1 as usize i = i + 5 as usize }
+        else if html_matches_at(value, i, slice(lt)) || html_matches_at(value, i, slice(gt)) { size = size + 1 as usize i = i + 4 as usize }
+        else if html_matches_at(value, i, slice(quot)) { size = size + 1 as usize i = i + 6 as usize }
+        else if html_matches_at(value, i, slice(apos)) { size = size + 1 as usize i = i + 5 as usize }
+        else { return -1 as isize }
+    }
+    return size as isize
+}
+
+export function html_unescape_into(value: []u8, destination: []u8): isize {
+    let required: isize = html_unescape_length(value)
+    if required < 0 as isize || required as usize > len(destination) { return -1 as isize }
+    let amp: [u8; 5] = [38 as u8,97 as u8,109 as u8,112 as u8,59 as u8]
+    let lt: [u8; 4] = [38 as u8,108 as u8,116 as u8,59 as u8]
+    let gt: [u8; 4] = [38 as u8,103 as u8,116 as u8,59 as u8]
+    let quot: [u8; 6] = [38 as u8,113 as u8,117 as u8,111 as u8,116 as u8,59 as u8]
+    let apos: [u8; 5] = [38 as u8,35 as u8,51 as u8,57 as u8,59 as u8]
+    let input: usize = 0 as usize
+    let output: usize = 0 as usize
+    while input < len(value) {
+        if value[input] != 38 as u8 { destination[output] = value[input] input = input + 1 as usize }
+        else if html_matches_at(value, input, slice(amp)) { destination[output] = 38 as u8 input = input + 5 as usize }
+        else if html_matches_at(value, input, slice(lt)) { destination[output] = 60 as u8 input = input + 4 as usize }
+        else if html_matches_at(value, input, slice(gt)) { destination[output] = 62 as u8 input = input + 4 as usize }
+        else if html_matches_at(value, input, slice(quot)) { destination[output] = 34 as u8 input = input + 6 as usize }
+        else if html_matches_at(value, input, slice(apos)) { destination[output] = 39 as u8 input = input + 5 as usize }
+        else { return -1 as isize }
+        output = output + 1 as usize
+    }
+    return output as isize
+}
+
+function html_token_reset(token: *HtmlToken): bool {
+    if token == null { return false }
+    token.kind = html_token_error()
+    token.start = 0 as usize
+    token.length = 0 as usize
+    token.name_start = 0 as usize
+    token.name_length = 0 as usize
+    token.closing = false
+    token.self_closing = false
+    return true
+}
+
+function html_comment_end(value: []u8, start: usize): isize {
+    let i: usize = start
+    while i + 2 as usize < len(value) {
+        if value[i] == 45 as u8 && value[i + 1 as usize] == 45 as u8 && value[i + 2 as usize] == 62 as u8 { return (i + 3 as usize) as isize }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function html_next(value: []u8, start: usize, token: *HtmlToken, next: *usize): bool {
+    if !html_token_reset(token) || next == null || start > len(value) { return false }
+    if start == len(value) { token.kind = html_token_eof() token.start = start unsafe { *next = start } return true }
+
+    if value[start] != 60 as u8 {
+        let end: usize = start
+        while end < len(value) && value[end] != 60 as u8 { end = end + 1 as usize }
+        token.kind = html_token_text()
+        token.start = start
+        token.length = end - start
+        unsafe { *next = end }
+        return true
+    }
+
+    let comment_prefix: [u8; 4] = [60 as u8,33 as u8,45 as u8,45 as u8]
+    if html_matches_at(value, start, slice(comment_prefix)) {
+        let end: isize = html_comment_end(value, start + 4 as usize)
+        if end < 0 as isize { token.kind = html_token_error() return false }
+        token.kind = html_token_comment()
+        token.start = start
+        token.length = end as usize - start
+        unsafe { *next = end as usize }
+        return true
+    }
+
+    let cursor: usize = start + 1 as usize
+    if cursor < len(value) && value[cursor] == 47 as u8 { token.closing = true cursor = cursor + 1 as usize }
+    if cursor < len(value) && value[cursor] == 33 as u8 {
+        while cursor < len(value) && value[cursor] != 62 as u8 { cursor = cursor + 1 as usize }
+        if cursor >= len(value) { return false }
+        token.kind = html_token_doctype()
+        token.start = start
+        token.length = cursor + 1 as usize - start
+        unsafe { *next = cursor + 1 as usize }
+        return true
+    }
+
+    while cursor < len(value) && html_is_ascii_space(value[cursor]) { cursor = cursor + 1 as usize }
+    let name_start: usize = cursor
+    while cursor < len(value) && html_is_name_char(value[cursor]) { cursor = cursor + 1 as usize }
+    if cursor == name_start { return false }
+    token.name_start = name_start
+    token.name_length = cursor - name_start
+
+    let quote: u8 = 0 as u8
+    while cursor < len(value) {
+        let c: u8 = value[cursor]
+        if quote != 0 as u8 {
+            if c == quote { quote = 0 as u8 }
+            cursor = cursor + 1 as usize
+        } else {
+            if c == 34 as u8 || c == 39 as u8 { quote = c cursor = cursor + 1 as usize }
+            else if c == 62 as u8 {
+                let inspect: usize = cursor
+                while inspect > start && html_is_ascii_space(value[inspect - 1 as usize]) { inspect = inspect - 1 as usize }
+                if inspect > start && value[inspect - 1 as usize] == 47 as u8 { token.self_closing = true }
+                token.kind = html_token_tag()
+                token.start = start
+                token.length = cursor + 1 as usize - start
+                unsafe { *next = cursor + 1 as usize }
+                return true
+            } else { cursor = cursor + 1 as usize }
+        }
+    }
+    token.kind = html_token_error()
+    return false
+}
+
+export function html_tag_name_equals(value: []u8, token: *HtmlToken, name: []u8): bool {
+    if token == null || token.kind != html_token_tag() || token.name_length != len(name) { return false }
+    if token.name_start > len(value) || token.name_length > len(value) - token.name_start { return false }
+    let i: usize = 0 as usize
+    while i < len(name) {
+        if html_ascii_lower(value[token.name_start + i]) != html_ascii_lower(name[i]) { return false }
+        i = i + 1 as usize
+    }
+    return true
+}
+
+export function html_count_tokens(value: []u8): usize {
+    let token_bytes: [u8; 64] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let token: *HtmlToken = (&token_bytes[0 as usize]) as *HtmlToken
+    let count: usize = 0 as usize
+    let offset: usize = 0 as usize
+    while offset < len(value) {
+        let next: usize = offset
+        if !html_next(value, offset, token, &next) || next <= offset { return 0 as usize }
+        if token.kind != html_token_eof() { count = count + 1 as usize }
+        offset = next
+    }
+    return count
+}

@@ -69,6 +69,71 @@ function invalid_null(): u32 {
 EOF
 reject build/invalid_direct_null_dereference.nqr "provable null dereference"
 
+cat > build/invalid_use_after_move.nqr <<'EOF'
+function consume(values: [int; 2]): int { return values[0] }
+function invalid_move(): int {
+    let values: [int; 2] = [4, 8]
+    consume(values)
+    return values[0]
+}
+EOF
+reject build/invalid_use_after_move.nqr "owned fixed array used after move into function"
+
+cat > build/invalid_move_while_borrowed.nqr <<'EOF'
+function consume(values: [int; 2]): int { return values[0] }
+function invalid_borrow_move(): int {
+    let values: [int; 2] = [4, 8]
+    let borrowed: *[int; 2] = &values
+    consume(values)
+    return 0
+}
+EOF
+reject build/invalid_move_while_borrowed.nqr "owned value moved while shared borrow remains live"
+
+cat > build/valid_copy_scalar.nqr <<'EOF'
+function consume(value: int): int { return value }
+function valid_copy(): int {
+    let value: int = 9
+    consume(value)
+    return value
+}
+EOF
+"$NQ" check build/valid_copy_scalar.nqr >/dev/null
+
+cat > build/valid_comptime.nqr <<'EOF'
+function fib(n: int): int {
+    let a: int = 0
+    let b: int = 1
+    let i: int = 0
+    while i < n {
+        let next: int = a + b
+        a = b
+        b = next
+        i = i + 1
+    }
+    return a
+}
+const folded: int = comptime(fib(10))
+comptime_assert(folded == 55)
+function main(): int { print(folded) return 0 }
+EOF
+"$NQ" check build/valid_comptime.nqr >/dev/null
+comptime_output="$("$NQ" run build/valid_comptime.nqr)"
+if [ "$comptime_output" != '55' ]; then
+  echo "compile-time execution changed expected value: $comptime_output" >&2
+  exit 1
+fi
+"$NQ" nir build/valid_comptime.nqr > build/valid_comptime.nir
+if grep -q 'comptime' build/valid_comptime.nir; then
+  echo "comptime call survived lowering instead of being erased" >&2
+  exit 1
+fi
+
+cat > build/invalid_comptime_host.nqr <<'EOF'
+const impossible = comptime(host("clockMillis"))
+EOF
+reject build/invalid_comptime_host.nqr "compile-time execution attempted host I/O"
+
 cat > build/valid_generic_record_nested.nqr <<'EOF'
 record Cell<T> {
     value: T
@@ -100,4 +165,4 @@ export function next_u64(link: *Link<u64>): *Link<u64> {
 EOF
 "$NQ" check build/valid_generic_record_recursive.nqr >/dev/null
 
-echo "maturity checks passed"
+echo "maturity checks passed (ownership, borrow safety, comptime, generics, bounds and null safety)"

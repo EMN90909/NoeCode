@@ -1,6 +1,24 @@
 module noqeri.std.retry
 
+record RetryPolicy { maxAttempts: usize baseDelayMillis: u64 maxDelayMillis: u64 multiplier: u64 jitterPermille: u64 }
+record RetryState { attempt: usize elapsedMillis: u64 lastDelayMillis: u64 exhausted: bool }
+
 export function retry_status_ok(status: isize): bool { return status >= 0 as isize }
 export function retry_status_error(status: isize): bool { return status < 0 as isize }
 export function retry_error_code(status: isize): isize { if status < 0 as isize { return -status } return 0 as isize }
 export function retry_attempt_allowed(attempt: usize, max_attempts: usize): bool { return attempt < max_attempts }
+export function retry_policy_valid(policy: RetryPolicy): bool { if policy.maxAttempts == 0 as usize { return false } if policy.multiplier == 0 as u64 { return false } if policy.maxDelayMillis < policy.baseDelayMillis { return false } return policy.jitterPermille <= 1000 as u64 }
+export function retry_policy_default(): RetryPolicy { let policy: RetryPolicy policy.maxAttempts=5 as usize policy.baseDelayMillis=100 as u64 policy.maxDelayMillis=5000 as u64 policy.multiplier=2 as u64 policy.jitterPermille=100 as u64 return policy }
+export function retry_policy_immediate(maxAttempts: usize): RetryPolicy { let policy: RetryPolicy policy.maxAttempts=maxAttempts policy.baseDelayMillis=0 as u64 policy.maxDelayMillis=0 as u64 policy.multiplier=1 as u64 policy.jitterPermille=0 as u64 return policy }
+export function retry_state_init(): RetryState { let state: RetryState state.attempt=0 as usize state.elapsedMillis=0 as u64 state.lastDelayMillis=0 as u64 state.exhausted=false return state }
+export function retry_saturating_mul_u64(value:u64,factor:u64,cap:u64):u64 { if value==0 as u64 || factor==0 as u64 { return 0 as u64 } if value>=cap { return cap } if factor>cap/value { return cap } let product:u64=value*factor if product>cap { return cap } return product }
+export function retry_saturating_add_u64(value:u64,addend:u64):u64 { let max:u64=18446744073709551615 as u64 if addend>max-value { return max } return value+addend }
+export function retry_exponential_delay(policy:RetryPolicy,attempt:usize):u64 { if !retry_policy_valid(policy) || policy.baseDelayMillis==0 as u64 { return 0 as u64 } let delay:u64=policy.baseDelayMillis let i:usize=0 as usize while i<attempt { delay=retry_saturating_mul_u64(delay,policy.multiplier,policy.maxDelayMillis) if delay>=policy.maxDelayMillis { return policy.maxDelayMillis } i=i+1 as usize } return delay }
+export function retry_mix_seed(seed:u64,attempt:usize):u64 { let x:u64=seed+(attempt as u64*6364136223846793005 as u64)+1442695040888963407 as u64 x=x*2862933555777941757 as u64+3037000493 as u64 x=x*3202034522624059733 as u64+1 as u64 return x }
+export function retry_jittered_delay(policy:RetryPolicy,attempt:usize,seed:u64):u64 { let base:u64=retry_exponential_delay(policy,attempt) if base==0 as u64 || policy.jitterPermille==0 as u64 { return base } let window:u64=retry_saturating_mul_u64(base,policy.jitterPermille,18446744073709551615 as u64)/1000 as u64 if window==0 as u64 { return base } let mixed:u64=retry_mix_seed(seed,attempt) let span:u64=retry_saturating_add_u64(window,window)+1 as u64 let offset:u64=mixed%span if offset<=window { let subtract:u64=window-offset if subtract>=base { return 0 as u64 } return base-subtract } let add:u64=offset-window let result:u64=retry_saturating_add_u64(base,add) if result>policy.maxDelayMillis { return policy.maxDelayMillis } return result }
+export function retry_can_attempt(policy:RetryPolicy,state:RetryState):bool { return retry_policy_valid(policy) && !state.exhausted && state.attempt<policy.maxAttempts }
+export function retry_record_attempt(policy:RetryPolicy,state:*RetryState,delayMillis:u64):bool { if state==null { return false } if !retry_can_attempt(policy,*state) { state.exhausted=true return false } state.attempt=state.attempt+1 as usize state.lastDelayMillis=delayMillis state.elapsedMillis=retry_saturating_add_u64(state.elapsedMillis,delayMillis) if state.attempt>=policy.maxAttempts { state.exhausted=true } return true }
+export function retry_remaining(policy:RetryPolicy,state:RetryState):usize { if state.attempt>=policy.maxAttempts { return 0 as usize } return policy.maxAttempts-state.attempt }
+export function retry_reset(state:*RetryState):bool { if state==null { return false } state.attempt=0 as usize state.elapsedMillis=0 as u64 state.lastDelayMillis=0 as u64 state.exhausted=false return true }
+export function retry_http_status(status:int):bool { if status==408 || status==425 || status==429 { return true } return status>=500 && status<=599 && status!=501 && status!=505 }
+export function retry_network_error(code:isize):bool { let value:isize=retry_error_code(code) return value==4 as isize || value==11 as isize || value==32 as isize || value==104 as isize || value==110 as isize || value==111 as isize }

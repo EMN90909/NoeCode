@@ -5,23 +5,39 @@ BUILD_DIR="${BUILD_DIR:-$ROOT/build}"
 STAGE0="${NOQERI_STAGE0:-}"
 BOOTSTRAP="$ROOT/Compiler/selfhost/bootstrap.nqr"
 
-if [ -z "$STAGE0" ]; then
-  if command -v noqeri >/dev/null 2>&1; then STAGE0=$(command -v noqeri); fi
-fi
-if [ -z "$STAGE0" ]; then
-  cat >&2 <<'MSG'
-Noqeri's bootstrap program is written in Noqeri.
-A trusted stage-0 executable is still required only to turn that source into the
-first portable stage-1 object. Set NOQERI_STAGE0 to a trusted Noqeri seed.
-CMake/C++ are not used by this normal build.
-MSG
-  exit 2
-fi
 if ! command -v node >/dev/null 2>&1; then
-  echo "Noqeri's portable .nqo host requires Node.js 20+ at this stage" >&2
+  echo "Noqeri's portable bootstrap tooling requires Node.js 20+" >&2
   exit 2
 fi
 mkdir -p "$BUILD_DIR"
+
+if [ -z "$STAGE0" ]; then
+  if command -v noqeri >/dev/null 2>&1; then STAGE0=$(command -v noqeri); fi
+fi
+
+# A preinstalled Noqeri binary is no longer required. When no trusted binary is
+# supplied/found, build the repository's auditable C++ stage-0 source locally.
+# Stage-2 reproducibility remains the trust-removal gate; this is a source
+# bootstrap, not a claim that the C++ trust root has disappeared.
+if [ -z "$STAGE0" ]; then
+  if [ "${NOQERI_ALLOW_SOURCE_BOOTSTRAP:-1}" != "1" ]; then
+    echo "Noqeri seed is missing and source bootstrap is disabled (NOQERI_ALLOW_SOURCE_BOOTSTRAP=0)" >&2
+    exit 2
+  fi
+  if ! command -v cmake >/dev/null 2>&1; then
+    echo "No Noqeri stage-0 was found. Install CMake/C++ for automatic source bootstrap or set NOQERI_STAGE0." >&2
+    exit 2
+  fi
+  PATH_FILE="$BUILD_DIR/stage0-seed.path"
+  node "$ROOT/scripts/source-bootstrap.mjs" --root="$ROOT" --build-dir="$BUILD_DIR/stage0-seed" --path-file="$PATH_FILE" --proof="$BUILD_DIR/stage0-seed.json"
+  STAGE0=$(sed -n '1p' "$PATH_FILE")
+fi
+
+if [ ! -x "$STAGE0" ] && [ ! -f "$STAGE0" ]; then
+  echo "Noqeri stage-0 is not executable or does not exist: $STAGE0" >&2
+  exit 2
+fi
+
 "$STAGE0" check "$BOOTSTRAP"
 "$STAGE0" web "$BOOTSTRAP" "$BUILD_DIR/noqeri-stage1.nqo"
 cat > "$BUILD_DIR/noqeri" <<LAUNCH
@@ -32,3 +48,4 @@ chmod +x "$BUILD_DIR/noqeri"
 "$BUILD_DIR/noqeri" selftest
 "$BUILD_DIR/noqeri" --version
 printf 'Noqeri stage-1 built from Noqeri bootstrap source at %s\n' "$BUILD_DIR/noqeri"
+printf 'Stage-0 provenance: %s\n' "${NOQERI_STAGE0:+external seed}${NOQERI_STAGE0:-$BUILD_DIR/stage0-seed.json}"

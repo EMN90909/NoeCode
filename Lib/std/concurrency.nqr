@@ -1,0 +1,138 @@
+module noqeri.std.concurrency
+
+// Host-neutral structured-concurrency state. Actual thread/task creation remains
+// a runtime capability; this module provides the cancellation, accounting and
+// backpressure primitives needed to make spawned work bounded and observable.
+
+record CancellationToken {
+    state: u64
+}
+
+record Latch {
+    remaining: u64
+}
+
+record TaskGroup {
+    active: u64
+    completed: u64
+    failed: u64
+    cancelled: u64
+    firstError: u64
+}
+
+record BackpressureGate {
+    inFlight: u64
+    limit: u64
+}
+
+export function cancellation_active(): u64 { return 0 as u64 }
+export function cancellation_requested(): u64 { return 1 as u64 }
+export function cancellation_init(token: *CancellationToken): void { atomic.store(&token.state, cancellation_active()) }
+export function cancellation_request(token: *CancellationToken): bool {
+    return atomic.compareExchange(&token.state, cancellation_active(), cancellation_requested()) == cancellation_active()
+}
+export function cancellation_is_requested(token: *CancellationToken): bool { return atomic.load(&token.state) == cancellation_requested() }
+export function cancellation_reset(token: *CancellationToken): void { atomic.store(&token.state, cancellation_active()) }
+
+export function latch_init(latch: *Latch, count: u64): void { atomic.store(&latch.remaining, count) }
+export function latch_remaining(latch: *Latch): u64 { return atomic.load(&latch.remaining) }
+export function latch_ready(latch: *Latch): bool { return latch_remaining(latch) == 0 as u64 }
+export function latch_count_down(latch: *Latch): bool {
+    let current: u64 = atomic.load(&latch.remaining)
+    while current > 0 as u64 {
+        let observed: u64 = atomic.compareExchange(&latch.remaining, current, current - 1 as u64)
+        if observed == current { return current == 1 as u64 }
+        current = observed
+    }
+    return true
+}
+
+export function task_group_init(group: *TaskGroup): void {
+    atomic.store(&group.active, 0 as u64)
+    atomic.store(&group.completed, 0 as u64)
+    atomic.store(&group.failed, 0 as u64)
+    atomic.store(&group.cancelled, 0 as u64)
+    atomic.store(&group.firstError, 0 as u64)
+}
+
+export function task_group_active(group: *TaskGroup): u64 { return atomic.load(&group.active) }
+export function task_group_completed(group: *TaskGroup): u64 { return atomic.load(&group.completed) }
+export function task_group_failed(group: *TaskGroup): u64 { return atomic.load(&group.failed) }
+export function task_group_cancelled(group: *TaskGroup): u64 { return atomic.load(&group.cancelled) }
+export function task_group_done(group: *TaskGroup): bool { return task_group_active(group) == 0 as u64 }
+export function task_group_has_failure(group: *TaskGroup): bool { return task_group_failed(group) > 0 as u64 }
+export function task_group_first_error(group: *TaskGroup): isize { return atomic.load(&group.firstError) as isize }
+
+export function task_group_spawned(group: *TaskGroup): void {
+    let current: u64 = atomic.load(&group.active)
+    while atomic.compareExchange(&group.active, current, current + 1 as u64) != current { current = atomic.load(&group.active) }
+}
+
+function task_group_decrement_active(group: *TaskGroup): void {
+    let current: u64 = atomic.load(&group.active)
+    while current > 0 as u64 {
+        let observed: u64 = atomic.compareExchange(&group.active, current, current - 1 as u64)
+        if observed == current { return }
+        current = observed
+    }
+}
+
+export function task_group_finished(group: *TaskGroup): void {
+    let current: u64 = atomic.load(&group.completed)
+    while atomic.compareExchange(&group.completed, current, current + 1 as u64) != current { current = atomic.load(&group.completed) }
+    task_group_decrement_active(group)
+}
+
+export function task_group_failed_with(group: *TaskGroup, error: isize): void {
+    let failed: u64 = atomic.load(&group.failed)
+    while atomic.compareExchange(&group.failed, failed, failed + 1 as u64) != failed { failed = atomic.load(&group.failed) }
+    if error != 0 as isize { atomic.compareExchange(&group.firstError, 0 as u64, error as u64) }
+    task_group_decrement_active(group)
+}
+
+export function task_group_mark_cancelled(group: *TaskGroup): void {
+    let current: u64 = atomic.load(&group.cancelled)
+    while atomic.compareExchange(&group.cancelled, current, current + 1 as u64) != current { current = atomic.load(&group.cancelled) }
+    task_group_decrement_active(group)
+}
+
+export function backpressure_init(gate: *BackpressureGate, limit: u64): void {
+    atomic.store(&gate.inFlight, 0 as u64)
+    gate.limit = limit
+}
+export function backpressure_limit(gate: *BackpressureGate): u64 { return gate.limit }
+export function backpressure_in_flight(gate: *BackpressureGate): u64 { return atomic.load(&gate.inFlight) }
+export function backpressure_available(gate: *BackpressureGate): u64 {
+    let active: u64 = backpressure_in_flight(gate)
+    if active >= gate.limit { return 0 as u64 }
+    return gate.limit - active
+}
+export function backpressure_try_enter(gate: *BackpressureGate): bool {
+    if gate.limit == 0 as u64 { return false }
+    let current: u64 = atomic.load(&gate.inFlight)
+    while current < gate.limit {
+        let observed: u64 = atomic.compareExchange(&gate.inFlight, current, current + 1 as u64)
+        if observed == current { return true }
+        current = observed
+    }
+    return false
+}
+export function backpressure_leave(gate: *BackpressureGate): bool {
+    let current: u64 = atomic.load(&gate.inFlight)
+    while current > 0 as u64 {
+        let observed: u64 = atomic.compareExchange(&gate.inFlight, current, current - 1 as u64)
+        if observed == current { return true }
+        current = observed
+    }
+    return false
+}
+
+export function concurrency_spin_until_cancelled(token: *CancellationToken, maxSpins: usize): bool {
+    let spin: usize = 0 as usize
+    while spin < maxSpins {
+        if cancellation_is_requested(token) { return true }
+        atomic.fence()
+        spin = spin + 1 as usize
+    }
+    return cancellation_is_requested(token)
+}

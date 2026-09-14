@@ -12,7 +12,7 @@ endif()
 # the Noqeri compiler can compile the corresponding compiler/toolchain pieces.
 set(NOQERI_FRONTEND_SOURCES
  Compiler/core.cpp Compiler/modules.cpp Compiler/workspace.cpp Compiler/type_checker.cpp
- Compiler/lifetime.cpp Compiler/safety.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp Compiler/register_alloc.cpp Compiler/optimizer.cpp
+ Compiler/comptime.cpp Compiler/ownership.cpp Compiler/lifetime.cpp Compiler/safety.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp Compiler/register_alloc.cpp Compiler/optimizer.cpp
  Compiler/bootstrap/lexer_host.cpp Compiler/bootstrap/parser_host.cpp Compiler/bootstrap/abi_runtime_host.cpp Compiler/bootstrap/interpreter_host.cpp
  Compiler/bootstrap/noqeridb_host.cpp)
 set(NOQERI_SOURCES ${NOQERI_FRONTEND_SOURCES}
@@ -70,6 +70,12 @@ if(BUILD_TESTING)
  add_test(NAME noqeri-stress COMMAND noqeri stress ${CMAKE_SOURCE_DIR})
  add_test(NAME noqeri-doctor COMMAND noqeri doctor ${CMAKE_SOURCE_DIR})
  add_test(NAME noqeri-audit COMMAND noqeri audit ${CMAKE_SOURCE_DIR})
+ find_program(NOQERI_NODE_EXECUTABLE node)
+ if(NOQERI_NODE_EXECUTABLE)
+  add_test(NAME noqeri-compiler-maturity COMMAND ${NOQERI_NODE_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/test-compiler-maturity.mjs $<TARGET_FILE:noqeri>)
+  add_test(NAME noqeri-fuzz-quick COMMAND ${NOQERI_NODE_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/fuzz/fuzz-all.mjs --cases=25 --seed=1313948230 --timeout=2000)
+  set_tests_properties(noqeri-fuzz-quick PROPERTIES ENVIRONMENT "NOQERI_NATIVE=$<TARGET_FILE:noqeri>")
+ endif()
 endif()
 install(TARGETS noqeri noqeri_abi RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(DIRECTORY Include/noqeri/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/noqeri FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")

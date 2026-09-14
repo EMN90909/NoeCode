@@ -1,6 +1,93 @@
 module noqeri.std.timezone
 
-export function timezone_seconds_to_millis(value:i64):i64{return value*1000 as i64}
-export function timezone_minutes_to_seconds(value:i64):i64{return value*60 as i64}
-export function timezone_hours_to_seconds(value:i64):i64{return value*3600 as i64}
-export function timezone_nonnegative(value:i64):bool{return value>=0 as i64}
+record UtcOffset {
+    seconds: i32
+    valid: bool
+}
+
+export function timezone_seconds_to_millis(value: i64): i64 { return value * 1000 as i64 }
+export function timezone_minutes_to_seconds(value: i64): i64 { return value * 60 as i64 }
+export function timezone_hours_to_seconds(value: i64): i64 { return value * 3600 as i64 }
+export function timezone_nonnegative(value: i64): bool { return value >= 0 as i64 }
+
+export function timezone_is_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
+export function timezone_digit(c: u8): i32 { if !timezone_is_digit(c) { return -1 as i32 } return (c - 48 as u8) as i32 }
+
+export function timezone_offset_valid_seconds(seconds: i32): bool {
+    return seconds >= -64800 as i32 && seconds <= 64800 as i32
+}
+
+export function timezone_offset(seconds: i32): UtcOffset {
+    let result: UtcOffset
+    result.seconds = seconds
+    result.valid = timezone_offset_valid_seconds(seconds)
+    return result
+}
+
+export function timezone_utc(): UtcOffset { return timezone_offset(0 as i32) }
+export function timezone_offset_minutes(minutes: i32): UtcOffset {
+    if minutes < -1080 as i32 || minutes > 1080 as i32 { return timezone_offset(64801 as i32) }
+    return timezone_offset(minutes * 60 as i32)
+}
+
+export function timezone_parse_offset(text: []u8): UtcOffset {
+    if len(text) == 1 as usize && text[0] == 90 as u8 { return timezone_utc() }
+    if len(text) != 6 as usize { return timezone_offset(64801 as i32) }
+    if text[0] != 43 as u8 && text[0] != 45 as u8 { return timezone_offset(64801 as i32) }
+    if text[3] != 58 as u8 { return timezone_offset(64801 as i32) }
+    if !timezone_is_digit(text[1]) || !timezone_is_digit(text[2]) || !timezone_is_digit(text[4]) || !timezone_is_digit(text[5]) { return timezone_offset(64801 as i32) }
+    let hours: i32 = timezone_digit(text[1]) * 10 as i32 + timezone_digit(text[2])
+    let minutes: i32 = timezone_digit(text[4]) * 10 as i32 + timezone_digit(text[5])
+    if hours > 18 as i32 || minutes > 59 as i32 { return timezone_offset(64801 as i32) }
+    if hours == 18 as i32 && minutes != 0 as i32 { return timezone_offset(64801 as i32) }
+    let total: i32 = hours * 3600 as i32 + minutes * 60 as i32
+    if text[0] == 45 as u8 { total = -total }
+    return timezone_offset(total)
+}
+
+export function timezone_format_offset(offset: UtcOffset, output: []u8): isize {
+    if !offset.valid || len(output) < 6 as usize { return -1 as isize }
+    let seconds: i32 = offset.seconds
+    let negative: bool = seconds < 0 as i32
+    let absolute: i32 = seconds
+    if negative { absolute = -absolute }
+    let hours: i32 = absolute / 3600 as i32
+    let minutes: i32 = (absolute % 3600 as i32) / 60 as i32
+    output[0] = 43 as u8
+    if negative { output[0] = 45 as u8 }
+    output[1] = (48 as i32 + hours / 10 as i32) as u8
+    output[2] = (48 as i32 + hours % 10 as i32) as u8
+    output[3] = 58 as u8
+    output[4] = (48 as i32 + minutes / 10 as i32) as u8
+    output[5] = (48 as i32 + minutes % 10 as i32) as u8
+    return 6 as isize
+}
+
+export function timezone_to_utc(localEpochSeconds: i64, offset: UtcOffset): i64 {
+    if !offset.valid { return localEpochSeconds }
+    return localEpochSeconds - offset.seconds as i64
+}
+
+export function timezone_from_utc(utcEpochSeconds: i64, offset: UtcOffset): i64 {
+    if !offset.valid { return utcEpochSeconds }
+    return utcEpochSeconds + offset.seconds as i64
+}
+
+export function timezone_convert(epochSeconds: i64, fromOffset: UtcOffset, toOffset: UtcOffset): i64 {
+    if !fromOffset.valid || !toOffset.valid { return epochSeconds }
+    return timezone_from_utc(timezone_to_utc(epochSeconds, fromOffset), toOffset)
+}
+
+export function timezone_same_instant(aLocal: i64, aOffset: UtcOffset, bLocal: i64, bOffset: UtcOffset): bool {
+    if !aOffset.valid || !bOffset.valid { return false }
+    return timezone_to_utc(aLocal, aOffset) == timezone_to_utc(bLocal, bOffset)
+}
+
+export function timezone_offset_difference_seconds(fromOffset: UtcOffset, toOffset: UtcOffset): i32 {
+    if !fromOffset.valid || !toOffset.valid { return 0 as i32 }
+    return toOffset.seconds - fromOffset.seconds
+}
+
+export function timezone_is_utc(offset: UtcOffset): bool { return offset.valid && offset.seconds == 0 as i32 }
+export function timezone_is_east(offset: UtcOffset): bool { return offset.valid && offset.seconds > 0 as i32 }
+export function timezone_is_west(offset: UtcOffset): bool { return offset.valid && offset.seconds < 0 as i32 }

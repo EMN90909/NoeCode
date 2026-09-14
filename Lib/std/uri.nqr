@@ -1,6 +1,175 @@
 module noqeri.std.uri
 
+record UriParts {
+    schemeStart: usize
+    schemeLength: usize
+    authorityStart: usize
+    authorityLength: usize
+    pathStart: usize
+    pathLength: usize
+    queryStart: usize
+    queryLength: usize
+    fragmentStart: usize
+    fragmentLength: usize
+    hasScheme: bool
+    hasAuthority: bool
+    hasQuery: bool
+    hasFragment: bool
+    valid: bool
+}
+
 export function uri_is_ascii_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
 export function uri_is_ascii_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
 export function uri_is_ascii_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
-export function uri_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && uri_is_ascii_space(value[i]) { i = i + 1 } return i }
+export function uri_is_hex(c: u8): bool { return uri_is_ascii_digit(c) || (c >= 65 as u8 && c <= 70 as u8) || (c >= 97 as u8 && c <= 102 as u8) }
+export function uri_is_unreserved(c: u8): bool { return uri_is_ascii_alpha(c) || uri_is_ascii_digit(c) || c == 45 as u8 || c == 46 as u8 || c == 95 as u8 || c == 126 as u8 }
+export function uri_is_sub_delim(c: u8): bool { return c == 33 as u8 || c == 36 as u8 || c == 38 as u8 || c == 39 as u8 || c == 40 as u8 || c == 41 as u8 || c == 42 as u8 || c == 43 as u8 || c == 44 as u8 || c == 59 as u8 || c == 61 as u8 }
+export function uri_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && uri_is_ascii_space(value[i]) { i = i + 1 as usize } return i }
+
+export function uri_scheme_char(c: u8, first: bool): bool {
+    if first { return uri_is_ascii_alpha(c) }
+    return uri_is_ascii_alpha(c) || uri_is_ascii_digit(c) || c == 43 as u8 || c == 45 as u8 || c == 46 as u8
+}
+
+export function uri_percent_encoding_valid(text: []u8): bool {
+    let i: usize = 0 as usize
+    while i < len(text) {
+        if text[i] == 37 as u8 {
+            if i + 2 as usize >= len(text) { return false }
+            if !uri_is_hex(text[i + 1 as usize]) || !uri_is_hex(text[i + 2 as usize]) { return false }
+            i = i + 3 as usize
+        } else {
+            if text[i] < 32 as u8 || text[i] == 127 as u8 || text[i] == 32 as u8 { return false }
+            i = i + 1 as usize
+        }
+    }
+    return true
+}
+
+export function uri_empty_parts(): UriParts {
+    let parts: UriParts
+    parts.schemeStart = 0 as usize
+    parts.schemeLength = 0 as usize
+    parts.authorityStart = 0 as usize
+    parts.authorityLength = 0 as usize
+    parts.pathStart = 0 as usize
+    parts.pathLength = 0 as usize
+    parts.queryStart = 0 as usize
+    parts.queryLength = 0 as usize
+    parts.fragmentStart = 0 as usize
+    parts.fragmentLength = 0 as usize
+    parts.hasScheme = false
+    parts.hasAuthority = false
+    parts.hasQuery = false
+    parts.hasFragment = false
+    parts.valid = false
+    return parts
+}
+
+export function uri_parse(text: []u8): UriParts {
+    let parts: UriParts = uri_empty_parts()
+    if len(text) == 0 as usize || !uri_percent_encoding_valid(text) { return parts }
+    let i: usize = 0 as usize
+    let colon: usize = len(text)
+    let slashOrDelimiter: usize = len(text)
+    while i < len(text) {
+        let c: u8 = text[i]
+        if c == 58 as u8 { colon = i break }
+        if c == 47 as u8 || c == 63 as u8 || c == 35 as u8 { slashOrDelimiter = i break }
+        i = i + 1 as usize
+    }
+    if colon < slashOrDelimiter {
+        if colon == 0 as usize { return parts }
+        i = 0 as usize
+        while i < colon { if !uri_scheme_char(text[i], i == 0 as usize) { return parts } i = i + 1 as usize }
+        parts.hasScheme = true
+        parts.schemeStart = 0 as usize
+        parts.schemeLength = colon
+        i = colon + 1 as usize
+    } else { i = 0 as usize }
+
+    if i + 1 as usize < len(text) && text[i] == 47 as u8 && text[i + 1 as usize] == 47 as u8 {
+        parts.hasAuthority = true
+        i = i + 2 as usize
+        parts.authorityStart = i
+        while i < len(text) && text[i] != 47 as u8 && text[i] != 63 as u8 && text[i] != 35 as u8 { i = i + 1 as usize }
+        parts.authorityLength = i - parts.authorityStart
+        if parts.authorityLength == 0 as usize { return parts }
+    }
+
+    parts.pathStart = i
+    while i < len(text) && text[i] != 63 as u8 && text[i] != 35 as u8 { i = i + 1 as usize }
+    parts.pathLength = i - parts.pathStart
+
+    if i < len(text) && text[i] == 63 as u8 {
+        parts.hasQuery = true
+        i = i + 1 as usize
+        parts.queryStart = i
+        while i < len(text) && text[i] != 35 as u8 { i = i + 1 as usize }
+        parts.queryLength = i - parts.queryStart
+    }
+    if i < len(text) && text[i] == 35 as u8 {
+        parts.hasFragment = true
+        i = i + 1 as usize
+        parts.fragmentStart = i
+        parts.fragmentLength = len(text) - i
+    }
+    parts.valid = true
+    return parts
+}
+
+export function uri_valid(text: []u8): bool { return uri_parse(text).valid }
+export function uri_is_absolute(text: []u8): bool { let parts: UriParts = uri_parse(text) return parts.valid && parts.hasScheme }
+export function uri_is_relative(text: []u8): bool { let parts: UriParts = uri_parse(text) return parts.valid && !parts.hasScheme }
+
+export function uri_authority_has_userinfo(text: []u8, parts: UriParts): bool {
+    if !parts.valid || !parts.hasAuthority { return false }
+    let i: usize = parts.authorityStart
+    let end: usize = parts.authorityStart + parts.authorityLength
+    while i < end { if text[i] == 64 as u8 { return true } i = i + 1 as usize }
+    return false
+}
+
+export function uri_authority_port_start(text: []u8, parts: UriParts): usize {
+    if !parts.valid || !parts.hasAuthority { return len(text) }
+    let start: usize = parts.authorityStart
+    let end: usize = start + parts.authorityLength
+    let i: usize = start
+    let bracketed: bool = false
+    while i < end {
+        if text[i] == 91 as u8 { bracketed = true }
+        else if text[i] == 93 as u8 { bracketed = false }
+        else if text[i] == 58 as u8 && !bracketed { return i + 1 as usize }
+        i = i + 1 as usize
+    }
+    return end
+}
+
+export function uri_port_valid(text: []u8, parts: UriParts): bool {
+    if !parts.valid || !parts.hasAuthority { return true }
+    let start: usize = uri_authority_port_start(text, parts)
+    let end: usize = parts.authorityStart + parts.authorityLength
+    if start == end { return true }
+    let value: u64 = 0 as u64
+    let i: usize = start
+    while i < end {
+        if !uri_is_ascii_digit(text[i]) { return false }
+        value = value * 10 as u64 + (text[i] - 48 as u8) as u64
+        if value > 65535 as u64 { return false }
+        i = i + 1 as usize
+    }
+    return value > 0 as u64
+}
+
+export function uri_path_is_absolute(text: []u8, parts: UriParts): bool {
+    return parts.valid && parts.pathLength > 0 as usize && text[parts.pathStart] == 47 as u8
+}
+
+export function uri_query_pair_count(text: []u8, parts: UriParts): usize {
+    if !parts.valid || !parts.hasQuery || parts.queryLength == 0 as usize { return 0 as usize }
+    let count: usize = 1 as usize
+    let i: usize = parts.queryStart
+    let end: usize = parts.queryStart + parts.queryLength
+    while i < end { if text[i] == 38 as u8 { count = count + 1 as usize } i = i + 1 as usize }
+    return count
+}

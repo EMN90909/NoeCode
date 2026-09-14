@@ -1,8 +1,367 @@
 module noqeri.std.counter
 
-export function nqCounterIncrement(value: usize): usize { return value + 1 }
-export function nqCounterCanIncrement(value: usize, limit: usize): bool { return value < limit }
-export function nqCounterRemaining(value: usize, limit: usize): usize {
-    if value >= limit { return 0 as usize }
-    return limit - value
+record Counter {
+    value: u64
+    updates: u64
+}
+
+record BoundedCounter {
+    value: u64
+    minimum: u64
+    maximum: u64
+    updates: u64
+    rejected: u64
+}
+
+record RollingCounter {
+    current: u64
+    previous: u64
+    total: u64
+    windows: u64
+    windowStart: u64
+    windowSize: u64
+}
+
+record RateCounter {
+    events: u64
+    units: u64
+    startedAt: u64
+    updatedAt: u64
+}
+
+record CounterSnapshot {
+    value: u64
+    updates: u64
+    at: u64
+}
+
+export function counter_init(out: *Counter, initial: u64): bool {
+    if out == null { return false }
+    out.value = initial
+    out.updates = 0 as u64
+    return true
+}
+export function counter_value(counter: *Counter): u64 { if counter == null { return 0 as u64 } return counter.value }
+export function counter_updates(counter: *Counter): u64 { if counter == null { return 0 as u64 } return counter.updates }
+export function counter_reset(counter: *Counter, value: u64): bool { if counter == null { return false } counter.value = value counter.updates = counter.updates + 1 as u64 return true }
+
+export function counter_can_add(counter: *Counter, amount: u64): bool {
+    return counter != null && amount <= 18446744073709551615 as u64 - counter.value
+}
+export function counter_can_sub(counter: *Counter, amount: u64): bool { return counter != null && amount <= counter.value }
+export function counter_try_add(counter: *Counter, amount: u64): bool {
+    if !counter_can_add(counter, amount) { return false }
+    counter.value = counter.value + amount
+    counter.updates = counter.updates + 1 as u64
+    return true
+}
+export function counter_try_sub(counter: *Counter, amount: u64): bool {
+    if !counter_can_sub(counter, amount) { return false }
+    counter.value = counter.value - amount
+    counter.updates = counter.updates + 1 as u64
+    return true
+}
+export function counter_increment(counter: *Counter): bool { return counter_try_add(counter, 1 as u64) }
+export function counter_decrement(counter: *Counter): bool { return counter_try_sub(counter, 1 as u64) }
+export function counter_saturating_add(counter: *Counter, amount: u64): u64 {
+    if counter == null { return 0 as u64 }
+    if amount > 18446744073709551615 as u64 - counter.value { counter.value = 18446744073709551615 as u64 }
+    else { counter.value = counter.value + amount }
+    counter.updates = counter.updates + 1 as u64
+    return counter.value
+}
+export function counter_saturating_sub(counter: *Counter, amount: u64): u64 {
+    if counter == null { return 0 as u64 }
+    if amount >= counter.value { counter.value = 0 as u64 } else { counter.value = counter.value - amount }
+    counter.updates = counter.updates + 1 as u64
+    return counter.value
+}
+export function counter_snapshot(counter: *Counter, at: u64): CounterSnapshot {
+    let out: CounterSnapshot
+    out.value = 0 as u64
+    out.updates = 0 as u64
+    out.at = at
+    if counter != null { out.value = counter.value out.updates = counter.updates }
+    return out
+}
+export function counter_delta(before: CounterSnapshot, after: CounterSnapshot): u64 { if after.value < before.value { return 0 as u64 } return after.value - before.value }
+export function counter_update_delta(before: CounterSnapshot, after: CounterSnapshot): u64 { if after.updates < before.updates { return 0 as u64 } return after.updates - before.updates }
+export function counter_elapsed(before: CounterSnapshot, after: CounterSnapshot): u64 { if after.at < before.at { return 0 as u64 } return after.at - before.at }
+export function counter_rate_per_thousand(before: CounterSnapshot, after: CounterSnapshot): u64 {
+    let elapsed: u64 = counter_elapsed(before, after)
+    if elapsed == 0 as u64 { return 0 as u64 }
+    let delta: u64 = counter_delta(before, after)
+    if delta > 18446744073709551 as u64 { return 18446744073709551615 as u64 }
+    return delta * 1000 as u64 / elapsed
+}
+
+export function bounded_counter_init(out: *BoundedCounter, minimum: u64, maximum: u64, initial: u64): bool {
+    if out == null || maximum < minimum || initial < minimum || initial > maximum { return false }
+    out.minimum = minimum
+    out.maximum = maximum
+    out.value = initial
+    out.updates = 0 as u64
+    out.rejected = 0 as u64
+    return true
+}
+export function bounded_counter_valid(counter: *BoundedCounter): bool { return counter != null && counter.maximum >= counter.minimum && counter.value >= counter.minimum && counter.value <= counter.maximum }
+export function bounded_counter_remaining_up(counter: *BoundedCounter): u64 { if !bounded_counter_valid(counter) { return 0 as u64 } return counter.maximum - counter.value }
+export function bounded_counter_remaining_down(counter: *BoundedCounter): u64 { if !bounded_counter_valid(counter) { return 0 as u64 } return counter.value - counter.minimum }
+export function bounded_counter_at_min(counter: *BoundedCounter): bool { return bounded_counter_valid(counter) && counter.value == counter.minimum }
+export function bounded_counter_at_max(counter: *BoundedCounter): bool { return bounded_counter_valid(counter) && counter.value == counter.maximum }
+export function bounded_counter_try_add(counter: *BoundedCounter, amount: u64): bool {
+    if !bounded_counter_valid(counter) || amount > counter.maximum - counter.value {
+        if counter != null { counter.rejected = counter.rejected + 1 as u64 }
+        return false
+    }
+    counter.value = counter.value + amount
+    counter.updates = counter.updates + 1 as u64
+    return true
+}
+export function bounded_counter_try_sub(counter: *BoundedCounter, amount: u64): bool {
+    if !bounded_counter_valid(counter) || amount > counter.value - counter.minimum {
+        if counter != null { counter.rejected = counter.rejected + 1 as u64 }
+        return false
+    }
+    counter.value = counter.value - amount
+    counter.updates = counter.updates + 1 as u64
+    return true
+}
+export function bounded_counter_increment(counter: *BoundedCounter): bool { return bounded_counter_try_add(counter, 1 as u64) }
+export function bounded_counter_decrement(counter: *BoundedCounter): bool { return bounded_counter_try_sub(counter, 1 as u64) }
+export function bounded_counter_clamp_add(counter: *BoundedCounter, amount: u64): u64 {
+    if !bounded_counter_valid(counter) { return 0 as u64 }
+    let room: u64 = counter.maximum - counter.value
+    let accepted: u64 = amount
+    if accepted > room { accepted = room counter.rejected = counter.rejected + 1 as u64 }
+    counter.value = counter.value + accepted
+    counter.updates = counter.updates + 1 as u64
+    return accepted
+}
+export function bounded_counter_clamp_sub(counter: *BoundedCounter, amount: u64): u64 {
+    if !bounded_counter_valid(counter) { return 0 as u64 }
+    let room: u64 = counter.value - counter.minimum
+    let accepted: u64 = amount
+    if accepted > room { accepted = room counter.rejected = counter.rejected + 1 as u64 }
+    counter.value = counter.value - accepted
+    counter.updates = counter.updates + 1 as u64
+    return accepted
+}
+export function bounded_counter_set(counter: *BoundedCounter, value: u64): bool {
+    if !bounded_counter_valid(counter) || value < counter.minimum || value > counter.maximum { if counter != null { counter.rejected = counter.rejected + 1 as u64 } return false }
+    counter.value = value
+    counter.updates = counter.updates + 1 as u64
+    return true
+}
+export function bounded_counter_reset_min(counter: *BoundedCounter): bool { if !bounded_counter_valid(counter) { return false } counter.value = counter.minimum counter.updates = counter.updates + 1 as u64 return true }
+export function bounded_counter_reset_max(counter: *BoundedCounter): bool { if !bounded_counter_valid(counter) { return false } counter.value = counter.maximum counter.updates = counter.updates + 1 as u64 return true }
+export function bounded_counter_percent(counter: *BoundedCounter): u64 {
+    if !bounded_counter_valid(counter) || counter.maximum == counter.minimum { return 0 as u64 }
+    let width: u64 = counter.maximum - counter.minimum
+    let offset: u64 = counter.value - counter.minimum
+    if offset > 184467440737095516 as u64 { return 100 as u64 }
+    return offset * 100 as u64 / width
+}
+export function bounded_counter_per_mille(counter: *BoundedCounter): u64 {
+    if !bounded_counter_valid(counter) || counter.maximum == counter.minimum { return 0 as u64 }
+    let width: u64 = counter.maximum - counter.minimum
+    let offset: u64 = counter.value - counter.minimum
+    if offset > 18446744073709551 as u64 { return 1000 as u64 }
+    return offset * 1000 as u64 / width
+}
+
+export function rolling_counter_init(out: *RollingCounter, now: u64, windowSize: u64): bool {
+    if out == null || windowSize == 0 as u64 { return false }
+    out.current = 0 as u64
+    out.previous = 0 as u64
+    out.total = 0 as u64
+    out.windows = 0 as u64
+    out.windowStart = now
+    out.windowSize = windowSize
+    return true
+}
+export function rolling_counter_valid(counter: *RollingCounter): bool { return counter != null && counter.windowSize > 0 as u64 }
+export function rolling_counter_roll(counter: *RollingCounter, now: u64): bool {
+    if !rolling_counter_valid(counter) || now < counter.windowStart { return false }
+    let elapsed: u64 = now - counter.windowStart
+    if elapsed < counter.windowSize { return true }
+    let windowsPassed: u64 = elapsed / counter.windowSize
+    if windowsPassed == 1 as u64 { counter.previous = counter.current } else { counter.previous = 0 as u64 }
+    counter.current = 0 as u64
+    counter.windows = counter.windows + windowsPassed
+    counter.windowStart = counter.windowStart + windowsPassed * counter.windowSize
+    return true
+}
+export function rolling_counter_add(counter: *RollingCounter, now: u64, amount: u64): bool {
+    if !rolling_counter_roll(counter, now) { return false }
+    if amount > 18446744073709551615 as u64 - counter.current || amount > 18446744073709551615 as u64 - counter.total { return false }
+    counter.current = counter.current + amount
+    counter.total = counter.total + amount
+    return true
+}
+export function rolling_counter_increment(counter: *RollingCounter, now: u64): bool { return rolling_counter_add(counter, now, 1 as u64) }
+export function rolling_counter_current(counter: *RollingCounter, now: u64): u64 { if !rolling_counter_roll(counter, now) { return 0 as u64 } return counter.current }
+export function rolling_counter_previous(counter: *RollingCounter, now: u64): u64 { if !rolling_counter_roll(counter, now) { return 0 as u64 } return counter.previous }
+export function rolling_counter_total(counter: *RollingCounter): u64 { if counter == null { return 0 as u64 } return counter.total }
+export function rolling_counter_reset(counter: *RollingCounter, now: u64): bool {
+    if !rolling_counter_valid(counter) { return false }
+    counter.current = 0 as u64
+    counter.previous = 0 as u64
+    counter.total = 0 as u64
+    counter.windows = 0 as u64
+    counter.windowStart = now
+    return true
+}
+export function rolling_counter_window_end(counter: *RollingCounter): u64 {
+    if !rolling_counter_valid(counter) { return 0 as u64 }
+    if counter.windowSize > 18446744073709551615 as u64 - counter.windowStart { return 18446744073709551615 as u64 }
+    return counter.windowStart + counter.windowSize
+}
+
+export function rate_counter_init(out: *RateCounter, now: u64): bool {
+    if out == null { return false }
+    out.events = 0 as u64
+    out.units = 0 as u64
+    out.startedAt = now
+    out.updatedAt = now
+    return true
+}
+export function rate_counter_record(out: *RateCounter, now: u64, units: u64): bool {
+    if out == null || now < out.updatedAt { return false }
+    if out.events == 18446744073709551615 as u64 || units > 18446744073709551615 as u64 - out.units { return false }
+    out.events = out.events + 1 as u64
+    out.units = out.units + units
+    out.updatedAt = now
+    return true
+}
+export function rate_counter_elapsed(counter: *RateCounter): u64 { if counter == null || counter.updatedAt < counter.startedAt { return 0 as u64 } return counter.updatedAt - counter.startedAt }
+export function rate_counter_events_per_thousand(counter: *RateCounter): u64 {
+    let elapsed: u64 = rate_counter_elapsed(counter)
+    if elapsed == 0 as u64 || counter == null { return 0 as u64 }
+    if counter.events > 18446744073709551 as u64 { return 18446744073709551615 as u64 }
+    return counter.events * 1000 as u64 / elapsed
+}
+export function rate_counter_units_per_thousand(counter: *RateCounter): u64 {
+    let elapsed: u64 = rate_counter_elapsed(counter)
+    if elapsed == 0 as u64 || counter == null { return 0 as u64 }
+    if counter.units > 18446744073709551 as u64 { return 18446744073709551615 as u64 }
+    return counter.units * 1000 as u64 / elapsed
+}
+export function rate_counter_average_units(counter: *RateCounter): u64 { if counter == null || counter.events == 0 as u64 { return 0 as u64 } return counter.units / counter.events }
+export function rate_counter_reset(counter: *RateCounter, now: u64): bool { return rate_counter_init(counter, now) }
+
+export function nqCounterIncrement(value: u64): u64 { if value == 18446744073709551615 as u64 { return value } return value + 1 as u64 }
+export function nqCounterCanIncrement(value: u64, limit: u64): bool { return value < limit }
+export function nqCounterRemaining(value: u64, limit: u64): u64 { if value >= limit { return 0 as u64 } return limit - value }
+
+export function counter_add_many(counter: *Counter, amounts: []u64): bool {
+    if counter == null { return false }
+    let index: usize = 0 as usize
+    while index < len(amounts) {
+        if !counter_try_add(counter, amounts[index]) { return false }
+        index = index + 1 as usize
+    }
+    return true
+}
+export function counter_sub_many(counter: *Counter, amounts: []u64): bool {
+    if counter == null { return false }
+    let index: usize = 0 as usize
+    while index < len(amounts) {
+        if !counter_try_sub(counter, amounts[index]) { return false }
+        index = index + 1 as usize
+    }
+    return true
+}
+export function bounded_counter_add_many(counter: *BoundedCounter, amounts: []u64): usize {
+    let accepted: usize = 0 as usize
+    let index: usize = 0 as usize
+    while index < len(amounts) {
+        if !bounded_counter_try_add(counter, amounts[index]) { return accepted }
+        accepted = accepted + 1 as usize
+        index = index + 1 as usize
+    }
+    return accepted
+}
+export function counter_snapshot_changed(before: CounterSnapshot, after: CounterSnapshot): bool { return before.value != after.value || before.updates != after.updates }
+export function counter_snapshot_forward(before: CounterSnapshot, after: CounterSnapshot): bool { return after.at >= before.at && after.updates >= before.updates }
+export function counter_snapshot_value_increased(before: CounterSnapshot, after: CounterSnapshot): bool { return after.value > before.value }
+export function counter_snapshot_value_decreased(before: CounterSnapshot, after: CounterSnapshot): bool { return after.value < before.value }
+
+export function bounded_counter_fraction(counter: *BoundedCounter, numerator: u64, denominator: u64): bool {
+    if !bounded_counter_valid(counter) || denominator == 0 as u64 { return false }
+    let width: u64 = counter.maximum - counter.minimum
+    let offset: u64 = counter.value - counter.minimum
+    if width == 0 as u64 { return numerator == 0 as u64 }
+    if offset > 18446744073709551615 as u64 / denominator { return true }
+    if numerator != 0 as u64 && width > 18446744073709551615 as u64 / numerator { return false }
+    return offset * denominator >= width * numerator
+}
+export function bounded_counter_quarter(counter: *BoundedCounter): bool { return bounded_counter_fraction(counter, 1 as u64, 4 as u64) }
+export function bounded_counter_half(counter: *BoundedCounter): bool { return bounded_counter_fraction(counter, 1 as u64, 2 as u64) }
+export function bounded_counter_three_quarters(counter: *BoundedCounter): bool { return bounded_counter_fraction(counter, 3 as u64, 4 as u64) }
+export function rolling_counter_is_idle(counter: *RollingCounter, now: u64): bool { return rolling_counter_current(counter, now) == 0 as u64 }
+export function rolling_counter_increased(counter: *RollingCounter, now: u64): bool { if !rolling_counter_roll(counter, now) { return false } return counter.current > counter.previous }
+export function rolling_counter_decreased(counter: *RollingCounter, now: u64): bool { if !rolling_counter_roll(counter, now) { return false } return counter.current < counter.previous }
+export function rolling_counter_change(counter: *RollingCounter, now: u64): i64 {
+    if !rolling_counter_roll(counter, now) { return 0 as i64 }
+    if counter.current >= counter.previous {
+        let delta: u64 = counter.current - counter.previous
+        if delta > 9223372036854775807 as u64 { return 9223372036854775807 as i64 }
+        return delta as i64
+    }
+    let delta: u64 = counter.previous - counter.current
+    if delta > 9223372036854775807 as u64 { return -9223372036854775807 as i64 }
+    return -(delta as i64)
+}
+
+export function bounded_counter_at_least_10_percent(counter: *BoundedCounter): bool { return bounded_counter_percent(counter) >= 10 as u64 }
+export function bounded_counter_at_least_20_percent(counter: *BoundedCounter): bool { return bounded_counter_percent(counter) >= 20 as u64 }
+export function bounded_counter_at_least_25_percent(counter: *BoundedCounter): bool { return bounded_counter_percent(counter) >= 25 as u64 }
+export function bounded_counter_at_least_30_percent(counter: *BoundedCounter): bool { return bounded_counter_percent(counter) >= 30 as u64 }
+export function bounded_counter_at_least_40_percent(counter: *BoundedCounter): bool { return bounded_counter_percent(counter) >= 40 as u64 }
+export function bounded_counter_at_least_50_percent(counter: *BoundedCounter): bool { return bounded_counter_percent(counter) >= 50 as u64 }
+export function bounded_counter_at_least_60_percent(counter: *BoundedCounter): bool { return bounded_counter_percent(counter) >= 60 as u64 }
+export function bounded_counter_at_least_70_percent(counter: *BoundedCounter): bool { return bounded_counter_percent(counter) >= 70 as u64 }
+export function bounded_counter_at_least_75_percent(counter: *BoundedCounter): bool { return bounded_counter_percent(counter) >= 75 as u64 }
+export function bounded_counter_at_least_80_percent(counter: *BoundedCounter): bool { return bounded_counter_percent(counter) >= 80 as u64 }
+export function bounded_counter_at_least_90_percent(counter: *BoundedCounter): bool { return bounded_counter_percent(counter) >= 90 as u64 }
+export function bounded_counter_at_least_95_percent(counter: *BoundedCounter): bool { return bounded_counter_percent(counter) >= 95 as u64 }
+export function bounded_counter_at_least_99_percent(counter: *BoundedCounter): bool { return bounded_counter_percent(counter) >= 99 as u64 }
+export function bounded_counter_at_least_100_percent(counter: *BoundedCounter): bool { return bounded_counter_percent(counter) >= 100 as u64 }
+
+export function bounded_counter_try_reserve(counter: *BoundedCounter, amount: u64): bool { return bounded_counter_try_add(counter, amount) }
+export function bounded_counter_release(counter: *BoundedCounter, amount: u64): bool { return bounded_counter_try_sub(counter, amount) }
+export function bounded_counter_reserve_available(counter: *BoundedCounter, requested: u64): u64 {
+    if !bounded_counter_valid(counter) { return 0 as u64 }
+    let remaining: u64 = bounded_counter_remaining_up(counter)
+    if requested < remaining { return requested }
+    return remaining
+}
+export function bounded_counter_release_available(counter: *BoundedCounter, requested: u64): u64 {
+    if !bounded_counter_valid(counter) { return 0 as u64 }
+    let used: u64 = bounded_counter_remaining_down(counter)
+    if requested < used { return requested }
+    return used
+}
+export function rolling_counter_age(counter: *RollingCounter, now: u64): u64 {
+    if !rolling_counter_valid(counter) || now < counter.windowStart { return 0 as u64 }
+    return now - counter.windowStart
+}
+export function rolling_counter_remaining(counter: *RollingCounter, now: u64): u64 {
+    if !rolling_counter_valid(counter) { return 0 as u64 }
+    let age: u64 = rolling_counter_age(counter, now)
+    if age >= counter.windowSize { return 0 as u64 }
+    return counter.windowSize - age
+}
+export function rolling_counter_window_index(counter: *RollingCounter, now: u64): u64 {
+    if !rolling_counter_valid(counter) || now < counter.windowStart { return counter.windows }
+    return counter.windows + (now - counter.windowStart) / counter.windowSize
+}
+export function rate_counter_has_samples(counter: *RateCounter): bool { return counter != null && counter.events > 0 as u64 }
+export function rate_counter_span(counter: *RateCounter): u64 { return rate_counter_elapsed(counter) }
+export function rate_counter_last_update(counter: *RateCounter): u64 { if counter == null { return 0 as u64 } return counter.updatedAt }
+export function rate_counter_started_at(counter: *RateCounter): u64 { if counter == null { return 0 as u64 } return counter.startedAt }
+export function rate_counter_idle_for(counter: *RateCounter, now: u64): u64 {
+    if counter == null || now < counter.updatedAt { return 0 as u64 }
+    return now - counter.updatedAt
 }

@@ -107,7 +107,10 @@ export function markdown_count_inline_code(value: []u8): usize {
     let open: bool = false
     let i: usize = 0 as usize
     while i < len(value) {
-        if value[i] == 96 as u8 { open = !open if !open { count = count + 1 as usize } }
+        if value[i] == 96 as u8 {
+            if !open { count = count + 1 as usize }
+            open = !open
+        }
         i = i + 1 as usize
     }
     return count

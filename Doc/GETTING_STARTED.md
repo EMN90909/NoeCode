@@ -1,10 +1,10 @@
 # Getting started
 
-Noqeri source files end in `.nqr`.
+Noqeri source files end in `.nqr`. The normal application path is deliberately small: values, decisions, counted repetition, functions, records and libraries first; systems mechanisms later.
 
-## Normal path
+## First program
 
-Use an official Noqeri release or a previously built Noqeri compiler when one is available for your platform. The normal language workflow is intentionally small:
+Use an official Noqeri release or a previously built compiler for your platform:
 
 ```sh
 noqeri --version
@@ -23,7 +23,55 @@ print("Hello from Noqeri")
 print(square(7))
 ```
 
-For a project, use `noqeri new`, `noqeri check`, `noqeri test`, `noqeri run`, and `noqeri build`. Beginners do not need pointers, atomics, ABI layouts, native object formats, assembly, or FFI for ordinary application work.
+Semicolons are optional in ordinary source. `if` and `while` do not require condition parentheses.
+
+## Repeat something a known number of times
+
+For the common beginner case “do this N times”, use `repeat` instead of manually creating a counter:
+
+```nqr
+let total = 0
+
+repeat 4 {
+    total = total + 3
+}
+
+print(total) // 12
+```
+
+`repeat count { ... }` evaluates `count` once, converts it to the ordinary `int` count used by the loop, and executes the block while an internal counter is below it. Zero or negative counts execute the block zero times. It is syntax sugar over the existing checked `while` model, not a separate runtime or concurrency feature.
+
+Use `while` when the stopping condition is not simply a count:
+
+```nqr
+let remaining = 3
+while remaining > 0 {
+    print(remaining)
+    remaining = remaining - 1
+}
+```
+
+This gives beginners two predictable loop ideas: **repeat N times** and **keep going while a condition is true**.
+
+## Projects
+
+For a project, the normal commands are:
+
+```sh
+noqeri new my-app
+noqeri check my-app
+noqeri test my-app/tests
+noqeri run my-app/src/main.nqr
+noqeri build my-app/src/main.nqr
+```
+
+Application programmers should not need pointers, atomics, ABI layouts, object formats, assembly or FFI merely to use files, data formats, collections or ordinary concurrency abstractions. Those features remain available for systems work and interop.
+
+## Standard-library mental model
+
+Library names should describe real capabilities rather than placeholder namespaces. Current substantive foundations include collections/structures such as bitsets, Bloom filters, deque/heap/priority queue, ring/pool/cache; time primitives such as duration/calendar/clock; data-integrity and encoding primitives such as CRC/hash/endian/varint/encoding; and state utilities such as event/future/iterator/metrics/numeric/lexer/parser.
+
+Many low-level structures use caller-owned storage so freestanding code does not secretly allocate. Beginner documentation should show the operation first (`push`, `get`, `set`, `take`, `complete`) and explain backing storage afterwards.
 
 ## Bootstrap from source
 
@@ -36,6 +84,8 @@ Current local bootstrap scripts remain:
 ```sh
 ./scripts/build.sh
 ./build/noqeri --version
+./scripts/test_maturity.sh
+./scripts/test_safety.sh
 ```
 
 On Windows use `scripts/build.ps1`; multi-config generators may place the executable at `build/Release/noqeri.exe`.
@@ -50,6 +100,8 @@ node Runtime/noqeri-quality.mjs test --race tests
 node Runtime/noqeri-quality.mjs test --overflow tests
 ```
 
-`--check-memory` uses an AddressSanitizer/UBSan instrumented host build; `--race` uses a ThreadSanitizer host build; `--overflow` enables Noqeri's checked integer execution path. Sanitizer presets currently require a compiler/toolchain that supports the corresponding sanitizer.
+`--check-memory` uses an AddressSanitizer/UBSan-instrumented host build; `--race` uses a ThreadSanitizer host build; `--overflow` enables Noqeri's checked integer execution path. Sanitizer presets currently require a host compiler/toolchain that supports the corresponding sanitizer.
+
+Ordinary dynamic safe indexing is still checked independently of these heavy diagnostic modes. Raw operations that bypass normal guarantees belong in explicit `unsafe { ... }` blocks.
 
 Noqeri should not claim performance leadership from anecdotes. See `Benchmarks/METHODOLOGY.md` for the evidence rules.

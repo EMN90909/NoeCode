@@ -1,6 +1,186 @@
 module noqeri.std.uri
 
+record UriSpan {
+    start: usize
+    length: usize
+}
+
+record UriParts {
+    scheme: UriSpan
+    authority: UriSpan
+    path: UriSpan
+    query: UriSpan
+    fragment: UriSpan
+    absolute: bool
+    valid: bool
+}
+
 export function uri_is_ascii_space(c: u8): bool { return c == 32 as u8 || c == 9 as u8 || c == 10 as u8 || c == 13 as u8 }
 export function uri_is_ascii_digit(c: u8): bool { return c >= 48 as u8 && c <= 57 as u8 }
 export function uri_is_ascii_alpha(c: u8): bool { return (c >= 65 as u8 && c <= 90 as u8) || (c >= 97 as u8 && c <= 122 as u8) }
-export function uri_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && uri_is_ascii_space(value[i]) { i = i + 1 } return i }
+export function uri_trim_left_count(value: []u8): usize { let i: usize = 0 as usize while i < len(value) && uri_is_ascii_space(value[i]) { i = i + 1 as usize } return i }
+export function uri_is_hex(c: u8): bool { return uri_is_ascii_digit(c) || (c >= 65 as u8 && c <= 70 as u8) || (c >= 97 as u8 && c <= 102 as u8) }
+export function uri_is_unreserved(c: u8): bool { return uri_is_ascii_alpha(c) || uri_is_ascii_digit(c) || c == 45 as u8 || c == 46 as u8 || c == 95 as u8 || c == 126 as u8 }
+export function uri_is_subdelim(c: u8): bool { return c == 33 as u8 || c == 36 as u8 || c == 38 as u8 || c == 39 as u8 || c == 40 as u8 || c == 41 as u8 || c == 42 as u8 || c == 43 as u8 || c == 44 as u8 || c == 59 as u8 || c == 61 as u8 }
+
+export function uri_span(start: usize, length: usize): UriSpan { let out: UriSpan out.start = start out.length = length return out }
+export function uri_span_valid(value: []u8, span: UriSpan): bool { return span.start <= len(value) && span.length <= len(value) - span.start }
+
+export function uri_span_equals(value: []u8, span: UriSpan, expected: []u8): bool {
+    if !uri_span_valid(value, span) || span.length != len(expected) { return false }
+    let i: usize = 0 as usize
+    while i < span.length { if value[span.start + i] != expected[i] { return false } i = i + 1 as usize }
+    return true
+}
+
+export function uri_scheme_char(c: u8, first: bool): bool {
+    if first { return uri_is_ascii_alpha(c) }
+    return uri_is_ascii_alpha(c) || uri_is_ascii_digit(c) || c == 43 as u8 || c == 45 as u8 || c == 46 as u8
+}
+
+export function uri_scheme_valid(value: []u8, start: usize, end: usize): bool {
+    if start >= end || end > len(value) { return false }
+    let i: usize = start
+    while i < end { if !uri_scheme_char(value[i], i == start) { return false } i = i + 1 as usize }
+    return true
+}
+
+export function uri_percent_sequences_valid(value: []u8, start: usize, end: usize): bool {
+    if start > end || end > len(value) { return false }
+    let i: usize = start
+    while i < end {
+        if value[i] == 37 as u8 {
+            if i + 2 as usize >= end || !uri_is_hex(value[i + 1 as usize]) || !uri_is_hex(value[i + 2 as usize]) { return false }
+            i = i + 3 as usize
+        } else { i = i + 1 as usize }
+    }
+    return true
+}
+
+export function uri_component_has_space(value: []u8, start: usize, end: usize): bool {
+    if end > len(value) { return true }
+    let i: usize = start
+    while i < end { if uri_is_ascii_space(value[i]) { return true } i = i + 1 as usize }
+    return false
+}
+
+function uri_parts_reset(out: *UriParts): bool {
+    if out == null { return false }
+    out.scheme.start = 0 as usize
+    out.scheme.length = 0 as usize
+    out.authority.start = 0 as usize
+    out.authority.length = 0 as usize
+    out.path.start = 0 as usize
+    out.path.length = 0 as usize
+    out.query.start = 0 as usize
+    out.query.length = 0 as usize
+    out.fragment.start = 0 as usize
+    out.fragment.length = 0 as usize
+    out.absolute = false
+    out.valid = false
+    return true
+}
+
+// Bounded RFC3986-oriented structural parser. It separates scheme, authority,
+// path, query and fragment without allocation. It validates scheme characters,
+// percent triplets and whitespace but intentionally leaves DNS/IP validation to
+// std/dns or application policy.
+export function uri_parse(value: []u8, out: *UriParts): bool {
+    if !uri_parts_reset(out) || len(value) == 0 as usize { return false }
+    let start: usize = 0 as usize
+    let end: usize = len(value)
+    while start < end && uri_is_ascii_space(value[start]) { start = start + 1 as usize }
+    while end > start && uri_is_ascii_space(value[end - 1 as usize]) { end = end - 1 as usize }
+    if start >= end { return false }
+
+    let fragmentStart: usize = end
+    let queryStart: usize = end
+    let i: usize = start
+    while i < end {
+        if value[i] == 35 as u8 { fragmentStart = i i = end }
+        else { i = i + 1 as usize }
+    }
+    let mainEnd: usize = fragmentStart
+    i = start
+    while i < mainEnd {
+        if value[i] == 63 as u8 { queryStart = i i = mainEnd }
+        else { i = i + 1 as usize }
+    }
+    let hierarchicalEnd: usize = queryStart
+
+    if fragmentStart < end { out.fragment.start = fragmentStart + 1 as usize out.fragment.length = end - out.fragment.start }
+    if queryStart < mainEnd { out.query.start = queryStart + 1 as usize out.query.length = mainEnd - out.query.start }
+
+    let colon: usize = hierarchicalEnd
+    i = start
+    while i < hierarchicalEnd {
+        let c: u8 = value[i]
+        if c == 58 as u8 { colon = i i = hierarchicalEnd }
+        else if c == 47 as u8 || c == 63 as u8 || c == 35 as u8 { i = hierarchicalEnd }
+        else { i = i + 1 as usize }
+    }
+
+    let cursor: usize = start
+    if colon < hierarchicalEnd {
+        if !uri_scheme_valid(value, start, colon) { return false }
+        out.scheme.start = start
+        out.scheme.length = colon - start
+        out.absolute = true
+        cursor = colon + 1 as usize
+    }
+
+    if cursor + 1 as usize < hierarchicalEnd && value[cursor] == 47 as u8 && value[cursor + 1 as usize] == 47 as u8 {
+        let authorityStart: usize = cursor + 2 as usize
+        let authorityEnd: usize = authorityStart
+        while authorityEnd < hierarchicalEnd && value[authorityEnd] != 47 as u8 { authorityEnd = authorityEnd + 1 as usize }
+        if authorityStart >= authorityEnd || uri_component_has_space(value, authorityStart, authorityEnd) { return false }
+        out.authority.start = authorityStart
+        out.authority.length = authorityEnd - authorityStart
+        cursor = authorityEnd
+    }
+
+    out.path.start = cursor
+    out.path.length = hierarchicalEnd - cursor
+
+    if uri_component_has_space(value, start, end) { return false }
+    if !uri_percent_sequences_valid(value, out.path.start, out.path.start + out.path.length) { return false }
+    if out.query.length > 0 as usize && !uri_percent_sequences_valid(value, out.query.start, out.query.start + out.query.length) { return false }
+    if out.fragment.length > 0 as usize && !uri_percent_sequences_valid(value, out.fragment.start, out.fragment.start + out.fragment.length) { return false }
+    out.valid = true
+    return true
+}
+
+export function uri_valid(value: []u8): bool { let parts: UriParts return uri_parse(value, &parts) }
+export function uri_is_absolute(value: []u8): bool { let parts: UriParts if !uri_parse(value, &parts) { return false } return parts.absolute }
+export function uri_has_authority(parts: *UriParts): bool { return parts != null && parts.valid && parts.authority.length > 0 as usize }
+export function uri_has_query(parts: *UriParts): bool { return parts != null && parts.valid && parts.query.length > 0 as usize }
+export function uri_has_fragment(parts: *UriParts): bool { return parts != null && parts.valid && parts.fragment.length > 0 as usize }
+
+export function uri_hex_value(c: u8): u8 {
+    if c >= 48 as u8 && c <= 57 as u8 { return c - 48 as u8 }
+    if c >= 65 as u8 && c <= 70 as u8 { return c - 65 as u8 + 10 as u8 }
+    return c - 97 as u8 + 10 as u8
+}
+
+export function uri_percent_decode(value: []u8, out: []u8): isize {
+    let needed: usize = 0 as usize
+    let i: usize = 0 as usize
+    while i < len(value) {
+        if value[i] == 37 as u8 {
+            if i + 2 as usize >= len(value) || !uri_is_hex(value[i + 1 as usize]) || !uri_is_hex(value[i + 2 as usize]) { return -1 as isize }
+            i = i + 3 as usize
+        } else { i = i + 1 as usize }
+        needed = needed + 1 as usize
+    }
+    if len(out) < needed { return -2 as isize }
+    i = 0 as usize
+    let written: usize = 0 as usize
+    while i < len(value) {
+        if value[i] == 37 as u8 {
+            out[written] = uri_hex_value(value[i + 1 as usize]) * 16 as u8 + uri_hex_value(value[i + 2 as usize])
+            i = i + 3 as usize
+        } else { out[written] = value[i] i = i + 1 as usize }
+        written = written + 1 as usize
+    }
+    return written as isize
+}

@@ -13,7 +13,7 @@ namespace noe {
 enum class TokenKind {
     Eof, Identifier, Integer, Float, String,
     LineComment, BlockComment,
-    Let, Const, Function, If, Else, While, Return, True, False, Null,
+    Let, Const, Function, If, Else, While, Repeat, Return, True, False, Null,
     Import, Module, Record, Class, Extern, Export, Volatile, As, Throw, Try, Unsafe,
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
     Comma, Colon, Semicolon, Dot,

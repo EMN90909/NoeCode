@@ -12,7 +12,7 @@ endif()
 # the Noqeri compiler can compile the corresponding compiler/toolchain pieces.
 set(NOQERI_FRONTEND_SOURCES
  Compiler/core.cpp Compiler/modules.cpp Compiler/workspace.cpp Compiler/type_checker.cpp
- Compiler/lifetime.cpp Compiler/safety.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp Compiler/register_alloc.cpp Compiler/optimizer.cpp
+ Compiler/comptime.cpp Compiler/ownership.cpp Compiler/lifetime.cpp Compiler/safety.cpp Compiler/generics.cpp Compiler/nir.cpp Compiler/nir_analysis.cpp Compiler/register_alloc.cpp Compiler/optimizer.cpp
  Compiler/bootstrap/lexer_host.cpp Compiler/bootstrap/parser_host.cpp Compiler/bootstrap/abi_runtime_host.cpp Compiler/bootstrap/interpreter_host.cpp
  Compiler/bootstrap/noqeridb_host.cpp)
 set(NOQERI_SOURCES ${NOQERI_FRONTEND_SOURCES}

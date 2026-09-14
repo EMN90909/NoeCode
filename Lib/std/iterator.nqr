@@ -1,5 +1,165 @@
 module noqeri.std.iterator
 
+// Iterator<T> is a lightweight cursor over caller-owned contiguous storage.
+// It performs no allocation and keeps the familiar next/peek/reset vocabulary.
+record Iterator<T> {
+    data: *T
+    length: usize
+    front: usize
+    back: usize
+}
+
+export function iterator_init<T>(iterator: *Iterator<T>, data: *T, length: usize): bool {
+    if iterator == null { return false }
+    if length > 0 as usize && data == null { return false }
+    iterator.data = data
+    iterator.length = length
+    iterator.front = 0 as usize
+    iterator.back = length
+    return true
+}
+
+export function iterator_length<T>(iterator: *Iterator<T>): usize {
+    if iterator == null { return 0 as usize }
+    return iterator.length
+}
+
+export function iterator_position<T>(iterator: *Iterator<T>): usize {
+    if iterator == null { return 0 as usize }
+    return iterator.front
+}
+
+export function iterator_remaining<T>(iterator: *Iterator<T>): usize {
+    if iterator == null || iterator.front >= iterator.back { return 0 as usize }
+    return iterator.back - iterator.front
+}
+
+export function iterator_empty<T>(iterator: *Iterator<T>): bool {
+    return iterator == null || iterator.front >= iterator.back
+}
+
+export function iterator_invariant<T>(iterator: *Iterator<T>): bool {
+    if iterator == null { return false }
+    if iterator.front > iterator.back || iterator.back > iterator.length { return false }
+    if iterator.length > 0 as usize && iterator.data == null { return false }
+    return true
+}
+
+export function iterator_peek_ref<T>(iterator: *Iterator<T>): *T {
+    if iterator_empty(iterator) || iterator.data == null { return null as *T }
+    unsafe { return &iterator.data[iterator.front] }
+}
+
+export function iterator_peek_back_ref<T>(iterator: *Iterator<T>): *T {
+    if iterator_empty(iterator) || iterator.data == null { return null as *T }
+    unsafe { return &iterator.data[iterator.back - 1 as usize] }
+}
+
+export function iterator_next_ref<T>(iterator: *Iterator<T>): *T {
+    let value: *T = iterator_peek_ref(iterator)
+    if value == null { return null as *T }
+    iterator.front = iterator.front + 1 as usize
+    return value
+}
+
+export function iterator_next_back_ref<T>(iterator: *Iterator<T>): *T {
+    let value: *T = iterator_peek_back_ref(iterator)
+    if value == null { return null as *T }
+    iterator.back = iterator.back - 1 as usize
+    return value
+}
+
+export function iterator_peek_or<T: Copy>(iterator: *Iterator<T>, fallback: T): T {
+    let value: *T = iterator_peek_ref(iterator)
+    if value == null { return fallback }
+    unsafe { return *value }
+}
+
+export function iterator_next_or<T: Copy>(iterator: *Iterator<T>, fallback: T): T {
+    let value: *T = iterator_next_ref(iterator)
+    if value == null { return fallback }
+    unsafe { return *value }
+}
+
+export function iterator_next_back_or<T: Copy>(iterator: *Iterator<T>, fallback: T): T {
+    let value: *T = iterator_next_back_ref(iterator)
+    if value == null { return fallback }
+    unsafe { return *value }
+}
+
+export function iterator_skip<T>(iterator: *Iterator<T>, count: usize): usize {
+    let remaining: usize = iterator_remaining(iterator)
+    let actual: usize = count
+    if actual > remaining { actual = remaining }
+    iterator.front = iterator.front + actual
+    return actual
+}
+
+export function iterator_skip_back<T>(iterator: *Iterator<T>, count: usize): usize {
+    let remaining: usize = iterator_remaining(iterator)
+    let actual: usize = count
+    if actual > remaining { actual = remaining }
+    iterator.back = iterator.back - actual
+    return actual
+}
+
+export function iterator_reset<T>(iterator: *Iterator<T>): bool {
+    if iterator == null { return false }
+    iterator.front = 0 as usize
+    iterator.back = iterator.length
+    return true
+}
+
+export function iterator_seek<T>(iterator: *Iterator<T>, index: usize): bool {
+    if iterator == null || index > iterator.length { return false }
+    iterator.front = index
+    iterator.back = iterator.length
+    return true
+}
+
+export function iterator_take<T>(iterator: *Iterator<T>, count: usize): usize {
+    if iterator == null { return 0 as usize }
+    let remaining: usize = iterator_remaining(iterator)
+    let actual: usize = count
+    if actual > remaining { actual = remaining }
+    iterator.back = iterator.front + actual
+    return actual
+}
+
+export function iterator_count_value<T: Eq + Copy>(iterator: *Iterator<T>, value: T): usize {
+    if iterator == null || iterator.data == null { return 0 as usize }
+    let count: usize = 0 as usize
+    let i: usize = iterator.front
+    while i < iterator.back {
+        unsafe { if iterator.data[i] == value { count = count + 1 as usize } }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+export function iterator_find<T: Eq + Copy>(iterator: *Iterator<T>, value: T): isize {
+    if iterator == null || iterator.data == null { return -1 as isize }
+    let i: usize = iterator.front
+    while i < iterator.back {
+        unsafe { if iterator.data[i] == value { return i as isize } }
+        i = i + 1 as usize
+    }
+    return -1 as isize
+}
+
+export function iterator_copy_remaining<T: Copy>(iterator: *Iterator<T>, out: *T, out_capacity: usize): usize {
+    if iterator == null || iterator.data == null || out == null { return 0 as usize }
+    let count: usize = iterator_remaining(iterator)
+    if count > out_capacity { count = out_capacity }
+    let i: usize = 0 as usize
+    while i < count {
+        unsafe { out[i] = iterator.data[iterator.front + i] }
+        i = i + 1 as usize
+    }
+    return count
+}
+
+// Compatibility helpers retained for older slice-only callers.
 export function iterator_len<T>(items: []T): usize { return len(items) }
 export function iterator_is_empty<T>(items: []T): bool { return len(items) == 0 as usize }
 export function iterator_first<T>(items: []T): T { return items[0] }

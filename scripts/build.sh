@@ -8,15 +8,29 @@ BOOTSTRAP="$ROOT/Compiler/selfhost/bootstrap.nqr"
 if [ -z "$STAGE0" ]; then
   if command -v noqeri >/dev/null 2>&1; then STAGE0=$(command -v noqeri); fi
 fi
+
+# A prebuilt Noqeri seed is no longer mandatory. When none is supplied, build
+# the checked-in C++ bootstrap compiler from source and use it exactly once to
+# produce the portable Noqeri stage-1 module. This keeps bootstrap reproducible
+# from a clean checkout while preserving an explicit provenance boundary.
 if [ -z "$STAGE0" ]; then
-  cat >&2 <<'MSG'
-Noqeri's bootstrap program is written in Noqeri.
-A trusted stage-0 executable is still required only to turn that source into the
-first portable stage-1 object. Set NOQERI_STAGE0 to a trusted Noqeri seed.
-CMake/C++ are not used by this normal build.
-MSG
-  exit 2
+  if ! command -v cmake >/dev/null 2>&1; then
+    echo "No NOQERI_STAGE0 was supplied and CMake is unavailable for source bootstrap" >&2
+    exit 2
+  fi
+  STAGE0_DIR="$BUILD_DIR/stage0"
+  cmake -S "$ROOT" -B "$STAGE0_DIR" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+  cmake --build "$STAGE0_DIR" --config Release --target noqeri --parallel
+  if [ -x "$STAGE0_DIR/noqeri" ]; then
+    STAGE0="$STAGE0_DIR/noqeri"
+  elif [ -x "$STAGE0_DIR/Release/noqeri" ]; then
+    STAGE0="$STAGE0_DIR/Release/noqeri"
+  else
+    echo "source bootstrap completed but the stage-0 compiler executable was not found" >&2
+    exit 2
+  fi
 fi
+
 if ! command -v node >/dev/null 2>&1; then
   echo "Noqeri's portable .nqo host requires Node.js 20+ at this stage" >&2
   exit 2
@@ -31,4 +45,4 @@ LAUNCH
 chmod +x "$BUILD_DIR/noqeri"
 "$BUILD_DIR/noqeri" selftest
 "$BUILD_DIR/noqeri" --version
-printf 'Noqeri stage-1 built from Noqeri bootstrap source at %s\n' "$BUILD_DIR/noqeri"
+printf 'Noqeri stage-1 built from source bootstrap at %s\n' "$BUILD_DIR/noqeri"

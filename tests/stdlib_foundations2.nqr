@@ -1,0 +1,106 @@
+import "../Lib/std/event.nqr"
+import "../Lib/std/future.nqr"
+import "../Lib/std/iterator.nqr"
+import "../Lib/std/metrics.nqr"
+import "../Lib/std/numeric.nqr"
+import "../Lib/std/lexer.nqr"
+import "../Lib/std/parser.nqr"
+
+function test_event(): int {
+    let state: [u8; 64] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let event: *Event = (&state[0 as usize]) as *Event
+    if !event_init(event, false, false) { return 1 }
+    let generation: u64 = event_generation(event)
+    if !event_set(event) || !event_is_set(event) || !event_changed_since(event, generation) { return 2 }
+    if !event_take(event) || event_is_set(event) { return 3 }
+    if event_take(event) { return 4 }
+    if !event_configure(event, true) || !event_set(event) { return 5 }
+    if !event_take(event) || !event_is_set(event) { return 6 }
+    if event_set_count(event) != 2 as u64 || event_take_count(event) != 2 as u64 { return 7 }
+    return 0
+}
+
+function test_future(): int {
+    let state: [u8; 64] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let slot: i64 = 0 as i64
+    let future: *Future<i64> = (&state[0 as usize]) as *Future<i64>
+    if !future_init(future, &slot) || !future_pending(future) { return 1 }
+    if !future_complete(future, 42 as i64) || !future_ready(future) { return 2 }
+    if future_get_or(future, -1 as i64) != 42 as i64 { return 3 }
+    if future_complete(future, 99 as i64) { return 4 }
+    if !future_reset(future) || !future_fail(future, 17) || !future_failed(future) || future_error(future) != 17 { return 5 }
+    if !future_reset(future) || !future_cancel(future) || !future_cancelled(future) { return 6 }
+    return 0
+}
+
+function test_iterator(): int {
+    let state: [u8; 64] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let values: [i64; 5] = [10 as i64,20 as i64,30 as i64,40 as i64,50 as i64]
+    let iterator: *Iterator<i64> = (&state[0 as usize]) as *Iterator<i64>
+    if !iterator_init(iterator, &values[0 as usize], 5 as usize) { return 1 }
+    if iterator_next_or(iterator, -1 as i64) != 10 as i64 { return 2 }
+    if iterator_next_back_or(iterator, -1 as i64) != 50 as i64 { return 3 }
+    if iterator_remaining(iterator) != 3 as usize { return 4 }
+    if iterator_find(iterator, 30 as i64) != 2 as isize { return 5 }
+    if iterator_count_value(iterator, 40 as i64) != 1 as usize { return 6 }
+    if iterator_skip(iterator, 2 as usize) != 2 as usize || iterator_next_or(iterator, -1 as i64) != 40 as i64 { return 7 }
+    return 0
+}
+
+function test_metrics_numeric(): int {
+    let counter_bytes: [u8; 16] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let counter: *Counter = (&counter_bytes[0 as usize]) as *Counter
+    if !counter_init(counter, 2 as u64) || !counter_inc(counter) || !counter_add(counter, 7 as u64) || counter_get(counter) != 10 as u64 { return 1 }
+
+    let stats_bytes: [u8; 64] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let stats: *RunningStats = (&stats_bytes[0 as usize]) as *RunningStats
+    stats_init(stats)
+    stats_observe(stats, 4 as i64)
+    stats_observe(stats, 10 as i64)
+    stats_observe(stats, 7 as i64)
+    if stats_count(stats) != 3 as u64 || stats_mean(stats) != 7 as i64 || stats_range(stats) != 6 as i64 { return 2 }
+
+    let values: [i64; 4] = [2 as i64,4 as i64,6 as i64,8 as i64]
+    if numeric_sum_i64(slice(values)) != 20 as i64 || numeric_mean_i64(slice(values)) != 5 as i64 { return 3 }
+    if numeric_gcd_i64(84 as i64, 30 as i64) != 6 as i64 || numeric_lcm_i64(6 as i64, 8 as i64) != 24 as i64 { return 4 }
+    if numeric_pow_i64(3 as i64, 4 as usize) != 81 as i64 { return 5 }
+    if numeric_binary_search_i64(slice(values), 6 as i64) != 2 as isize { return 6 }
+    return 0
+}
+
+function test_lexer_parser(): int {
+    let source: [u8; 17] = [108 as u8,101 as u8,116 as u8,32 as u8,97 as u8,103 as u8,101 as u8,32 as u8,61 as u8,32 as u8,52 as u8,50 as u8,32 as u8,47 as u8,47 as u8,32 as u8,120 as u8]
+    let lexer_bytes: [u8; 64] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let lexer: *Lexer = (&lexer_bytes[0 as usize]) as *Lexer
+    if !lexer_init(lexer, &source[0 as usize], 17 as usize) { return 1 }
+    let token_storage: [u8; 256] = [0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8,0 as u8]
+    let tokens: *LexToken = (&token_storage[0 as usize]) as *LexToken
+    let token: *LexToken = tokens
+    if !lexer_next(lexer, token) || token.kind != lexer_token_identifier() { return 2 }
+    let first: LexToken = *token
+    token = &tokens[1 as usize]
+    lexer_next(lexer, token)
+    token = &tokens[2 as usize]
+    lexer_next(lexer, token)
+    token = &tokens[3 as usize]
+    lexer_next(lexer, token)
+    if token.kind != lexer_token_integer() { return 3 }
+    let number: u64 = 0 as u64
+    if !parser_parse_u64(&source[0 as usize], 17 as usize, token, &number) || number != 42 as u64 { return 4 }
+    if first.length != 3 as usize { return 5 }
+    return 0
+}
+
+function main(): int {
+    let result: int = test_event()
+    if result != 0 { return 10 + result }
+    result = test_future()
+    if result != 0 { return 30 + result }
+    result = test_iterator()
+    if result != 0 { return 50 + result }
+    result = test_metrics_numeric()
+    if result != 0 { return 70 + result }
+    result = test_lexer_parser()
+    if result != 0 { return 90 + result }
+    return 0
+}
